@@ -76,3 +76,9 @@ There is no conflicting implementation to preserve. The primary conflict is agai
 ## ASDI-000 result
 
 **Pass with boundary noted:** the repository audit and scaffold classification are checked into the local baseline, and no application/runtime behavior was changed. The protected GitHub repository baseline required by ASDI-003 remains externally blocked until an actual repository, plan capabilities, identities, and owner authorization are supplied.
+
+## Baseline update after initial audit
+
+After the initial audit, the owner designated the private repository [`https://github.com/simbiclaw/asdi`](https://github.com/simbiclaw/asdi), and local commit `f204409` was published to its empty `main` branch through local proxy port 7890. The authenticated repository owner is `simbiclaw` with admin permission.
+
+The remote designation does not satisfy ASDI-003. GitHub rejected repository-ruleset, legacy branch-protection, and branch-rules reads for this private repository with HTTP 403, saying the feature requires GitHub Pro or a public repository. Separate identity provisioning remains unauthorized. See [`GATE_003_EVIDENCE.md`](GATE_003_EVIDENCE.md).

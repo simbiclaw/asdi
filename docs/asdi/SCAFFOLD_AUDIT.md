@@ -42,6 +42,8 @@ No existing check can be promoted as a hard-rule implementation. H1–H7 therefo
 | Agent execution | No launcher, adapter, sandbox, hook, or guardrail. | Full non-Git file inventory. |
 | Product surface | No deployable application or service. | Full non-Git file inventory. |
 
+The subsequent owner-designated GitHub baseline and current protection blocker are recorded in [`GATE_003_EVIDENCE.md`](GATE_003_EVIDENCE.md); they do not change this initial ASDI-000 audit result.
+
 ## Generated and vendored paths
 
 None existed. No protected path is inferred from absent content. Generated/vendor declarations should be introduced only when actual generated output or vendored dependencies exist, and must be enforced by ASDI-003/ASDI-033.

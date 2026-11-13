@@ -1,0 +1,11 @@
+# Human owner approval is required for all paths and explicitly for
+# judgment-class and protected-content paths.
+* @simbiclaw
+/docs/asdi/decisions/** @simbiclaw
+/docs/asdi/GATE_003_EVIDENCE.md @simbiclaw
+/vendor/ @simbiclaw
+/third_party/ @simbiclaw
+/dist/ @simbiclaw
+/build/ @simbiclaw
+**/generated/ @simbiclaw
+**/*.generated.* @simbiclaw

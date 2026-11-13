@@ -2,18 +2,20 @@
 
 **Ticket:** ASDI-002  
 **Date:** 2026-11-13  
-**Status:** **Blocked on repository owner decision**  
 **Owner:** Repository owner  
+**Status:** **Repository selected by owner; pilot service interface still blocked on owner design/approval**
 
 ## Finding
 
 The inspected repository contained only [`ASDI_Codex_Implementation_Backlog_REV_H_G.md`](../../ASDI_Codex_Implementation_Backlog_REV_H_G.md) and the discovery artifacts added under `docs/asdi/`. It had no Git history at audit time and no deployable product, service, API, package manifest, Dockerfile, database, test suite, CI, metrics endpoint, feature-flag surface, or controlled defect path.
 
-Therefore, no pilot product or service is selected. A synthetic reference service is **not** created because the backlog requires explicit owner approval before inventing one.
+The owner designated the private repository `simbiclaw/asdi` as the ASDI repository. That repository remains the ASDI platform/control repository, not yet a selected pilot product. It still has no deployable product or service, so a synthetic reference service is **not** created because the backlog requires explicit owner approval before inventing one.
+
+The repository currently contains no customer data and no production connectivity. It is therefore eligible only for synthetic-data platform validation until the owner selects or approves an actual pilot service.
 
 ## Owner decision required
 
-Select exactly one option:
+The repository designation resolves only where ASDI itself is hosted. Select exactly one option for the lifecycle pilot:
 
 1. **Designate an existing pilot repository/service**, suitable for controlled feature/release/defect validation, with synthetic or test data only.
 2. **Approve a small synthetic reference service** in this repository for the first lifecycle demonstration.
