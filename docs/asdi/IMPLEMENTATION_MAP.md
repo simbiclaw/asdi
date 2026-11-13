@@ -53,8 +53,8 @@ There was no `.git` directory when the audit was performed. Consequently, there 
 
 | Ticket | Dependency | Existing support | Missing or conflicting capability | Relevant path |
 |---|---|---|---|---|
-| ASDI-010 | ASDI-000 | Backlog defines authored fields, defaults, validation examples, and provenance. | Implemented through 2026-11-13: dependency-free schema builder, strict validator, provisional central defaults, provenance checks, fixtures, and tests. No launcher exists yet, so no run can be launched from an invalid contract. | [`src/asdi/run_contract.py`](../../src/asdi/run_contract.py), [`fixtures/run_contracts/`](../../fixtures/run_contracts/), [`tests/test_run_contract.py`](../../tests/test_run_contract.py) |
-| ASDI-011 | ASDI-010 | Backlog defines runtime lifecycle and adapter requirements for Claude Code, Codex, and Hermes. | No launcher, adapter interface, cancellation, event stream, durable state, usage collection, or `done_check` enforcement. | Future runtime/launcher module |
+| ASDI-010 | ASDI-000 | Backlog defines authored fields, defaults, validation examples, and provenance. | Implemented and reverified through 2026-11-13: dependency-free schema builder, strict validator, provisional central defaults, provenance checks, fixtures, and tests. The ASDI-011 launcher revalidates before launch. | [`src/asdi/run_contract.py`](../../src/asdi/run_contract.py), [`fixtures/run_contracts/`](../../fixtures/run_contracts/), [`tests/test_run_contract.py`](../../tests/test_run_contract.py) |
+| ASDI-011 | ASDI-010 | Backlog defines runtime lifecycle and adapter requirements for Claude Code, Codex, and Hermes. | Implemented through 2026-11-13: board-neutral durable run store, Claude/Codex/Hermes adapters, structured event collection, actual child-process cancellation, usage capture, launcher `done_check` recheck, missing/runtime/host-restart failures, and fail-closed refusal without ASDI-012 isolation. Vendor CLI invocation and guardrail consumption remain unimplemented/unverified. | [`src/asdi/runtime.py`](../../src/asdi/runtime.py), [`tests/test_run_launcher.py`](../../tests/test_run_launcher.py), [`tests/test_runtime_adapters.py`](../../tests/test_runtime_adapters.py), [`docs/asdi/GATE_011_EVIDENCE.md`](GATE_011_EVIDENCE.md) |
 | ASDI-012 | ASDI-011 | Hard rule H3 requires container-per-run isolation and egress control. | No container runtime integration, workspace isolation, egress allowlist, secret boundary, or cleanup mechanism. | Future sandbox adapter |
 | ASDI-013 | ASDI-010, ASDI-011, ASDI-012 | H2 and H5 define `done_check`, turn, spend, and wall-clock requirements. | No guardrail evaluator, failure transitions, or per-run enforcement tests. | Future guardrail/enforcement module |
 | ASDI-014 | ASDI-011 | Backlog defines structured events and evidence. | No event schema, log writer, evidence record, or persistence boundary. | Future event/evidence module |
@@ -71,7 +71,7 @@ There is no conflicting implementation to preserve. The primary conflict is agai
 2. Complete ASDI-001 ADRs and the D-9 evidence/test plan.
 3. Complete ASDI-002 pilot-service selection: designate a pilot repository/service or approve a synthetic reference service; `simbiclaw/asdi` is the ASDI control repository, not yet the pilot product.
 4. ASDI-003 remains incomplete by owner decision: GitHub-native branch enforcement is deferred, no scoped identities exist, and all execution/merge paths stay disabled.
-5. ASDI-010 may proceed only as board-neutral, non-executing contract validation. ASDI-011 and every later execution path remain blocked by ADR-0004 and by their own dependencies.
+5. ASDI-010 provides the launch preflight. ASDI-011 may exercise only the explicitly authorized synthetic local-process adapter; Claude Code, Codex, and Hermes fail closed at container isolation until ASDI-012 exists.
 
 ## ASDI-000 result
 
