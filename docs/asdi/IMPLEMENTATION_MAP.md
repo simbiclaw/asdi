@@ -1,0 +1,78 @@
+# ASDI Implementation Map
+
+**Audit date:** 2026-11-13  
+**Audited path:** `/Users/russell/workspace/ASDI`  
+**Ticket:** ASDI-000  
+**Baseline document:** [`ASDI_Codex_Implementation_Backlog_REV_H_G.md`](../../ASDI_Codex_Implementation_Backlog_REV_H_G.md)
+
+## Repository inventory
+
+The inspected working directory contained exactly one regular file:
+
+| Path | Existing capability | Evidence |
+|---|---|---|
+| [`ASDI_Codex_Implementation_Backlog_REV_H_G.md`](../../ASDI_Codex_Implementation_Backlog_REV_H_G.md) | Execution backlog for ASDI Design REV H and ASDI Stack REV G, including tickets, dependencies, seven hard rules, D-9 compatibility tests, and open decisions. | Full-file review; lines 1–900. |
+
+There was no `.git` directory when the audit was performed. Consequently, there was no Git history, branch configuration, remote, checked-in state, or protected baseline.
+
+## Existing services, configuration, and data
+
+| Capability | Status | Repository evidence |
+|---|---|---|
+| Application service | Missing | No manifest, source tree, package manifest, Dockerfile, or process definition. |
+| Database schema or migration | Missing | No schema, migration, ORM model, or database configuration. |
+| Runtime configuration | Missing | No environment template, service configuration, or infrastructure configuration. |
+| Agent instructions | Missing | No repository-level `AGENTS.md`, agent config, hooks, or runtime adapter. |
+| Skills | Missing from the repository | The available-session skill catalog is outside this repository and is not project scaffold. |
+| Hooks or structural checks | Missing | No Git hooks, task hooks, scripts, validators, policy checks, or preflight checks. |
+| CI | Missing | No CI workflow, job definition, runner configuration, or test entry point. |
+| Tests | Missing | No test files, fixtures, runners, or expected-results directory. |
+| Documentation | Backlog only | The backlog is authoritative for execution order and acceptance criteria; no system documentation existed before this audit. |
+
+## Security-sensitive surface
+
+| Area | Finding | Consequence |
+|---|---|---|
+| Secrets | No checked-in secret, token, credential, environment value, keyfile, or secret manager configuration was found. | There is no production secret exposure in the inspected scaffold. |
+| Production connectivity | No service, network route, deploy target, tunnel, proxy, webhook, CI integration, or external API client was found. | There is no production connectivity and no runtime side-effect path. |
+| Generated or vendored paths | No generated, vendored, or third-party content was found. | No protected generated/vendor path can yet be declared from existing content. |
+| Authentication and authorization | No identity, token boundary, role definition, GitHub ruleset, CODEOWNERS file, or merge-control mechanism was found. | H1 and H3–H7 are unimplemented; no autonomous execution or merge path may be enabled. |
+
+## Mapping to the backlog
+
+### Gate 0 — audit, decisions, scaffold
+
+| Ticket | Dependency | Existing support | Missing or conflicting capability | Relevant path |
+|---|---|---|---|---|
+| ASDI-000 | None | Backlog provides acceptance criteria. | Repository map and hook audit did not exist before this document; no Git baseline existed. | `docs/asdi/IMPLEMENTATION_MAP.md`, `docs/asdi/SCAFFOLD_AUDIT.md` |
+| ASDI-001 | ASDI-000 | Open decisions and candidate options are recorded in backlog §1.3 and §7. | No checked-in ADR index, D-9 test plan, decision record, owner, or evidence trail. | `docs/asdi/decisions/` |
+| ASDI-002 | ASDI-000 | Backlog specifies what makes a suitable pilot. | Current repository has no deployable product or service; no pilot target or owner approval. | `docs/asdi/PILOT_TARGET.md` |
+| ASDI-003 | ASDI-000 | Backlog defines required identities and fail-closed verification. | No Git repository, remote, branch protection, rulesets, CODEOWNERS, credential separation, or GitHub permission tests. | Git remote/repository settings and `CODEOWNERS` |
+
+### Gate 1 — run contract and execution kernel
+
+| Ticket | Dependency | Existing support | Missing or conflicting capability | Relevant path |
+|---|---|---|---|---|
+| ASDI-010 | ASDI-000 | Backlog defines authored fields, defaults, validation examples, and provenance. | No schema, validator, fixtures, configuration, or launch preflight. | Future run-contract module and fixture tree |
+| ASDI-011 | ASDI-010 | Backlog defines runtime lifecycle and adapter requirements for Claude Code, Codex, and Hermes. | No launcher, adapter interface, cancellation, event stream, durable state, usage collection, or `done_check` enforcement. | Future runtime/launcher module |
+| ASDI-012 | ASDI-011 | Hard rule H3 requires container-per-run isolation and egress control. | No container runtime integration, workspace isolation, egress allowlist, secret boundary, or cleanup mechanism. | Future sandbox adapter |
+| ASDI-013 | ASDI-010, ASDI-011, ASDI-012 | H2 and H5 define `done_check`, turn, spend, and wall-clock requirements. | No guardrail evaluator, failure transitions, or per-run enforcement tests. | Future guardrail/enforcement module |
+| ASDI-014 | ASDI-011 | Backlog defines structured events and evidence. | No event schema, log writer, evidence record, or persistence boundary. | Future event/evidence module |
+
+### Gates 2–6
+
+All later tickets depend on Gate 0 and Gate 1 capabilities that are absent. In particular, the current repository has no board adapter, Archon workflow engine, GitHub poller, review system, policy classifier, recovery controller, learning ledger, production admission, local CI/signing registry, experiment system, telemetry stack, defect pipeline, autonomy rollout controls, or human attention surface.
+
+There is no conflicting implementation to preserve. The primary conflict is against intent, not existing code: the backlog describes a runnable, locally governed system while the inspected repository contains only the plan.
+
+## Safe execution order from this baseline
+
+1. Preserve the Gate 0 discovery artifacts in a local Git baseline without introducing runtime behavior.
+2. Complete ASDI-001 ADRs and the D-9 evidence/test plan.
+3. Complete ASDI-002 scope determination and request owner selection: designate a pilot repository/service or approve a synthetic reference service.
+4. For ASDI-003, establish the actual remote repository, identity model, rulesets, CODEOWNERS, and permission tests against the owner-selected GitHub repository and plan. A local scaffold cannot satisfy the GitHub behavior verification requirement.
+5. Do not begin ASDI-010 merely because its direct dependency is ASDI-000: the backlog's cadence requires Gate 0 tickets ASDI-000 through ASDI-003 first, and ASDI-002 currently lacks the owner decision required for complete lifecycle validation.
+
+## ASDI-000 result
+
+**Pass with boundary noted:** the repository audit and scaffold classification are checked into the local baseline, and no application/runtime behavior was changed. The protected GitHub repository baseline required by ASDI-003 remains externally blocked until an actual repository, plan capabilities, identities, and owner authorization are supplied.
