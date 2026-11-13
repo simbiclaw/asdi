@@ -1,0 +1,26 @@
+{
+  "schema_version": "asdi.run-contract/v1",
+  "task_type": "feature",
+  "objective": "Validate a contract without done_check",
+  "why": "This fixture proves that missing verification blocks a launch.",
+  "constraints": [],
+  "out_of_scope": [],
+  "boundaries": {
+    "protected_paths": ["CODEOWNERS"],
+    "max_changed_lines": 400,
+    "network": {"mode": "deny_all"},
+    "production_access": false,
+    "irreversible_actions": false
+  },
+  "guardrails": {
+    "max_turns": 200,
+    "max_spend_usd": 8,
+    "wall_clock_seconds": 5400
+  },
+  "output": {"kind": "report"},
+  "provenance": {
+    "human_provided": ["objective", "why"],
+    "lead_agent_authored": ["constraints", "out_of_scope"],
+    "platform_defaults": ["boundaries", "guardrails", "output", "task_type"]
+  }
+}

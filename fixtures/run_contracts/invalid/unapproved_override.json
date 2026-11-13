@@ -1,0 +1,30 @@
+{
+  "schema_version": "asdi.run-contract/v1",
+  "task_type": "feature",
+  "objective": "Reject an unapproved guardrail increase",
+  "why": "Provisional defaults require a permitted reason when raised.",
+  "constraints": [],
+  "out_of_scope": [],
+  "done_check": {
+    "description": "Tests pass.",
+    "argv": ["python3", "-m", "unittest", "discover"]
+  },
+  "boundaries": {
+    "protected_paths": ["CODEOWNERS"],
+    "max_changed_lines": 400,
+    "network": {"mode": "deny_all"},
+    "production_access": false,
+    "irreversible_actions": false
+  },
+  "guardrails": {
+    "max_turns": 300,
+    "max_spend_usd": 8,
+    "wall_clock_seconds": 5400
+  },
+  "output": {"kind": "report"},
+  "provenance": {
+    "human_provided": ["objective", "why"],
+    "lead_agent_authored": ["constraints", "out_of_scope", "done_check"],
+    "platform_defaults": ["boundaries", "guardrails", "output", "task_type"]
+  }
+}

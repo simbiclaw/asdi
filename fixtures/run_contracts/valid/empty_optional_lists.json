@@ -1,0 +1,49 @@
+{
+  "schema_version": "asdi.run-contract/v1",
+  "task_type": "documentation",
+  "objective": "Clarify an existing usage note",
+  "why": "A documentation gap caused avoidable operator confusion.",
+  "constraints": [],
+  "out_of_scope": [],
+  "done_check": {
+    "description": "Documentation build or equivalent local check succeeds.",
+    "argv": ["python3", "-m", "unittest", "discover"]
+  },
+  "boundaries": {
+    "protected_paths": [
+      "CODEOWNERS",
+      "**/generated/"
+    ],
+    "max_changed_lines": 400,
+    "network": {
+      "mode": "deny_all"
+    },
+    "production_access": false,
+    "irreversible_actions": false
+  },
+  "guardrails": {
+    "max_turns": 200,
+    "max_spend_usd": 8,
+    "wall_clock_seconds": 5400
+  },
+  "output": {
+    "kind": "report"
+  },
+  "provenance": {
+    "human_provided": [
+      "objective"
+    ],
+    "lead_agent_authored": [
+      "why",
+      "constraints",
+      "out_of_scope",
+      "done_check"
+    ],
+    "platform_defaults": [
+      "boundaries",
+      "guardrails",
+      "output",
+      "task_type"
+    ]
+  }
+}

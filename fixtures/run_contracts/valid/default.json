@@ -1,0 +1,58 @@
+{
+  "schema_version": "asdi.run-contract/v1",
+  "task_type": "feature",
+  "objective": "Implement a narrowly scoped pilot function",
+  "why": "The owner admitted this task to validate the ASDI contract path.",
+  "constraints": [
+    "Use synthetic data only.",
+    "Do not add runtime dependencies."
+  ],
+  "out_of_scope": [
+    "Production deployment",
+    "Feature exposure"
+  ],
+  "done_check": {
+    "description": "The complete project test suite passes.",
+    "argv": ["python3", "-m", "unittest", "discover", "-v"]
+  },
+  "boundaries": {
+    "protected_paths": [
+      "CODEOWNERS",
+      "docs/asdi/decisions/**",
+      "**/generated/",
+      "**/*.generated.*"
+    ],
+    "max_changed_lines": 400,
+    "network": {
+      "mode": "deny_all"
+    },
+    "production_access": false,
+    "irreversible_actions": false
+  },
+  "guardrails": {
+    "max_turns": 200,
+    "max_spend_usd": 8,
+    "wall_clock_seconds": 5400
+  },
+  "output": {
+    "kind": "pull_request",
+    "branch": "asdi/010-run-contract"
+  },
+  "provenance": {
+    "human_provided": [
+      "objective",
+      "why"
+    ],
+    "lead_agent_authored": [
+      "constraints",
+      "out_of_scope",
+      "done_check"
+    ],
+    "platform_defaults": [
+      "boundaries",
+      "guardrails",
+      "output",
+      "task_type"
+    ]
+  }
+}

@@ -5,6 +5,10 @@
 **Network path:** local HTTP proxy `127.0.0.1:7890`  
 **Result:** **FAIL — externally blocked; no permissive fallback configured**
 
+## Owner direction recorded on 2026-11-13
+
+The owner directed ASDI to stop pursuing GitHub repository rulesets and legacy branch protection for this repository. That direction is recorded in [ADR-0004](decisions/ADR-0004-github-protection.md) as a decision to defer GitHub-native enforcement, not as a pass or a weakening of hard rule H1. Agent execution and agent merge remain disabled. CODEOWNERS is advisory until an equivalent fail-closed enforcement boundary is implemented and tested.
+
 ## Verified baseline
 
 | Check | Evidence |
