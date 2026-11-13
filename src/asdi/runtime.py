@@ -22,7 +22,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from .errors import RuntimeErrorStateError
 from .run_contract import validate_run_contract
+from .sandbox import ContainerSandbox, SandboxSpec
 
 
 RUN_STATE_SCHEMA_VERSION = "asdi.run-state/v1"
@@ -36,8 +38,7 @@ TERMINAL_RUN_STATUSES = {
 NON_COMPLIANT_TEST_ADAPTERS = {"local_process_test"}
 
 
-class RuntimeErrorStateError(RuntimeError):
-    """The launcher cannot safely perform the requested state transition."""
+__all__ = ["RuntimeErrorStateError"]
 
 
 @dataclass(frozen=True)
@@ -49,6 +50,7 @@ class RuntimeAdapterConfig:
     """
 
     executable_path: str | None = None
+    container_executable_path: str | None = None
     argv_prefix: tuple[str, ...] = ()
     argv_suffix: tuple[str, ...] = ()
     include_objective: bool = True
@@ -97,8 +99,11 @@ class RuntimeAdapter:
             raise RuntimeErrorStateError("runtime executable must be an absolute path")
         executable_name = Path(command[0]).name.lower()
         forbidden_launchers = {"archon", "asdi", "asdi-launcher"}
+        shell_interpreters = {"sh", "bash", "dash", "zsh", "ksh"}
         if executable_name in forbidden_launchers:
             raise RuntimeErrorStateError("nested orchestration is forbidden")
+        if executable_name in shell_interpreters:
+            raise RuntimeErrorStateError("shell-interpreter runtime commands are forbidden")
         for argument in command[1:]:
             if not isinstance(argument, str) or any(ord(char) < 32 for char in argument):
                 raise RuntimeErrorStateError("runtime arguments must be printable strings")
@@ -381,6 +386,9 @@ class ProcessHandle:
     adapter: RuntimeAdapter | None = None
     contract: dict[str, Any] | None = None
     workspace: Path | None = None
+    sandbox: ContainerSandbox | None = None
+    container_name: str | None = None
+    container_id: str | None = None
     cancel_requested: bool = False
 
     def is_running(self) -> bool:
@@ -421,12 +429,15 @@ class ProcessHandle:
             return self.store.load_run(self.run_id)
         if state["status"] == "cancelling":
             self._finish_cancelled()
+            self._cleanup_sandbox()
             return self.store.load_run(self.run_id)
         if state["status"] != "running":
+            self._cleanup_sandbox()
             return state
         self._record_exit()
         state = self.store.load_run(self.run_id)
         if state["status"] != "runtime_succeeded":
+            self._cleanup_sandbox()
             return state
         if self.adapter.done_check_recheck:
             return self._run_done_check()
@@ -453,6 +464,7 @@ class ProcessHandle:
                 "done_check_unverified",
                 "runtime exited successfully but produced no Stop-hook pass evidence",
             )
+        self._cleanup_sandbox()
         return self.store.load_run(self.run_id)
 
     def cancel(self, timeout: float = 5.0) -> dict[str, Any]:
@@ -508,7 +520,9 @@ class ProcessHandle:
         else:
             while self.is_running():
                 time.sleep(0.05)
-        return self._finish_cancelled()
+        final = self._finish_cancelled()
+        self._cleanup_sandbox()
+        return final
 
     def _finish_cancelled(self) -> dict[str, Any]:
         assert self.store is not None
@@ -536,6 +550,31 @@ class ProcessHandle:
         )
         return self.store.load_run(self.run_id)
 
+    def _cleanup_sandbox(self) -> None:
+        if self.sandbox is None:
+            return
+        try:
+            self.sandbox.cleanup(
+                self.run_id,
+                container_name=self.container_name,
+            )
+            if self.container_name is not None:
+                self.store.append_event(
+                    self.run_id,
+                    "container_cleaned",
+                    {"container_name": self.container_name},
+                )
+        except RuntimeErrorStateError as error:
+            self.store.append_event(
+                self.run_id,
+                "container_cleanup_failed",
+                {
+                    "container_name": self.container_name,
+                    "error": str(error),
+                },
+            )
+            raise
+
     def _record_exit(self) -> None:
         assert self.process is not None
         assert self.store is not None
@@ -545,6 +584,10 @@ class ProcessHandle:
             "signal": signal_name(returncode),
             "finished_at": utc_now(),
         }
+        if self.sandbox is not None and self.container_name is not None:
+            payload["container_state"] = self.sandbox.inspect_exit_state(
+                self.container_name
+            )
         self.store.append_event(self.run_id, "process_exit", payload)
         if returncode == 0:
             self.store.transition(
@@ -620,29 +663,60 @@ class ProcessHandle:
         )
         try:
             with stdout_path.open("wb") as stdout, stderr_path.open("wb") as stderr:
-                completed = subprocess.run(
-                    done_check["argv"],
-                    cwd=self.workspace,
-                    stdout=stdout,
-                    stderr=stderr,
-                    stdin=subprocess.DEVNULL,
-                    env=_safe_environment(self.run_id, "done_check"),
-                    timeout=timeout,
-                    check=False,
-                )
+                if self.sandbox is not None:
+                    check_container = self.sandbox.done_check_container_name(
+                        self.run_id
+                    )
+                    completed = subprocess.run(
+                        [
+                            self.sandbox.docker,
+                            *self.sandbox.done_check_argv(
+                                self.run_id,
+                                self.contract,
+                                container_name=check_container,
+                            ),
+                        ],
+                        stdout=stdout,
+                        stderr=stderr,
+                        stdin=subprocess.DEVNULL,
+                        timeout=timeout,
+                        check=False,
+                    )
+                    self.sandbox.remove_container(check_container)
+                else:
+                    completed = subprocess.run(
+                        done_check["argv"],
+                        cwd=self.workspace,
+                        stdout=stdout,
+                        stderr=stderr,
+                        stdin=subprocess.DEVNULL,
+                        env=_safe_environment(self.run_id, "done_check"),
+                        timeout=timeout,
+                        check=False,
+                    )
         except FileNotFoundError as error:
             self._fail(
                 "done_check_missing",
                 f"done-check executable could not be run: {error}",
                 done_check_files=(stdout_path.name, stderr_path.name),
             )
+            self._cleanup_sandbox()
             return self.store.load_run(self.run_id)
         except subprocess.TimeoutExpired:
+            if self.sandbox is not None:
+                # Killing the Docker CLI on timeout does not necessarily stop
+                # the already-created verification container. Remove it by the
+                # identity captured before launch so no check container leaks.
+                try:
+                    self.sandbox.remove_container(check_container)
+                except RuntimeErrorStateError:
+                    pass
             self._fail(
                 "done_check_timeout",
                 f"done_check exceeded {timeout} seconds",
                 done_check_files=(stdout_path.name, stderr_path.name),
             )
+            self._cleanup_sandbox()
             return self.store.load_run(self.run_id)
 
         exit_code = completed.returncode
@@ -693,6 +767,7 @@ class ProcessHandle:
                 f"done_check exited with code {exit_code}",
                 done_check_files=(stdout_path.name, stderr_path.name),
             )
+        self._cleanup_sandbox()
         return self.store.load_run(self.run_id)
 
     def _fail(
@@ -760,6 +835,7 @@ class RunLauncher:
         *,
         isolation_mode: str,
         allow_noncompliant_test: bool = False,
+        sandbox_spec: SandboxSpec | None = None,
     ) -> ProcessHandle:
         state = self.store.load_run(run_id)
         if state["status"] != "created":
@@ -798,53 +874,180 @@ class RunLauncher:
             )
             raise RuntimeErrorStateError(f"unknown runtime adapter {adapter_name!r}")
 
-        try:
-            executable = adapter.resolve_executable(config)
-        except OSError as error:
-            self._start_failure(
-                run_id,
-                adapter_name,
-                isolation_mode,
-                "runtime_probe_failed",
-                str(error),
-            )
-            raise RuntimeErrorStateError(str(error)) from error
-        if executable is None:
-            searched = config.executable_path or ", ".join(adapter.executable_names)
-            self._start_failure(
-                run_id,
-                adapter_name,
-                isolation_mode,
-                "missing_runtime",
-                f"runtime executable not found: {searched}",
-            )
-            raise RuntimeErrorStateError(
-                f"runtime executable not found: {searched}"
-            )
-        try:
-            command = adapter.build_command(contract, executable, config)
-        except RuntimeErrorStateError as error:
-            self._start_failure(
-                run_id,
-                adapter_name,
-                isolation_mode,
-                "invalid_runtime_configuration",
-                str(error),
-            )
-            raise
-
+        executable = None
+        if not (isolation_mode == "container" and config.container_executable_path):
+            try:
+                executable = adapter.resolve_executable(config)
+            except OSError as error:
+                self._start_failure(
+                    run_id,
+                    adapter_name,
+                    isolation_mode,
+                    "runtime_probe_failed",
+                    str(error),
+                )
+                raise RuntimeErrorStateError(str(error)) from error
+            if executable is None:
+                searched = config.executable_path or ", ".join(adapter.executable_names)
+                self._start_failure(
+                    run_id,
+                    adapter_name,
+                    isolation_mode,
+                    "missing_runtime",
+                    f"runtime executable not found: {searched}",
+                )
+                raise RuntimeErrorStateError(
+                    f"runtime executable not found: {searched}"
+                )
         if isolation_mode == "container":
-            self._start_failure(
-                run_id,
-                adapter_name,
-                isolation_mode,
-                "sandbox_not_implemented",
-                "container-per-run isolation is ASDI-012 and is not implemented",
-                command=command,
+            if sandbox_spec is None:
+                self._start_failure(
+                    run_id,
+                    adapter_name,
+                    isolation_mode,
+                    "sandbox_not_configured",
+                    "container execution requires an explicit trusted image and runtime path",
+                )
+                raise RuntimeErrorStateError(
+                    "container execution requires an explicit sandbox specification"
+                )
+            if not config.container_executable_path:
+                self._start_failure(
+                    run_id,
+                    adapter_name,
+                    isolation_mode,
+                    "missing_container_runtime_path",
+                    "container execution requires an absolute in-container runtime executable",
+                )
+                raise RuntimeErrorStateError(
+                    "container execution requires a container runtime executable path"
+                )
+            command = adapter.build_command(
+                contract,
+                config.container_executable_path,
+                config,
             )
-            raise RuntimeErrorStateError(
-                "container-per-run isolation is required and not implemented"
-            )
+            sandbox = ContainerSandbox(sandbox_spec, self.store)
+            try:
+                sandbox.verify_daemon_and_image()
+                evidence = sandbox.prepare(
+                    run_id,
+                    contract,
+                    command=command,
+                )
+                docker_argv = sandbox.docker_run_argv(
+                    run_id,
+                    evidence,
+                    command,
+                )
+                sandbox.container_name = str(evidence["container_name"])
+                self.store.transition(
+                    run_id,
+                    {
+                        "status": "starting",
+                        "runtime": {
+                            "adapter": adapter_name,
+                            "executable": config.container_executable_path,
+                            "argv": list(command),
+                        },
+                        "isolation_compliant": True,
+                        "isolation_mode": "container_network_none",
+                        "sandbox": evidence,
+                    },
+                    expected_statuses={"created"},
+                )
+                self.store.append_event(
+                    run_id,
+                    "runtime_starting",
+                    {
+                        "adapter": adapter_name,
+                        "isolation": "container_network_none",
+                        "argv": list(command),
+                        "sandbox": evidence,
+                    },
+                )
+                run_root = self.store.run_root(run_id)
+                process = subprocess.Popen(
+                    [sandbox.docker, *docker_argv],
+                    cwd=run_root.parent,
+                    stdin=subprocess.DEVNULL,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                    bufsize=1,
+                    start_new_session=True,
+                )
+                started_at, container_id = sandbox.wait_for_container(process)
+                self.store.transition(
+                    run_id,
+                    {
+                        "status": "running",
+                        "process": {
+                            "pid": process.pid,
+                            "process_start_time": process_start_time(process.pid),
+                            "container_name": sandbox.container_name,
+                            "container_id": container_id,
+                            "container_started_at": started_at,
+                        },
+                        "started_at": utc_now(),
+                    },
+                    expected_statuses={"starting"},
+                )
+                self.store.append_event(
+                    run_id,
+                    "runtime_started",
+                    {
+                        "pid": process.pid,
+                        "container_name": sandbox.container_name,
+                        "container_id": container_id,
+                        "container_started_at": started_at,
+                    },
+                )
+                readers = [
+                    self._start_output_reader(
+                        run_id,
+                        process.stdout,
+                        "stdout",
+                        run_root / "stdout.log",
+                    ),
+                    self._start_output_reader(
+                        run_id,
+                        process.stderr,
+                        "stderr",
+                        run_root / "stderr.log",
+                    ),
+                ]
+                return ProcessHandle(
+                    run_id=run_id,
+                    pid=process.pid,
+                    process_start_time=process_start_time(process.pid),
+                    process=process,
+                    readers=readers,
+                    store=self.store,
+                    adapter=adapter,
+                    contract=contract,
+                    workspace=run_root / "workspace",
+                    sandbox=sandbox,
+                    container_name=sandbox.container_name,
+                    container_id=container_id,
+                )
+            except RuntimeErrorStateError as error:
+                if sandbox.container_name is not None:
+                    try:
+                        sandbox.stop_container(sandbox.container_name)
+                    except RuntimeErrorStateError:
+                        pass
+                if sandbox.proxy is not None:
+                    sandbox.proxy.stop()
+                self._start_failure(
+                    run_id,
+                    adapter_name,
+                    isolation_mode,
+                    "sandbox_setup_failed",
+                    str(error),
+                    command=command,
+                )
+                raise
         if isolation_mode != "host_process_test":
             self._start_failure(
                 run_id,
@@ -869,6 +1072,17 @@ class RunLauncher:
             raise RuntimeErrorStateError(
                 "host-process execution is prohibited without explicit synthetic-test authorization"
             )
+        try:
+            command = adapter.build_command(contract, executable, config)
+        except RuntimeErrorStateError as error:
+            self._start_failure(
+                run_id,
+                adapter_name,
+                isolation_mode,
+                "invalid_runtime_configuration",
+                str(error),
+            )
+            raise
 
         run_root = self.store.run_root(run_id)
         workspace = run_root / "workspace"

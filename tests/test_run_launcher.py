@@ -121,7 +121,7 @@ class RunLauncherTests(unittest.TestCase):
             )
         state = self.store.load_run(run_id)
         self.assertEqual(state["status"], "failed")
-        self.assertEqual(state["result"]["reason"], "sandbox_not_implemented")
+        self.assertEqual(state["result"]["reason"], "sandbox_not_configured")
         self.assertFalse(state["isolation_compliant"])
 
     def test_actual_process_cancellation_persists_terminal_evidence(self) -> None:

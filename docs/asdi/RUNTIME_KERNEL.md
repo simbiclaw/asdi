@@ -32,14 +32,14 @@ ASDI-011 is a board-neutral process kernel. It does not contain Multica or Paper
 
 `created` → `starting` → `running` → `runtime_succeeded` → `done_check_running` → `succeeded`
 
-Failure/cancellation paths end only in `failed` or `cancelled`. Start failures include missing runtime, invalid runtime configuration, missing/unknown isolation, unsafe-start rejection, and `sandbox_not_implemented`. Recovery failures include `host_restart_orphaned`, `process_identity_changed`, `missing_process_identity`, and `host_restart_interrupted`.
+Failure/cancellation paths end only in `failed` or `cancelled`. Start failures include missing runtime, invalid runtime configuration, missing/unknown isolation, unsafe-start rejection, missing sandbox configuration, missing container runtime path, and `sandbox_setup_failed`. Recovery failures include `host_restart_orphaned`, `process_identity_changed`, `missing_process_identity`, and `host_restart_interrupted`.
 
 ## Security boundary at this ticket
 
 - The launcher calls `validate_run_contract` at creation and again before start.
-- Vendor runtime adapters refuse container mode until ASDI-012 exists.
+- Vendor runtime adapters require an explicit hardened ASDI-012 sandbox; ASDI-012 is not accepted yet.
 - Synthetic host-process mode is explicitly labelled non-compliant and is restricted to allowed absolute utilities.
 - The child environment does not inherit the launcher environment or secrets.
 - The human environment is not production and no external runtime is invoked by this ticket.
 
-Live turn, spend, and wall-clock enforcement is ASDI-013. Container, workspace, egress, descendant containment, and cleanup are ASDI-012.
+Live turn, spend, and wall-clock enforcement is ASDI-013 and remains blocked. ASDI-012 has partial container evidence but its required container-side egress boundary is not accepted; autonomous operation remains disabled.
