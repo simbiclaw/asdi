@@ -282,6 +282,31 @@ class LifecycleStore:
             key=lambda item: (item.get("created_at_ns", 0), item["created_at"]),
         )
 
+    def list_missions(
+        self,
+        *,
+        status: str | None = None,
+        mission_kind: str | None = None,
+        external_reference: str | None = None,
+    ) -> list[dict[str, Any]]:
+        missions_root = self.root / "missions"
+        matches: list[dict[str, Any]] = []
+        if not missions_root.exists():
+            return matches
+        for mission_path in missions_root.glob("mission_*/mission.json"):
+            mission = json.loads(mission_path.read_text())
+            if status and mission.get("status") != status:
+                continue
+            if mission_kind and mission.get("mission_kind") != mission_kind:
+                continue
+            if external_reference and mission.get("external_reference") != external_reference:
+                continue
+            matches.append(mission)
+        return sorted(
+            matches,
+            key=lambda item: (item.get("created_at_ns", 0), item["created_at"]),
+        )
+
     @staticmethod
     def _brief(objective: str, why: str, constraints: list[str], mission_kind: str) -> dict[str, Any]:
         scope = "production defect repair" if mission_kind == "repair" else "local prototype feature"
