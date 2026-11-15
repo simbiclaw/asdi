@@ -61,6 +61,8 @@ Result: **40 tests, OK, 3 expected AF_UNIX skips.**
 |---|---|
 | Integrated company loop | Implemented and verified locally |
 | Agent execution | Verified with deterministic fixture agents |
+| Live command-agent compatibility | Implemented and tested; live vendor CLI not invoked |
+| Mission guardrails | Local turns/spend/wall clock implemented and verified |
 | Local deployment/rollback/flags | Implemented and verified |
 | Remote merge / production deployment | Not implemented; intentionally disabled |
 | Live model adapter in company loop | Not integrated yet |

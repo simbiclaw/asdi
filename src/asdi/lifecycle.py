@@ -31,6 +31,83 @@ FORBIDDEN_ARTIFACT_TOKENS = (
 )
 
 
+@dataclass(frozen=True)
+class MissionGuardrails:
+    """Per-mission limits enforced before and during lifecycle work."""
+
+    max_turns: int = 200
+    max_spend_usd: float = 8.0
+    wall_clock_seconds: int = 5400
+
+    def __post_init__(self) -> None:
+        if self.max_turns <= 0 or self.wall_clock_seconds <= 0 or self.max_spend_usd <= 0:
+            raise ValueError("mission guardrails must be positive")
+
+    def as_dict(self) -> dict[str, int | float]:
+        return {
+            "max_turns": self.max_turns,
+            "max_spend_usd": self.max_spend_usd,
+            "wall_clock_seconds": self.wall_clock_seconds,
+        }
+
+    @classmethod
+    def from_value(cls, value: dict[str, Any] | None) -> "MissionGuardrails":
+        if isinstance(value, cls):
+            return value
+        defaults = cls()
+        if value is None:
+            return defaults
+        return cls(
+            max_turns=int(value.get("max_turns", defaults.max_turns)),
+            max_spend_usd=float(value.get("max_spend_usd", defaults.max_spend_usd)),
+            wall_clock_seconds=int(value.get("wall_clock_seconds", defaults.wall_clock_seconds)),
+        )
+
+
+@dataclass(frozen=True)
+class CommandAgent:
+    """Explicit argv adapter for fixture, local, or live coding-agent CLIs.
+
+    Tokens ``{workspace}``, ``{mission_id}``, ``{objective}``, and ``{variant}``
+    are substituted before execution.  No shell is used.
+    """
+
+    name: str
+    argv: tuple[str, ...]
+    timeout_seconds: float = 120
+    default_cost_usd: float = 0.0
+    env: tuple[tuple[str, str], ...] = ()
+
+    def build(
+        self,
+        *,
+        mission_id: str,
+        workspace: Path,
+        objective: str,
+        variant: str,
+    ) -> tuple[list[str], dict[str, str]]:
+        values = {
+            "workspace": str(workspace),
+            "mission_id": mission_id,
+            "objective": objective,
+            "variant": variant,
+        }
+        command = [token.format(**values) for token in self.argv]
+        if not command or not Path(command[0]).is_absolute():
+            raise ValueError("agent command executable must be an absolute path")
+        if any(not isinstance(item, str) or any(ord(char) < 32 for char in item) for item in command):
+            raise ValueError("agent command arguments must be printable")
+        environment = {
+            "PATH": "/usr/bin:/bin:/usr/local/bin",
+            "HOME": "/tmp",
+            "LANG": "C.UTF-8",
+            "ASDI_RUN_ID": mission_id,
+            "ASDI_SANDBOX_MODE": "local_prototype_workspace",
+            **dict(self.env),
+        }
+        return command, environment
+
+
 def utc_now() -> str:
     return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
 
@@ -83,6 +160,7 @@ class LifecycleStore:
         mission_kind: str,
         parent_mission_id: str | None = None,
         detection_evidence: dict[str, Any] | None = None,
+        guardrails: MissionGuardrails | dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         if not objective.strip() or not why.strip():
             raise ValueError("objective and why are required")
@@ -90,6 +168,7 @@ class LifecycleStore:
         mission_root = self.mission_root(mission_id)
         mission_root.mkdir(parents=True)
         (mission_root / "workspace").mkdir()
+        guardrail_policy = MissionGuardrails.from_value(guardrails)
         now = utc_now()
         state: dict[str, Any] = {
             "schema_version": "asdi.mission/v0",
@@ -110,10 +189,18 @@ class LifecycleStore:
             "merge": None,
             "repair_attempts": 0,
             "closed": False,
+            "guardrails": guardrail_policy.as_dict(),
+            "budget": {
+                "turns_used": 0,
+                "spend_usd": 0.0,
+                "wall_clock_started_at": time.time(),
+                "wall_clock_seconds_used": 0.0,
+            },
         }
         self._save(state)
         self.append_event(mission_id, "mission_admitted", {"objective": objective})
         self.append_event(mission_id, "brief_compiled", state["brief"])
+        self.append_event(mission_id, "guardrails_configured", state["guardrails"])
         if parent_mission_id:
             self.append_event(
                 mission_id,
@@ -191,6 +278,68 @@ class MissionEngine:
     def __init__(self, store: LifecycleStore) -> None:
         self.store = store
 
+    def _check_guardrails(self, mission_id: str) -> dict[str, Any]:
+        mission = self.store.load(mission_id)
+        budget = mission["budget"]
+        guardrails = mission["guardrails"]
+        elapsed = max(0.0, time.time() - budget["wall_clock_started_at"])
+        budget["wall_clock_seconds_used"] = elapsed
+        breaches: list[str] = []
+        if budget["turns_used"] >= guardrails["max_turns"]:
+            breaches.append("max_turns")
+        if budget["spend_usd"] >= float(guardrails["max_spend_usd"]):
+            breaches.append("max_spend_usd")
+        if elapsed >= guardrails["wall_clock_seconds"]:
+            breaches.append("wall_clock_seconds")
+        self.store._save(mission)
+        if breaches:
+            payload = {
+                "breaches": breaches,
+                "budget": {
+                    "turns_used": budget["turns_used"],
+                    "spend_usd": budget["spend_usd"],
+                    "wall_clock_seconds_used": elapsed,
+                },
+                "limits": guardrails,
+            }
+            self.store.update(
+                mission_id,
+                {"status": "guardrail_exceeded"},
+                "guardrail_exceeded",
+                payload,
+            )
+            raise RuntimeError(f"mission guardrail exceeded: {', '.join(breaches)}")
+        return mission
+
+    def _remaining_wall_clock(self, mission: dict[str, Any]) -> float:
+        budget = mission["budget"]
+        elapsed = max(0.0, time.time() - budget["wall_clock_started_at"])
+        return max(0.0, float(mission["guardrails"]["wall_clock_seconds"]) - elapsed)
+
+    def _settle_guardrails(self, mission_id: str, *, cost_usd: float = 0.0) -> None:
+        mission = self.store.load(mission_id)
+        mission["budget"]["spend_usd"] = round(
+            mission["budget"]["spend_usd"] + max(0.0, cost_usd), 6
+        )
+        mission["budget"]["wall_clock_seconds_used"] = max(
+            0.0, time.time() - mission["budget"]["wall_clock_started_at"]
+        )
+        self.store._save(mission)
+        breaches: list[str] = []
+        budget = mission["budget"]
+        if budget["spend_usd"] >= float(mission["guardrails"]["max_spend_usd"]):
+            breaches.append("max_spend_usd")
+        if budget["wall_clock_seconds_used"] >= mission["guardrails"]["wall_clock_seconds"]:
+            breaches.append("wall_clock_seconds")
+        if breaches:
+            self.store.update(
+                mission_id,
+                {"status": "guardrail_exceeded"},
+                "guardrail_exceeded",
+                {"breaches": breaches, "budget": budget},
+            )
+            raise RuntimeError(f"mission guardrail exceeded: {', '.join(breaches)}")
+
     def decompose(self, mission_id: str) -> dict[str, Any]:
         mission = self.store.load(mission_id)
         if mission["mission_kind"] == "repair":
@@ -234,39 +383,59 @@ class MissionEngine:
         self,
         mission_id: str,
         *,
-        agent_path: str | Path,
+        agent_path: str | Path | None = None,
         variant: str,
         timeout: float = 10,
+        agent: CommandAgent | None = None,
     ) -> dict[str, Any]:
         mission = self.store.load(mission_id)
+        self._check_guardrails(mission_id)
         workspace = self.store.mission_root(mission_id) / "workspace"
-        command = [
-            sys.executable,
-            os.path.abspath(agent_path),
-            "--workspace",
-            str(workspace),
-            "--mission-id",
-            mission_id,
-            "--variant",
-            variant,
-        ]
+        runner = agent or fixture_agent(agent_path or "")
+        command, environment = runner.build(
+            mission_id=mission_id,
+            workspace=workspace,
+            objective=mission["objective"],
+            variant=variant,
+        )
+        remaining = self._remaining_wall_clock(mission)
+        execution_timeout = min(timeout, runner.timeout_seconds, remaining)
+        if execution_timeout <= 0:
+            self.store.update(
+                mission_id,
+                {"status": "guardrail_exceeded"},
+                "guardrail_exceeded",
+                {"breaches": ["wall_clock_seconds"]},
+            )
+            raise RuntimeError("mission wall-clock guardrail exceeded")
+        mission["budget"]["turns_used"] += 1
+        self.store._save(mission)
         started = utc_now()
         try:
             completed = subprocess.run(
                 command,
                 cwd=workspace,
-                env={
-                    "PATH": "/usr/bin:/bin:/usr/local/bin",
-                    "HOME": "/tmp",
-                    "ASDI_RUN_ID": mission_id,
-                    "ASDI_SANDBOX_MODE": "local_prototype_workspace",
-                },
+                env=environment,
                 capture_output=True,
                 text=True,
-                timeout=timeout,
+                timeout=execution_timeout,
                 check=False,
             )
-        except (OSError, subprocess.TimeoutExpired) as error:
+        except subprocess.TimeoutExpired as error:
+            evidence = {
+                "exit_code": None,
+                "error": str(error),
+                "guardrail": "wall_clock_seconds",
+            }
+            self._task(mission_id, mission["tasks"][0]["id"], "failed", evidence)
+            self.store.update(
+                mission_id,
+                {"status": "guardrail_exceeded"},
+                "guardrail_exceeded",
+                evidence,
+            )
+            raise RuntimeError("agent execution exceeded wall-clock guardrail") from error
+        except OSError as error:
             evidence = {"exit_code": None, "error": str(error)}
             self._task(mission_id, mission["tasks"][0]["id"], "failed", evidence)
             self.store.update(mission_id, {"status": "execution_failed"}, "execution_failed", evidence)
@@ -281,10 +450,21 @@ class MissionEngine:
         }
         (workspace / "agent.stdout.log").write_text(completed.stdout)
         (workspace / "agent.stderr.log").write_text(completed.stderr)
+        try:
+            output = json.loads(completed.stdout)
+            usage = output.get("usage", output) if isinstance(output, dict) else {}
+            if isinstance(usage, dict) and ("cost_usd" in usage or "usd_cost" in usage):
+                reported_cost = usage.get("cost_usd", usage.get("usd_cost", 0.0))
+                cost_usd = max(0.0, float(reported_cost)) if reported_cost is not None else 0.0
+            else:
+                cost_usd = runner.default_cost_usd
+        except (json.JSONDecodeError, TypeError, ValueError):
+            cost_usd = runner.default_cost_usd
         if completed.returncode != 0:
             self._task(mission_id, mission["tasks"][0]["id"], "failed", evidence)
             self.store.update(mission_id, {"status": "execution_failed"}, "execution_failed", evidence)
             raise RuntimeError("fixture agent returned nonzero")
+        self._settle_guardrails(mission_id, cost_usd=cost_usd)
         task_id = "repair" if mission["mission_kind"] == "repair" else "implement"
         self._task(mission_id, task_id, "completed", evidence)
         artifact = {
@@ -301,12 +481,25 @@ class MissionEngine:
 
     def self_verify(self, mission_id: str, *, app_path: str | Path) -> dict[str, Any]:
         workspace = self.store.mission_root(mission_id) / "workspace"
+        self._check_guardrails(mission_id)
+        mission = self.store.load(mission_id)
+        mission["budget"]["turns_used"] += 1
+        self.store._save(mission)
+        remaining = self._remaining_wall_clock(mission)
+        if remaining <= 0:
+            self.store.update(
+                mission_id,
+                {"status": "guardrail_exceeded"},
+                "guardrail_exceeded",
+                {"breaches": ["wall_clock_seconds"]},
+            )
+            raise RuntimeError("mission wall-clock guardrail exceeded")
         completed = subprocess.run(
             [sys.executable, str(app_path), "--self-check"],
             cwd=workspace,
             capture_output=True,
             text=True,
-            timeout=5,
+                timeout=min(5, remaining),
             check=False,
         )
         evidence = {"exit_code": completed.returncode, "stdout": completed.stdout.strip(), "stderr": completed.stderr.strip()}
@@ -316,17 +509,31 @@ class MissionEngine:
         task_id = "repair" if self.store.load(mission_id)["mission_kind"] == "repair" else "self_verification"
         self._task(mission_id, task_id, "completed", evidence)
         self.store.update(mission_id, {"status": "self_verified"}, "self_verification_passed", evidence)
+        self._settle_guardrails(mission_id)
         return evidence
 
     def independent_review(self, mission_id: str, *, reviewer_path: str | Path) -> list[dict[str, Any]]:
         workspace = self.store.mission_root(mission_id) / "workspace"
         results: list[dict[str, Any]] = []
         for scope in ("correctness", "security", "acceptance"):
+            self._check_guardrails(mission_id)
+            mission = self.store.load(mission_id)
+            mission["budget"]["turns_used"] += 1
+            self.store._save(mission)
+            remaining = self._remaining_wall_clock(mission)
+            if remaining <= 0:
+                self.store.update(
+                    mission_id,
+                    {"status": "guardrail_exceeded"},
+                    "guardrail_exceeded",
+                    {"breaches": ["wall_clock_seconds"]},
+                )
+                raise RuntimeError("mission wall-clock guardrail exceeded")
             completed = subprocess.run(
                 [sys.executable, os.path.abspath(reviewer_path), "--workspace", str(workspace), "--scope", scope],
                 capture_output=True,
                 text=True,
-                timeout=5,
+                timeout=min(5, remaining),
                 check=False,
             )
             try:
@@ -334,6 +541,7 @@ class MissionEngine:
             except json.JSONDecodeError:
                 result = {"scope": scope, "passed": False, "findings": ["reviewer returned invalid JSON"]}
             result["exit_code"] = completed.returncode
+            self._settle_guardrails(mission_id)
             results.append(result)
         failed = [result for result in results if not result["passed"]]
         mission = self.store.load(mission_id)
@@ -371,6 +579,7 @@ class MissionEngine:
         )
 
     def repair(self, mission_id: str, *, agent_path: str | Path, findings: list[dict[str, Any]]) -> dict[str, Any]:
+        self._check_guardrails(mission_id)
         mission = self.store.load(mission_id)
         attempts = mission["repair_attempts"] + 1
         if attempts > 2:
@@ -379,12 +588,21 @@ class MissionEngine:
         workspace = self.store.mission_root(mission_id) / "workspace"
         findings_path = workspace / "review-findings.json"
         findings_path.write_text(json.dumps(findings, indent=2, sort_keys=True) + "\n")
+        runner = fixture_agent(agent_path)
+        command, environment = runner.build(
+            mission_id=mission_id,
+            workspace=workspace,
+            objective=self.store.load(mission_id)["objective"],
+            variant="repair",
+        )
+        remaining = self._remaining_wall_clock(self.store.load(mission_id))
         completed = subprocess.run(
-            [os.path.abspath(agent_path), "--workspace", str(workspace), "--mission-id", mission_id, "--variant", "repair"],
+            command,
             cwd=workspace,
+            env=environment,
             capture_output=True,
             text=True,
-            timeout=10,
+            timeout=min(10, remaining),
             check=False,
         )
         evidence = {"attempt": attempts, "exit_code": completed.returncode}
@@ -466,6 +684,25 @@ def _sha256(path: Path) -> str:
     import hashlib
 
     return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def fixture_agent(agent_path: str | Path) -> CommandAgent:
+    """Compatibility adapter for the original deterministic fixture script."""
+
+    return CommandAgent(
+        name="fixture",
+        argv=(
+            sys.executable,
+            os.path.abspath(agent_path),
+            "--workspace",
+            "{workspace}",
+            "--mission-id",
+            "{mission_id}",
+            "--variant",
+            "{variant}",
+        ),
+        timeout_seconds=10,
+    )
 
 
 class ProductOps:

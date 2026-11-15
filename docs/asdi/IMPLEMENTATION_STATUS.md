@@ -15,7 +15,7 @@ This is the live reconciliation record. Detailed acceptance evidence remains in 
 | ASDI-010 | ASDI-000 | Pass | Contract schema, defaults, provenance, fixtures, validation, and launch preflight pass. See [`GATE_010_EVIDENCE.md`](GATE_010_EVIDENCE.md) and [`GATE_010_VERIFICATION.md`](GATE_010_VERIFICATION.md). |
 | ASDI-011 | ASDI-010 | Pass | Board-neutral durable launcher, Claude/Codex/Hermes adapters, real child cancellation, events/usage/failure/recovery, and `done_check` recheck pass at kernel level. Vendor CLI invocation remains intentionally unverified. See [`GATE_011_EVIDENCE.md`](GATE_011_EVIDENCE.md). |
 | ASDI-012 | ASDI-011 | **Fail / implementation in progress** | Hardened no-network container lifecycle, cancellation, workspace separation, environment boundary, and fail-closed setup have live evidence. Container-side egress does **not** pass because Docker Desktop/macOS cannot mount the host-side Unix socket. An owner-approved `development_open` bridge profile now permits noncompliant flow bring-up only. See [`GATE_012_EVIDENCE.md`](GATE_012_EVIDENCE.md), [`DEV_FLOW_EVIDENCE.md`](DEV_FLOW_EVIDENCE.md), and ADR-0007. |
-| ASDI-013 | ASDI-010/011/012 | Blocked for autonomous acceptance | Development flow can proceed, but autonomous acceptance cannot pass while ASDI-012 is failed. Existing launcher `done_check` recheck does not satisfy live turn/spend/wall-clock acceptance. |
+| ASDI-013 | ASDI-010/011/012 | Local prototype guardrails verified; autonomous acceptance blocked | Mission turn, reported spend, wall clock, and bounded repair are enforced in the local lifecycle. Live runtime billing and production-quality enforcement remain unfinished, and ASDI-012 remains failed. |
 | ASDI-014 | ASDI-011 | Partial | Run state, JSONL events, usage, sandbox, egress decisions, and cleanup evidence are persisted. Queryable retrieval, retention/redaction policy, and full event schema/observability interface remain. |
 | ASDI-020 | ASDI-001/011/012/013 | Blocked | D-9 spike requires the missing sandbox and guardrail capabilities and an owner board decision. |
 | ASDI-021 through ASDI-022 | Gate 1 / D-9 | Blocked for board product integration | Local lifecycle admission/brief/decomposition exists, but board dispatch cannot start pending D-9. |
@@ -29,7 +29,7 @@ This is the live reconciliation record. Detailed acceptance evidence remains in 
 | H2 enforced `done_check` | Contract and launcher recheck pass for tested local/container cases; complete enforcement remains ASDI-013. |
 | H3 container-per-run and egress | **Not accepted.** Network-none/hardened container evidence exists, but container-side allowlist enforcement fails on current Docker Desktop. |
 | H4 secrets outside sandbox | No persistent secret mount; tested host environment secret was absent in container. Production image/secret injection remains unapproved. |
-| H5 per-run guardrails | Not implemented; ASDI-013 remains blocked. |
+| H5 per-run guardrails | Local prototype turn/spend/wall-clock enforcement is implemented and tested; live vendor billing and production acceptance remain unfinished. |
 | H6 no irreversible actions | No irreversible agent action enabled; merge/deploy/production paths remain closed. |
 | H7 protected generated/vendored paths | No protected generated/vendored implementation yet; repository governance remains incomplete. |
 
@@ -41,8 +41,8 @@ This is the live reconciliation record. Detailed acceptance evidence remains in 
 4. **Production sandbox image and secret-injection boundary** must be selected and audited.
 5. **Container egress transport on macOS/Docker Desktop** requires an architectural decision if this remains the host platform.
 6. **ADR-0007 replacement** is required before autonomous operation: development-open bridge networking is noncompliant by definition.
-7. **Live model agent integration** is required to replace deterministic fixture agents in the integrated company loop.
+7. **Live model agent integration** is required to replace deterministic fixture agents in the integrated company loop; the explicit command-adapter path now exists but has not invoked a live vendor CLI.
 
 ## Current execution boundary
 
-Synthetic host-process tests are allowed only for process-kernel testing. The owner-approved `development_open` profile may exercise the flow with no production credentials/data; it is explicitly noncompliant. The integrated local lifecycle uses fixture agents, local deployment, and T0-authorized local merge only. No autonomous vendor runtime, remote merge, production deployment, or production exposure is authorized. ASDI-012 acceptance remains failed.
+Synthetic host-process tests are allowed only for process-kernel testing. The owner-approved `development_open` profile may exercise the flow with no production credentials/data; it is explicitly noncompliant. The integrated local lifecycle uses fixture agents or an explicit command adapter, local deployment, and T0-authorized local merge only. No autonomous vendor runtime, remote merge, production deployment, or production exposure is authorized. ASDI-012 acceptance remains failed.

@@ -32,5 +32,6 @@ The engine does not grant autonomous merge authority. Every local merge requires
 ## Consequences
 
 - ASDI can now demonstrate both required integrated scenarios locally.
+- The implementation includes an explicit shell-free command adapter and local per-mission guardrails so a real CLI can be substituted without redesign.
 - This is not production autonomy: agents are deterministic fixtures, deployment is local, remote merge is disabled, strict container egress remains unaccepted, and turn/spend/wall-clock guardrails remain ASDI-013 work.
 - The next high-value integration step is replacing the fixture agent with one live local runtime adapter while retaining admission, review, merge, deployment, monitoring, and learning evidence.

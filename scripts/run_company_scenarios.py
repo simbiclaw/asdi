@@ -10,6 +10,8 @@ import time
 from pathlib import Path
 
 from asdi.lifecycle import (
+    CommandAgent,
+    MissionGuardrails,
     LifecycleStore,
     MergeAuthorization,
     MissionEngine,
@@ -26,7 +28,7 @@ AUTHORIZATION = MergeAuthorization(
 
 
 class CompanyRun:
-    def __init__(self, root: Path, agent: Path, reviewer: Path) -> None:
+    def __init__(self, root: Path, agent: Path | CommandAgent, reviewer: Path) -> None:
         self.root = root
         self.store = LifecycleStore(root)
         self.engine = MissionEngine(self.store)
@@ -35,9 +37,13 @@ class CompanyRun:
         self.agent = agent
         self.reviewer = reviewer
 
+    @property
+    def agent_constraint(self) -> str:
+        return "explicit command adapter only" if isinstance(self.agent, CommandAgent) else "fixture agents only"
+
     def _implement(self, mission_id: str, variant: str) -> None:
         self.engine.decompose(mission_id)
-        self.engine.execute_agent(mission_id, agent_path=self.agent, variant=variant)
+        self.run_agent(mission_id, variant)
         mission_root = self.store.mission_root(mission_id) / "workspace"
         self.engine.self_verify(mission_id, app_path=mission_root / "app.py")
         review = self.engine.independent_review(mission_id, reviewer_path=self.reviewer)
@@ -45,18 +51,24 @@ class CompanyRun:
             raise RuntimeError(f"independent review failed for {mission_id}")
         self.engine.classify(mission_id)
 
+    def run_agent(self, mission_id: str, variant: str) -> dict:
+        if isinstance(self.agent, CommandAgent):
+            return self.engine.execute_agent(mission_id, agent=self.agent, variant=variant)
+        return self.engine.execute_agent(mission_id, agent_path=self.agent, variant=variant)
+
     def product_lifecycle(self) -> dict:
         mission = self.store.create_mission(
             objective="Deliver a controlled local prototype feature",
             why="Demonstrate the integrated ASDI product lifecycle on one host.",
             constraints=[
-                "fixture agents only",
+                self.agent_constraint,
                 "local target only",
                 "no production secrets",
                 "feature flag starts off",
                 "T0 human merge authorization",
             ],
             mission_kind="feature",
+            guardrails=MissionGuardrails(max_turns=24, max_spend_usd=2.0, wall_clock_seconds=120),
         )
         mission_id = mission["mission_id"]
         self._implement(mission_id, "good")
@@ -87,6 +99,8 @@ class CompanyRun:
             "stage": "product_lifecycle",
             "mission_id": mission_id,
             "status": state["status"],
+            "guardrails": state["guardrails"],
+            "budget": state["budget"],
             "tasks": state["tasks"],
             "classification": state["classification"],
             "merge": merge,
@@ -106,12 +120,13 @@ class CompanyRun:
             objective="Add local load handling to the prototype feature",
             why="Create a controlled production defect so self-healing can be demonstrated.",
             constraints=[
-                "fixture agents only",
+                self.agent_constraint,
                 "local target only",
                 "no production secrets",
                 "T0 human merge authorization",
             ],
             mission_kind="feature",
+            guardrails=MissionGuardrails(max_turns=24, max_spend_usd=2.0, wall_clock_seconds=120),
         )
         feature_id = feature["mission_id"]
         self._implement(feature_id, "buggy")
@@ -128,7 +143,7 @@ class CompanyRun:
             why="Close the self-healing lifecycle with bounded repair and production verification.",
             constraints=[
                 "maximum two repair attempts",
-                "fixture agents only",
+                self.agent_constraint,
                 "local target only",
                 "no production secrets",
                 "T0 human merge authorization",
@@ -136,11 +151,12 @@ class CompanyRun:
             mission_kind="repair",
             parent_mission_id=feature_id,
             detection_evidence=defect,
+            guardrails=MissionGuardrails(max_turns=24, max_spend_usd=2.0, wall_clock_seconds=120),
         )
         repair_id = repair["mission_id"]
         self.engine.decompose(repair_id)
         triage = self.engine.record_triage(repair_id, defect)
-        self.engine.execute_agent(repair_id, agent_path=self.agent, variant="repair")
+        self.run_agent(repair_id, "repair")
         repaired_workspace = self.store.mission_root(repair_id) / "workspace"
         self.engine.self_verify(repair_id, app_path=repaired_workspace / "app.py")
         review = self.engine.independent_review(repair_id, reviewer_path=self.reviewer)
@@ -174,6 +190,8 @@ class CompanyRun:
             "repair_mission_id": repair_id,
             "triage": triage,
             "repair_status": repair_state["status"],
+            "repair_guardrails": repair_state["guardrails"],
+            "repair_budget": repair_state["budget"],
             "repair_tasks": repair_state["tasks"],
             "repair_merge": merge,
             "repair_deployment": repair_deployment,
@@ -192,26 +210,53 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--root")
     parser.add_argument("--agent", default="scripts/fixture_agent.py")
+    parser.add_argument(
+        "--live-agent-command",
+        nargs="+",
+        help="Explicit argv command adapter; supports {workspace}, {mission_id}, {objective}, and {variant}.",
+    )
     parser.add_argument("--reviewer", default="scripts/fixture_reviewer.py")
     arguments = parser.parse_args()
     root = Path(arguments.root).resolve() if arguments.root else Path(tempfile.mkdtemp(prefix=f"asdi-company-{time.strftime('%Y%m%d-%H%M%S')}-"))
     root.mkdir(parents=True, exist_ok=True)
-    run = CompanyRun(root, Path(arguments.agent), Path(arguments.reviewer))
+    agent: Path | CommandAgent
+    if arguments.live_agent_command:
+        if Path(arguments.live_agent_command[0]).is_absolute() is False:
+            parser.error("live agent executable must be an absolute path")
+        agent = CommandAgent(
+            name="live_cli",
+            argv=tuple(arguments.live_agent_command),
+            timeout_seconds=300,
+        )
+    else:
+        agent = Path(arguments.agent)
+    run = CompanyRun(root, agent, Path(arguments.reviewer))
+    runner_info = (
+        {"kind": "command_agent", "name": agent.name}
+        if isinstance(agent, CommandAgent)
+        else {"kind": "fixture_agent", "path": str(agent)}
+    )
     report = {
         "schema_version": "asdi.company-scenario-report/v0",
         "result": "pass",
         "evidence_root": str(root),
-        "execution_mode": "local fixture agents; no model APIs; no production infrastructure",
+        "execution_mode": (
+            "explicit command agent; local target only; no production infrastructure"
+            if isinstance(agent, CommandAgent)
+            else "local fixture agents; no model APIs; no production infrastructure"
+        ),
+        "agent_adapter": runner_info,
         "product_lifecycle": run.product_lifecycle(),
         "self_healing_lifecycle": run.self_healing_lifecycle(),
         "learning_events": (root / "product" / "learning.jsonl").read_text().splitlines(),
         "limitations": {
-            "fixture_agents": True,
+            "fixture_agents": not isinstance(agent, CommandAgent),
             "live_model_agents": False,
             "remote_merge": False,
             "production_deployment": False,
             "strict_container_egress_accepted": False,
-            "guardrails_enforced": False,
+            "guardrails_enforced": True,
+            "guardrail_scope": "local mission turns, reported spend, and elapsed wall clock",
         },
     }
     report_path = root / "company-scenario-report.json"
