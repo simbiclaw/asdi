@@ -161,6 +161,8 @@ class LifecycleStore:
         parent_mission_id: str | None = None,
         detection_evidence: dict[str, Any] | None = None,
         guardrails: MissionGuardrails | dict[str, Any] | None = None,
+        external_reference: str | None = None,
+        reset_generation: int = 1,
     ) -> dict[str, Any]:
         if not objective.strip() or not why.strip():
             raise ValueError("objective and why are required")
@@ -174,10 +176,13 @@ class LifecycleStore:
             "schema_version": "asdi.mission/v0",
             "mission_id": mission_id,
             "created_at": now,
+            "created_at_ns": time.time_ns(),
             "updated_at": now,
             "status": "admitted",
             "mission_kind": mission_kind,
             "parent_mission_id": parent_mission_id,
+            "external_reference": external_reference.strip() if external_reference else None,
+            "reset_generation": max(1, int(reset_generation)),
             "objective": objective.strip(),
             "why": why.strip(),
             "constraints": constraints,
@@ -206,6 +211,12 @@ class LifecycleStore:
                 mission_id,
                 "linked_parent_mission",
                 {"parent_mission_id": parent_mission_id, "detection_evidence": detection_evidence or {}},
+            )
+        if reset_generation > 1:
+            self.append_event(
+                mission_id,
+                "brief_v2_created",
+                {"reset_generation": reset_generation, "external_reference": external_reference},
             )
         return state
 
@@ -248,6 +259,28 @@ class LifecycleStore:
         if not path.exists():
             return []
         return [json.loads(line) for line in path.read_text().splitlines()]
+
+    def find_by_external_reference(self, external_reference: str) -> list[dict[str, Any]]:
+        """Return durable missions for a work item, ordered by creation time."""
+
+        needle = external_reference.strip()
+        if not needle:
+            raise ValueError("external reference is required")
+        missions_root = self.root / "missions"
+        matches: list[dict[str, Any]] = []
+        if not missions_root.exists():
+            return matches
+        for mission_root in missions_root.glob("mission_*"):
+            mission_path = mission_root / "mission.json"
+            if not mission_path.is_file():
+                continue
+            mission = json.loads(mission_path.read_text())
+            if mission.get("external_reference") == needle:
+                matches.append(mission)
+        return sorted(
+            matches,
+            key=lambda item: (item.get("created_at_ns", 0), item["created_at"]),
+        )
 
     @staticmethod
     def _brief(objective: str, why: str, constraints: list[str], mission_kind: str) -> dict[str, Any]:
@@ -422,6 +455,12 @@ class MissionEngine:
                 check=False,
             )
         except subprocess.TimeoutExpired as error:
+            if error.stdout is not None:
+                output = error.stdout if isinstance(error.stdout, str) else error.stdout.decode(errors="replace")
+                (workspace / "agent.stdout.log").write_text(output)
+            if error.stderr is not None:
+                errors = error.stderr if isinstance(error.stderr, str) else error.stderr.decode(errors="replace")
+                (workspace / "agent.stderr.log").write_text(errors)
             evidence = {
                 "exit_code": None,
                 "error": str(error),
@@ -611,6 +650,38 @@ class MissionEngine:
             raise RuntimeError("repair agent failed")
         self.store.update(mission_id, {"status": "repaired"}, "repair_completed", evidence)
         return evidence
+
+    def reset(self, mission_id: str, *, reset_reason: str) -> dict[str, Any]:
+        """Create a fresh brief-v2 mission after exhausted bounded repair."""
+
+        previous = self.store.load(mission_id)
+        if previous["status"] != "reset_required":
+            raise ValueError("reset is allowed only after the repair limit is exceeded")
+        reset = self.store.create_mission(
+            objective=previous["objective"],
+            why=f"Brief-v2 reset after failed repair cycle: {reset_reason}",
+            constraints=[
+                *(previous.get("constraints", [])),
+                "prior attempt failed",
+                "fresh execution context",
+                "no accumulation of prior workspace state",
+            ],
+            mission_kind=previous["mission_kind"],
+            parent_mission_id=mission_id,
+            guardrails=previous.get("guardrails"),
+            external_reference=previous.get("external_reference"),
+            reset_generation=int(previous.get("reset_generation", 1)) + 1,
+        )
+        self.store.update(
+            mission_id,
+            {"status": "reset_created", "closed": True},
+            "mission_reset_created",
+            {
+                "reset_mission_id": reset["mission_id"],
+                "reset_reason": reset_reason,
+            },
+        )
+        return reset
 
     def classify(self, mission_id: str) -> dict[str, Any]:
         mission = self.store.load(mission_id)

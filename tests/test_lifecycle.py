@@ -143,6 +143,45 @@ class LifecycleTests(unittest.TestCase):
             self.run.engine.execute_agent(mission_id, agent_path=AGENT, variant="good")
         self.assertEqual(self.run.store.load(mission_id)["status"], "guardrail_exceeded")
 
+    def test_external_reference_is_queryable_across_resets(self) -> None:
+        reference = "WORK-RESET-1"
+        first = self.run.store.create_mission(
+            objective="bounded reset fixture",
+            why="verify failed missions receive a fresh brief-v2 context",
+            constraints=[],
+            mission_kind="repair",
+            external_reference=reference,
+            guardrails=MissionGuardrails(max_turns=100, max_spend_usd=1, wall_clock_seconds=60),
+        )
+        self.assertEqual(first["reset_generation"], 1)
+        mission_id = first["mission_id"]
+        self.run.engine.decompose(mission_id)
+        for _ in range(3):
+            try:
+                self.run.engine.repair(mission_id, agent_path=AGENT, findings=[])
+            except RuntimeError:
+                pass
+        exhausted = self.run.store.load(mission_id)
+        self.assertEqual(exhausted["status"], "reset_required")
+        reset = self.run.engine.reset(mission_id, reset_reason="two failed repair attempts")
+        self.assertEqual(reset["reset_generation"], 2)
+        self.assertEqual(reset["external_reference"], reference)
+        self.assertEqual(reset["parent_mission_id"], mission_id)
+        self.assertEqual(reset["repair_attempts"], 0)
+        self.assertEqual(self.run.store.load(mission_id)["status"], "reset_created")
+        matches = self.run.store.find_by_external_reference(reference)
+        self.assertEqual([item["mission_id"] for item in matches], [mission_id, reset["mission_id"]])
+
+    def test_reset_rejects_active_missions(self) -> None:
+        mission = self.run.store.create_mission(
+            objective="active reset guard",
+            why="reset must not discard active work",
+            constraints=[],
+            mission_kind="feature",
+        )
+        with self.assertRaises(ValueError):
+            self.run.engine.reset(mission["mission_id"], reset_reason="not exhausted")
+
     def test_product_lifecycle_passes_with_t0_local_merge(self) -> None:
         evidence = self.run.product_lifecycle()
         self.assertEqual(evidence["status"], "experiment_completed")

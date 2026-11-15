@@ -85,6 +85,7 @@ class CompanyRun:
             ],
             mission_kind="feature",
             guardrails=self.guardrails,
+            external_reference="asdi-local-product-2026-11-15",
         )
         mission_id = mission["mission_id"]
         self._implement(mission_id, "good")
@@ -143,6 +144,7 @@ class CompanyRun:
             ],
             mission_kind="feature",
             guardrails=self.guardrails,
+            external_reference="asdi-local-self-healing-2026-11-15",
         )
         feature_id = feature["mission_id"]
         self._implement(feature_id, "buggy")
@@ -168,6 +170,7 @@ class CompanyRun:
             parent_mission_id=feature_id,
             detection_evidence=defect,
             guardrails=self.guardrails,
+            external_reference="asdi-local-self-healing-2026-11-15",
         )
         repair_id = repair["mission_id"]
         self.engine.decompose(repair_id)
@@ -231,6 +234,7 @@ def main() -> int:
         help="Explicit argv command string; supports {workspace}, {mission_id}, {objective}, and {variant}.",
     )
     parser.add_argument("--reviewer", default="scripts/fixture_reviewer.py")
+    parser.add_argument("--agent-proxy", default="http://127.0.0.1:7890")
     parser.add_argument("--wall-clock-seconds", type=int, default=120)
     arguments = parser.parse_args()
     root = Path(arguments.root).resolve() if arguments.root else Path(tempfile.mkdtemp(prefix=f"asdi-company-{time.strftime('%Y%m%d-%H%M%S')}-"))
@@ -242,7 +246,14 @@ def main() -> int:
         agent = CommandAgent(
             name="live_cli",
             argv=tuple(shlex.split(arguments.live_agent_command)),
-            timeout_seconds=300,
+            timeout_seconds=560,
+            env=(
+                ("HTTP_PROXY", arguments.agent_proxy),
+                ("HTTPS_PROXY", arguments.agent_proxy),
+                ("ALL_PROXY", arguments.agent_proxy),
+                ("NO_PROXY", "localhost,127.0.0.1"),
+                ("CODEX_HOME", "/Users/russell/.codex"),
+            ),
         )
     else:
         agent = Path(arguments.agent)
@@ -273,6 +284,10 @@ def main() -> int:
         "agent_adapter": runner_info,
         "product_lifecycle": run.product_lifecycle(),
         "self_healing_lifecycle": run.self_healing_lifecycle(),
+        "mission_index": {
+            "product": run.store.find_by_external_reference("asdi-local-product-2026-11-15"),
+            "self_healing": run.store.find_by_external_reference("asdi-local-self-healing-2026-11-15"),
+        },
         "learning_events": (root / "product" / "learning.jsonl").read_text().splitlines(),
         "limitations": {
             "fixture_agents": not isinstance(agent, CommandAgent),

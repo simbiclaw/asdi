@@ -19,6 +19,8 @@ A Codex-specific adapter was added at [`scripts/codex_lifecycle_adapter.py`](../
 
 One opt-in integration attempt used the installed Codex CLI against a temporary local target. The lifecycle engine stopped it at the configured wall-clock guardrail after 300 seconds with `guardrail_exceeded`. No production resource was contacted by ASDI and no merge/deployment occurred. This is a live-agent integration failure, not a guardrail failure; the guardrail behaved correctly.
 
+Follow-up diagnostics found the configured default provider was initially unreachable without the local proxy. With proxy and `CODEX_HOME` configured, `deepseek-v4.1-flash` and `glm-5.3-flash` both reached the provider but disconnected before response completion. This is now a provider/model integration issue rather than a lifecycle-engine issue.
+
 ## Verification
 
 ```sh
