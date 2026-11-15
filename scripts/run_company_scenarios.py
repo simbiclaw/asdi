@@ -50,6 +50,85 @@ class CompanyRun:
             wall_clock_seconds=120,
         )
 
+    def execute_feature_mission(
+        self,
+        mission_id: str,
+        *,
+        authorization: MergeAuthorization,
+        variant: str = "good",
+        expose: bool = True,
+        traffic: int = 4,
+    ) -> dict:
+        mission = self.store.load(mission_id)
+        if mission["mission_kind"] != "feature":
+            raise ValueError("local autonomous runner currently supports feature missions")
+        if mission["status"] not in {"created", "admitted", "decomposed"}:
+            raise ValueError(f"mission is {mission['status']}; expected created/admitted/decomposed")
+
+        self.engine.decompose(mission_id)
+        self.run_agent(mission_id, variant)
+        workspace = self.store.mission_root(mission_id) / "workspace"
+        self.engine.self_verify(mission_id, app_path=workspace / "app.py")
+        review = self.engine.independent_review(mission_id, reviewer_path=self.reviewer)
+        if any(not result["passed"] for result in review):
+            raise RuntimeError(f"independent review failed for {mission_id}")
+        self.engine.classify(mission_id)
+        merge = self.engine.merge(mission_id, target_root=self.target, authorization=authorization)
+        deployment = self.product.deploy(mission_id, workspace)
+        default = self.product.request(scenario="normal")
+        exposure = None
+        experiment = None
+        if expose:
+            exposure = self.product.set_flag(
+                "prototype_feature",
+                True,
+                decision_reference=authorization.decision_reference,
+            )
+            experiment = self.product.experiment(
+                name="prototype_feature", traffic=traffic
+            )
+        self.engine.complete_task(
+            mission_id,
+            "deployment",
+            {"deployment": deployment, "default_flag_response": default},
+            status="deployed",
+        )
+        if experiment is not None:
+            self.engine.complete_task(
+                mission_id,
+                "experiment",
+                {
+                    "experiment_verdict": experiment["verdict"],
+                    "passed": experiment["passed"],
+                    "failed": experiment["failed"],
+                },
+                status="experiment_completed",
+            )
+        state = self.store.load(mission_id)
+        return {
+            "mission_id": mission_id,
+            "status": state["status"],
+            "external_reference": state.get("external_reference"),
+            "guardrails": state["guardrails"],
+            "budget": state["budget"],
+            "tasks": state["tasks"],
+            "classification": state["classification"],
+            "merge": merge,
+            "deployment": deployment,
+            "default_flag_response": default,
+            "controlled_exposure": exposure,
+            "experiment_verdict": (
+                {
+                    "verdict": experiment["verdict"],
+                    "passed": experiment["passed"],
+                    "failed": experiment["failed"],
+                }
+                if experiment
+                else None
+            ),
+            "events": [event["type"] for event in self.store.events(mission_id)],
+        }
+
     @property
     def agent_constraint(self) -> str:
         return "explicit command adapter only" if isinstance(self.agent, CommandAgent) else "fixture agents only"
@@ -88,49 +167,14 @@ class CompanyRun:
             external_reference="asdi-local-product-2026-11-15",
         )
         mission_id = mission["mission_id"]
-        self._implement(mission_id, "good")
-        merge = self.engine.merge(mission_id, target_root=self.target, authorization=AUTHORIZATION)
-        workspace = self.store.mission_root(mission_id) / "workspace"
-        deployment = self.product.deploy(mission_id, workspace)
-        default = self.product.request(scenario="normal")
-        exposure = self.product.set_flag(
-            "prototype_feature",
-            True,
-            decision_reference="owner directive 2026-11-15: controlled local prototype exposure",
-        )
-        experiment = self.product.experiment(name="prototype_feature", traffic=4)
-        self.engine.complete_task(
+        result = self.execute_feature_mission(
             mission_id,
-            "deployment",
-            {"deployment": deployment, "default_flag_response": default},
-            status="deployed",
+            authorization=AUTHORIZATION,
+            variant="good",
+            expose=True,
+            traffic=4,
         )
-        self.engine.complete_task(
-            mission_id,
-            "experiment",
-            {"experiment_verdict": experiment["verdict"], "passed": experiment["passed"], "failed": experiment["failed"]},
-            status="experiment_completed",
-        )
-        state = self.store.load(mission_id)
-        return {
-            "stage": "product_lifecycle",
-            "mission_id": mission_id,
-            "status": state["status"],
-            "guardrails": state["guardrails"],
-            "budget": state["budget"],
-            "tasks": state["tasks"],
-            "classification": state["classification"],
-            "merge": merge,
-            "deployment": deployment,
-            "default_flag_response": default,
-            "controlled_exposure": exposure,
-            "experiment_verdict": {
-                "verdict": experiment["verdict"],
-                "passed": experiment["passed"],
-                "failed": experiment["failed"],
-            },
-            "events": [event["type"] for event in self.store.events(mission_id)],
-        }
+        return {"stage": "product_lifecycle", **result}
 
     def self_healing_lifecycle(self) -> dict:
         feature = self.store.create_mission(

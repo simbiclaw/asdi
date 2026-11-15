@@ -13,6 +13,7 @@
 * `events` — read the append-only lifecycle event log;
 * `product` — read release/flag/traffic/monitoring/learning evidence;
 * `check` — validate durable roots.
+* `run` — autonomously execute an admitted local feature through governed local merge, deployment, optional exposure, and experiment verdict.
 
 Mission snapshots expose current status, guardrails, remaining turn/spend/wall-clock budget, tasks, artifacts, classification, merge authorization, reset generation, and parent linkage.
 

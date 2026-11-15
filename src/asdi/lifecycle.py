@@ -773,7 +773,13 @@ class MissionEngine:
             "autonomous_merge": False,
         }
         self._task(mission_id, "classification", "completed", {**classification, "merge": merge_record})
-        return self.store.update(mission_id, {"status": "merged", "merge": merge_record}, "local_merge_authorized", merge_record)
+        self.store.update(
+            mission_id,
+            {"status": "merged", "merge": merge_record},
+            "local_merge_authorized",
+            merge_record,
+        )
+        return merge_record
 
 
 def _sha256(path: Path) -> str:

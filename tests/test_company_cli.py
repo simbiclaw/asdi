@@ -9,6 +9,11 @@ from pathlib import Path
 from scripts.company_cli import main
 
 
+ROOT = Path(__file__).resolve().parents[1]
+AGENT = ROOT / "scripts" / "fixture_agent.py"
+REVIEWER = ROOT / "scripts" / "fixture_reviewer.py"
+
+
 class CompanyCliTests(unittest.TestCase):
     def setUp(self) -> None:
         self._temporary = tempfile.TemporaryDirectory()
@@ -102,3 +107,84 @@ class CompanyCliTests(unittest.TestCase):
         )
         self.assertEqual(result, 2)
         self.assertEqual(json.loads(output.getvalue())["error"], "mission_not_found")
+
+    def test_run_admitted_feature_through_governed_local_lifecycle(self) -> None:
+        admitted = self.cli(
+            "--root",
+            str(self.root),
+            "admit",
+            "--objective",
+            "Autonomously deliver a controlled local feature",
+            "--why",
+            "Verify durable CLI dispatch through the integrated lifecycle",
+            "--external-reference",
+            "WORK-RUN-1",
+            "--max-turns",
+            "24",
+            "--max-spend-usd",
+            "2",
+            "--wall-clock-seconds",
+            "300",
+        )
+        result = self.cli(
+            "--root",
+            str(self.root),
+            "run",
+            "--mission-id",
+            admitted["mission_id"],
+            "--agent",
+            str(AGENT),
+            "--reviewer",
+            str(REVIEWER),
+            "--approver",
+            "test_owner",
+            "--decision-reference",
+            "explicit T0 local prototype regression",
+            "--variant",
+            "good",
+            "--traffic",
+            "4",
+        )
+        self.assertEqual(result["status"], "experiment_completed")
+        self.assertTrue(all(task["status"] == "completed" for task in result["tasks"]))
+        self.assertEqual(result["classification"]["change_class"], "T0_human")
+        self.assertFalse(result["merge"]["autonomous_merge"])
+        self.assertFalse(result["merge"]["remote_merge"])
+        self.assertEqual(result["merge"]["authority"], "T0_human")
+        self.assertEqual(result["default_flag_response"]["response"]["variant"], "off")
+        self.assertEqual(result["experiment_verdict"]["verdict"], "keep_for_human_review")
+        self.assertTrue(result["controlled_exposure"]["enabled"])
+        self.assertEqual(result["budget"]["turns_used"], 5)
+
+    def test_runner_can_deploy_without_exposure(self) -> None:
+        admitted = self.cli(
+            "--root",
+            str(self.root),
+            "admit",
+            "--objective",
+            "Deploy behind the default-off flag",
+            "--why",
+            "Controlled exposure must remain a separate decision",
+            "--external-reference",
+            "WORK-RUN-NO-EXPOSURE",
+        )
+        result = self.cli(
+            "--root",
+            str(self.root),
+            "run",
+            "--mission-id",
+            admitted["mission_id"],
+            "--agent",
+            str(AGENT),
+            "--reviewer",
+            str(REVIEWER),
+            "--approver",
+            "test_owner",
+            "--decision-reference",
+            "deploy default-off only",
+            "--no-exposure",
+        )
+        self.assertEqual(result["status"], "deployed")
+        self.assertIsNone(result["controlled_exposure"])
+        self.assertIsNone(result["experiment_verdict"])
+        self.assertEqual(result["default_flag_response"]["response"]["variant"], "off")

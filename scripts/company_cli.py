@@ -5,11 +5,13 @@ from __future__ import annotations
 
 import argparse
 import json
+import shlex
 import time
 from pathlib import Path
 from typing import Any
 
-from asdi.lifecycle import LifecycleStore, MissionGuardrails, ProductOps
+from asdi.lifecycle import CommandAgent, LifecycleStore, MissionGuardrails, MergeAuthorization, ProductOps
+from scripts.run_company_scenarios import CompanyRun
 
 
 SENSITIVE_KEYS = {"api_key", "authorization", "password", "secret", "token"}
@@ -136,6 +138,20 @@ def build_parser() -> argparse.ArgumentParser:
 
     product = commands.add_parser("product", help="Read product operations evidence")
     commands.add_parser("check", help="Validate durable roots")
+    run = commands.add_parser(
+        "run",
+        help="Autonomously execute an admitted local feature through governed local merge/deployment",
+    )
+    run.add_argument("--mission-id", required=True)
+    run.add_argument("--agent", default="scripts/fixture_agent.py")
+    run.add_argument("--live-agent-command")
+    run.add_argument("--agent-proxy", default="http://127.0.0.1:7890")
+    run.add_argument("--reviewer", default="scripts/fixture_reviewer.py")
+    run.add_argument("--variant", choices=("good", "buggy", "repair"), default="good")
+    run.add_argument("--approver", required=True)
+    run.add_argument("--decision-reference", required=True)
+    run.add_argument("--no-exposure", action="store_true")
+    run.add_argument("--traffic", type=int, default=4)
     return parser
 
 
@@ -202,6 +218,51 @@ def main(argv: list[str] | None = None, *, stdout: Any = None) -> int:
 
     if arguments.command == "product":
         output(_json_output(product_summary(ProductOps(root / "product"))))
+        return 0
+
+    if arguments.command == "run":
+        try:
+            mission = store.load(arguments.mission_id)
+        except (FileNotFoundError, json.JSONDecodeError):
+            output(_json_output({"error": "mission_not_found"}))
+            return 2
+        agent: Path | CommandAgent
+        if arguments.live_agent_command:
+            command_argv = shlex.split(arguments.live_agent_command)
+            if not command_argv or not Path(command_argv[0]).is_absolute():
+                output(_json_output({"error": "live_agent_executable_must_be_absolute"}))
+                return 2
+            agent = CommandAgent(
+                name="live_cli",
+                argv=tuple(command_argv),
+                timeout_seconds=560,
+                env=(
+                    ("HTTP_PROXY", arguments.agent_proxy),
+                    ("HTTPS_PROXY", arguments.agent_proxy),
+                    ("ALL_PROXY", arguments.agent_proxy),
+                    ("NO_PROXY", "localhost,127.0.0.1"),
+                    ("CODEX_HOME", "/Users/russell/.codex"),
+                ),
+            )
+        else:
+            agent = Path(arguments.agent)
+        runner = CompanyRun(root, agent, Path(arguments.reviewer))
+        try:
+            result = runner.execute_feature_mission(
+                arguments.mission_id,
+                authorization=MergeAuthorization(
+                    approver=arguments.approver,
+                    decision_reference=arguments.decision_reference,
+                    authority="T0_human",
+                ),
+                variant=arguments.variant,
+                expose=not arguments.no_exposure,
+                traffic=arguments.traffic,
+            )
+        except (ValueError, RuntimeError) as error:
+            output(_json_output({"error": "mission_execution_failed", "message": str(error)}))
+            return 3
+        output(_json_output(result))
         return 0
 
     if arguments.command == "check":
