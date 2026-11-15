@@ -19,6 +19,7 @@ from asdi.lifecycle import (
     ProductOps,
     ensure_local_target,
 )
+from asdi.governance import TRMLedger
 
 
 AUTHORIZATION = MergeAuthorization(
@@ -41,6 +42,7 @@ class CompanyRun:
         self.store = LifecycleStore(root)
         self.engine = MissionEngine(self.store)
         self.product = ProductOps(root / "product")
+        self.trm = TRMLedger(root / "governance")
         self.target = ensure_local_target(root / "target")
         self.agent = agent
         self.reviewer = reviewer
@@ -72,6 +74,14 @@ class CompanyRun:
         review = self.engine.independent_review(mission_id, reviewer_path=self.reviewer)
         if any(not result["passed"] for result in review):
             raise RuntimeError(f"independent review failed for {mission_id}")
+        self.trm.record_first_pass(
+            task_type=mission["mission_kind"],
+            mission_id=mission_id,
+            evidence={
+                "review_results": review,
+                "local_prototype": True,
+            },
+        )
         self.engine.classify(mission_id)
         merge = self.engine.merge(mission_id, target_root=self.target, authorization=authorization)
         deployment = self.product.deploy(mission_id, workspace)
@@ -203,6 +213,14 @@ class CompanyRun:
         )
         repair_deployment = self.product.deploy(repair_id, repaired_workspace)
         verification = self.product.verify_repair(traffic=traffic)
+        if verification["closure"] == "reopened":
+            self.trm.record_escaped_defect(
+                task_type=parent["mission_kind"],
+                evidence={
+                    "defect_id": defect["defect_id"],
+                    "repair_mission_id": repair_id,
+                },
+            )
         closure = self.product.close_defect(defect, verification)
         if verification["closure"] == "reopened":
             try:
@@ -250,6 +268,7 @@ class CompanyRun:
             "repair_events": [
                 event["type"] for event in self.store.events(repair_id)
             ],
+            "trm": self.trm.snapshot()["task_types"].get(parent["mission_kind"]),
         }
 
     def monitor(
@@ -407,6 +426,7 @@ def main() -> int:
             "product": run.store.find_by_external_reference("asdi-local-product-2026-11-15"),
             "self_healing": run.store.find_by_external_reference("asdi-local-self-healing-2026-11-15"),
         },
+        "trm": run.trm.snapshot(),
         "learning_events": (root / "product" / "learning.jsonl").read_text().splitlines(),
         "limitations": {
             "fixture_agents": not isinstance(agent, CommandAgent),

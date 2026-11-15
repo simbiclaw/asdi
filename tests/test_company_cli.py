@@ -189,6 +189,56 @@ class CompanyCliTests(unittest.TestCase):
         self.assertIsNone(result["experiment_verdict"])
         self.assertEqual(result["default_flag_response"]["response"]["variant"], "off")
 
+    def test_governance_reports_trm_and_paired_metrics(self) -> None:
+        admitted = self.cli(
+            "--root",
+            str(self.root),
+            "admit",
+            "--objective",
+            "Generate governance evidence",
+            "--why",
+            "TRM and metrics must be reproducible",
+            "--external-reference",
+            "WORK-GOVERNANCE-1",
+        )
+        self.cli(
+            "--root",
+            str(self.root),
+            "run",
+            "--mission-id",
+            admitted["mission_id"],
+            "--agent",
+            str(AGENT),
+            "--reviewer",
+            str(REVIEWER),
+            "--approver",
+            "test_owner",
+            "--decision-reference",
+            "governance fixture",
+            "--no-exposure",
+        )
+        governance = self.cli("--root", str(self.root), "governance")
+        self.assertEqual(
+            governance["trm"]["task_types"]["feature"]["maturity"],
+            "T0",
+        )
+        expected = {
+            "pr_cycle_time",
+            "share_of_merges_by_bot",
+            "deploys_per_day",
+            "experiments_decided_per_week",
+            "detection_to_verified_fix",
+            "first_pass_approval_rate",
+            "resets_per_run",
+            "rule_count",
+        }
+        self.assertEqual(set(governance["metrics"]["metrics"]), expected)
+        for name in expected:
+            metric = governance["metrics"]["metrics"][name]
+            self.assertIn("countermeasure", metric)
+            self.assertIn("source", metric)
+        self.assertIn("revert_rate", governance["metrics"]["countermeasures"])
+
     def test_monitor_detects_repairs_and_closes_local_defect(self) -> None:
         baseline = self.cli(
             "--root",

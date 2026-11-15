@@ -70,5 +70,6 @@ Result: **51 tests, OK, 3 expected AF_UNIX skips.**
 | Live model adapter in company loop | Command adapter and Codex smoke path integrated; live provider/model issue unresolved |
 | Strict container egress | Not accepted |
 | Turn/spend/wall-clock guardrails | Implemented locally; production acceptance remains unfinished |
+| TRM and paired metrics | Implemented and verified locally; production promotion remains disabled |
 
 This demonstrates a working local engineering company loop. It does not yet demonstrate production autonomy.

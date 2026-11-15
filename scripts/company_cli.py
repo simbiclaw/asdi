@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any
 
 from asdi.lifecycle import CommandAgent, LifecycleStore, MissionGuardrails, MergeAuthorization, ProductOps
+from asdi.governance import TRMLedger, paired_metrics
 from scripts.run_company_scenarios import CompanyRun
 
 
@@ -170,6 +171,8 @@ def build_parser() -> argparse.ArgumentParser:
     monitor.add_argument("--wall-clock-seconds", type=int, default=120)
     monitor.add_argument("--approver")
     monitor.add_argument("--decision-reference")
+    governance = commands.add_parser("governance", help="Inspect TRM and paired metrics")
+    governance.add_argument("--window-days", type=int, default=7)
     return parser
 
 
@@ -343,6 +346,17 @@ def main(argv: list[str] | None = None, *, stdout: Any = None) -> int:
                     "root": str(root),
                     "missions_root": (root / "missions").exists(),
                     "product_root": product_root.exists(),
+                }
+            )
+        )
+        return 0
+
+    if arguments.command == "governance":
+        output(
+            _json_output(
+                {
+                    "trm": TRMLedger(root / "governance").snapshot(),
+                    "metrics": paired_metrics(root, window_days=arguments.window_days),
                 }
             )
         )
