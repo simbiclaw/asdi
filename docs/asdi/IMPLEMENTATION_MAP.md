@@ -59,9 +59,15 @@ There was no `.git` directory when the audit was performed. Consequently, there 
 | ASDI-013 | ASDI-010, ASDI-011, ASDI-012 | H2 and H5 define `done_check`, turn, spend, and wall-clock requirements. | No guardrail evaluator, failure transitions, or per-run enforcement tests. | Future guardrail/enforcement module |
 | ASDI-014 | ASDI-011 | Backlog defines structured events and evidence. | No event schema, log writer, evidence record, or persistence boundary. | Future event/evidence module |
 
+### Integrated company lifecycle
+
+| Capability | Dependency | Current support | Remaining boundary | Relevant path |
+|---|---|---|---|---|
+| Integrated lifecycle | ASDI-010/011 and ADR-0008 | **Local prototype verified; production autonomy not accepted.** Admission, brief, decomposition, fixture execution, scoped checks, bounded repair, classification, T0-governed local merge, local deployment/rollback, default-off flag, controlled exposure, monitoring, triage, verification, closure, and learning run as one vertical slice. | Live model agents, remote merge, production deployment, strict egress acceptance, and full guardrails remain unfinished. | [`src/asdi/lifecycle.py`](../../src/asdi/lifecycle.py), [`scripts/run_company_scenarios.py`](../../scripts/run_company_scenarios.py), [`docs/asdi/COMPANY_LIFECYCLE_EVIDENCE.md`](COMPANY_LIFECYCLE_EVIDENCE.md) |
+
 ### Gates 2–6
 
-All later tickets depend on Gate 0 and Gate 1 capabilities that are absent. In particular, the current repository has no board adapter, Archon workflow engine, GitHub poller, review system, policy classifier, recovery controller, learning ledger, production admission, local CI/signing registry, experiment system, telemetry stack, defect pipeline, autonomy rollout controls, or human attention surface.
+Board, remote merge, production admission, deployment, and enterprise observability still depend on Gate 0 owner decisions and production hardening. The integrated local prototype now contains a policy classifier, recovery/repair loop, learning ledger, local experiment system, local deployment/rollback, defect pipeline, and local monitoring surface, but these are explicitly prototype controls rather than accepted production autonomy.
 
 There is no conflicting implementation to preserve. The primary conflict is against intent, not existing code: the backlog describes a runnable, locally governed system while the inspected repository contains only the plan.
 
@@ -71,7 +77,7 @@ There is no conflicting implementation to preserve. The primary conflict is agai
 2. Complete ASDI-001 ADRs and the D-9 evidence/test plan.
 3. Complete ASDI-002 pilot-service selection: designate a pilot repository/service or approve a synthetic reference service; `simbiclaw/asdi` is the ASDI control repository, not yet the pilot product.
 4. ASDI-003 remains incomplete by owner decision: GitHub-native branch enforcement is deferred, no scoped identities exist, and all execution/merge paths stay disabled.
-5. ASDI-010 provides the launch preflight. ASDI-011 passed at process-kernel level. ASDI-012 remains failed until container-side egress is proven; vendor runtimes and autonomous operation remain disabled.
+5. ASDI-010 provides the launch preflight. ASDI-011 passed at process-kernel level. ASDI-012 remains failed until container-side egress is proven; the local lifecycle may run with fixture agents and T0-governed local merge only. Vendor production runtimes and autonomous remote merge/deployment remain disabled.
 
 ## ASDI-000 result
 

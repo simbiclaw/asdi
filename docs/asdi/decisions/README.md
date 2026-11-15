@@ -9,6 +9,7 @@
 | [ADR-0005](ADR-0005-run-contract-implementation.md) | Initial ASDI-010 implementation approach | Accepted for non-executing validator: Python standard library only, no external dependency | Repository owner may override | ASDI-010 evidence |
 | [ADR-0006](ADR-0006-runtime-launch-boundary.md) | ASDI-011 process launch and identity boundary | Accepted: synthetic host-process tests only; vendor CLIs fail closed without ASDI-012 | Repository owner may override | ASDI-011 evidence |
 | [ADR-0007](ADR-0007-development-open-network-profile.md) | Owner-approved noncompliant bridge-network profile for development flow bring-up | **Accepted for development only; forbidden for production/autonomous acceptance** | Repository owner | Owner direction, 2026-11-15; ASDI-012 Docker Desktop socket blocker |
+| [ADR-0008](ADR-0008-integrated-local-lifecycle.md) | Integrated single-host lifecycle prototype with fixture agents, local operations, and T0-governed local merge | Accepted as local prototype; production autonomy not accepted | Repository owner may override | Company lifecycle evidence, 2026-11-15 |
 
 Statuses are limited to `proposed`, `accepted`, `rejected`, and `deferred`. A deferred decision does not authorize implementation of a downstream capability that depends on it.
 

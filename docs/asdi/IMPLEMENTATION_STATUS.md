@@ -18,8 +18,8 @@ This is the live reconciliation record. Detailed acceptance evidence remains in 
 | ASDI-013 | ASDI-010/011/012 | Blocked for autonomous acceptance | Development flow can proceed, but autonomous acceptance cannot pass while ASDI-012 is failed. Existing launcher `done_check` recheck does not satisfy live turn/spend/wall-clock acceptance. |
 | ASDI-014 | ASDI-011 | Partial | Run state, JSONL events, usage, sandbox, egress decisions, and cleanup evidence are persisted. Queryable retrieval, retention/redaction policy, and full event schema/observability interface remain. |
 | ASDI-020 | ASDI-001/011/012/013 | Blocked | D-9 spike requires the missing sandbox and guardrail capabilities and an owner board decision. |
-| ASDI-021 through ASDI-022 | Gate 1 / D-9 | Blocked | Board integration and admission are explicitly out of scope pending D-9. |
-| ASDI-030 onward | Prior gates | Not started / blocked | Outcome workflow, poller, review, merge policy, repair, TRM, metrics, production infrastructure, experiments, telemetry, and autonomy rollout are not enabled. |
+| ASDI-021 through ASDI-022 | Gate 1 / D-9 | Blocked for board product integration | Local lifecycle admission/brief/decomposition exists, but board dispatch cannot start pending D-9. |
+| ASDI-030 onward | Prior gates | Local prototype integration verified; production autonomy not accepted | Outcome workflow, local T0 merge, bounded repair, local deploy/rollback, default-off flags, experiment verdict, monitoring/triage/closure, and learning ledger are integrated. Remote merge, production deployment, live model agents, full review governance, and TRM promotion remain disabled or unfinished. See [`COMPANY_LIFECYCLE_EVIDENCE.md`](COMPANY_LIFECYCLE_EVIDENCE.md). |
 
 ## Hard-rule status
 
@@ -41,7 +41,8 @@ This is the live reconciliation record. Detailed acceptance evidence remains in 
 4. **Production sandbox image and secret-injection boundary** must be selected and audited.
 5. **Container egress transport on macOS/Docker Desktop** requires an architectural decision if this remains the host platform.
 6. **ADR-0007 replacement** is required before autonomous operation: development-open bridge networking is noncompliant by definition.
+7. **Live model agent integration** is required to replace deterministic fixture agents in the integrated company loop.
 
 ## Current execution boundary
 
-Synthetic host-process tests are allowed only for process-kernel testing. The owner-approved `development_open` profile may exercise the flow with no production credentials/data and no merge/deployment authority; it is explicitly noncompliant. No autonomous vendor runtime is authorized, and ASDI-012 acceptance remains failed.
+Synthetic host-process tests are allowed only for process-kernel testing. The owner-approved `development_open` profile may exercise the flow with no production credentials/data; it is explicitly noncompliant. The integrated local lifecycle uses fixture agents, local deployment, and T0-authorized local merge only. No autonomous vendor runtime, remote merge, production deployment, or production exposure is authorized. ASDI-012 acceptance remains failed.

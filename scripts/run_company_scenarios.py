@@ -1,0 +1,224 @@
+#!/usr/bin/env python3
+"""Run the integrated product and self-healing lifecycle scenarios."""
+
+from __future__ import annotations
+
+import argparse
+import json
+import tempfile
+import time
+from pathlib import Path
+
+from asdi.lifecycle import (
+    LifecycleStore,
+    MergeAuthorization,
+    MissionEngine,
+    ProductOps,
+    ensure_local_target,
+)
+
+
+AUTHORIZATION = MergeAuthorization(
+    approver="repository_owner",
+    decision_reference="owner directive 2026-11-15: complete lifecycle integration, local prototype only",
+    authority="T0_human",
+)
+
+
+class CompanyRun:
+    def __init__(self, root: Path, agent: Path, reviewer: Path) -> None:
+        self.root = root
+        self.store = LifecycleStore(root)
+        self.engine = MissionEngine(self.store)
+        self.product = ProductOps(root / "product")
+        self.target = ensure_local_target(root / "target")
+        self.agent = agent
+        self.reviewer = reviewer
+
+    def _implement(self, mission_id: str, variant: str) -> None:
+        self.engine.decompose(mission_id)
+        self.engine.execute_agent(mission_id, agent_path=self.agent, variant=variant)
+        mission_root = self.store.mission_root(mission_id) / "workspace"
+        self.engine.self_verify(mission_id, app_path=mission_root / "app.py")
+        review = self.engine.independent_review(mission_id, reviewer_path=self.reviewer)
+        if any(not result["passed"] for result in review):
+            raise RuntimeError(f"independent review failed for {mission_id}")
+        self.engine.classify(mission_id)
+
+    def product_lifecycle(self) -> dict:
+        mission = self.store.create_mission(
+            objective="Deliver a controlled local prototype feature",
+            why="Demonstrate the integrated ASDI product lifecycle on one host.",
+            constraints=[
+                "fixture agents only",
+                "local target only",
+                "no production secrets",
+                "feature flag starts off",
+                "T0 human merge authorization",
+            ],
+            mission_kind="feature",
+        )
+        mission_id = mission["mission_id"]
+        self._implement(mission_id, "good")
+        merge = self.engine.merge(mission_id, target_root=self.target, authorization=AUTHORIZATION)
+        workspace = self.store.mission_root(mission_id) / "workspace"
+        deployment = self.product.deploy(mission_id, workspace)
+        default = self.product.request(scenario="normal")
+        exposure = self.product.set_flag(
+            "prototype_feature",
+            True,
+            decision_reference="owner directive 2026-11-15: controlled local prototype exposure",
+        )
+        experiment = self.product.experiment(name="prototype_feature", traffic=4)
+        self.engine.complete_task(
+            mission_id,
+            "deployment",
+            {"deployment": deployment, "default_flag_response": default},
+            status="deployed",
+        )
+        self.engine.complete_task(
+            mission_id,
+            "experiment",
+            {"experiment_verdict": experiment["verdict"], "passed": experiment["passed"], "failed": experiment["failed"]},
+            status="experiment_completed",
+        )
+        state = self.store.load(mission_id)
+        return {
+            "stage": "product_lifecycle",
+            "mission_id": mission_id,
+            "status": state["status"],
+            "tasks": state["tasks"],
+            "classification": state["classification"],
+            "merge": merge,
+            "deployment": deployment,
+            "default_flag_response": default,
+            "controlled_exposure": exposure,
+            "experiment_verdict": {
+                "verdict": experiment["verdict"],
+                "passed": experiment["passed"],
+                "failed": experiment["failed"],
+            },
+            "events": [event["type"] for event in self.store.events(mission_id)],
+        }
+
+    def self_healing_lifecycle(self) -> dict:
+        feature = self.store.create_mission(
+            objective="Add local load handling to the prototype feature",
+            why="Create a controlled production defect so self-healing can be demonstrated.",
+            constraints=[
+                "fixture agents only",
+                "local target only",
+                "no production secrets",
+                "T0 human merge authorization",
+            ],
+            mission_kind="feature",
+        )
+        feature_id = feature["mission_id"]
+        self._implement(feature_id, "buggy")
+        self.engine.merge(feature_id, target_root=self.target, authorization=AUTHORIZATION)
+        workspace = self.store.mission_root(feature_id) / "workspace"
+        deployment = self.product.deploy(feature_id, workspace)
+        observation = self.product.observe(scenario="load")
+        if observation["healthy"]:
+            raise RuntimeError("expected prototype defect was not detected")
+        defect = self.product.raise_defect(observation)
+
+        repair = self.store.create_mission(
+            objective="Repair the detected local prototype load defect",
+            why="Close the self-healing lifecycle with bounded repair and production verification.",
+            constraints=[
+                "maximum two repair attempts",
+                "fixture agents only",
+                "local target only",
+                "no production secrets",
+                "T0 human merge authorization",
+            ],
+            mission_kind="repair",
+            parent_mission_id=feature_id,
+            detection_evidence=defect,
+        )
+        repair_id = repair["mission_id"]
+        self.engine.decompose(repair_id)
+        triage = self.engine.record_triage(repair_id, defect)
+        self.engine.execute_agent(repair_id, agent_path=self.agent, variant="repair")
+        repaired_workspace = self.store.mission_root(repair_id) / "workspace"
+        self.engine.self_verify(repair_id, app_path=repaired_workspace / "app.py")
+        review = self.engine.independent_review(repair_id, reviewer_path=self.reviewer)
+        if any(not result["passed"] for result in review):
+            raise RuntimeError(f"independent repair review failed for {repair_id}")
+        self.engine.classify(repair_id)
+        merge = self.engine.merge(repair_id, target_root=self.target, authorization=AUTHORIZATION)
+        repair_deployment = self.product.deploy(repair_id, repaired_workspace)
+        verification = self.product.verify_repair(traffic=4)
+        closure = self.product.close_defect(defect, verification)
+        self.engine.complete_task(
+            repair_id,
+            "deployment",
+            {"deployment": repair_deployment},
+            status="repair_deployed",
+        )
+        self.engine.complete_task(
+            repair_id,
+            "verification",
+            {"closure": verification["closure"], "passed": verification["passed"]},
+            status="production_verified",
+        )
+        feature_state = self.store.load(feature_id)
+        repair_state = self.store.load(repair_id)
+        return {
+            "stage": "self_healing_lifecycle",
+            "feature_mission_id": feature_id,
+            "defective_deployment": deployment,
+            "detection": observation,
+            "defect": defect,
+            "repair_mission_id": repair_id,
+            "triage": triage,
+            "repair_status": repair_state["status"],
+            "repair_tasks": repair_state["tasks"],
+            "repair_merge": merge,
+            "repair_deployment": repair_deployment,
+            "production_verification": {
+                "passed": verification["passed"],
+                "closure": verification["closure"],
+                "outcomes": len(verification["outcomes"]),
+            },
+            "closure": closure,
+            "feature_events": [event["type"] for event in self.store.events(feature_id)],
+            "repair_events": [event["type"] for event in self.store.events(repair_id)],
+        }
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--root")
+    parser.add_argument("--agent", default="scripts/fixture_agent.py")
+    parser.add_argument("--reviewer", default="scripts/fixture_reviewer.py")
+    arguments = parser.parse_args()
+    root = Path(arguments.root).resolve() if arguments.root else Path(tempfile.mkdtemp(prefix=f"asdi-company-{time.strftime('%Y%m%d-%H%M%S')}-"))
+    root.mkdir(parents=True, exist_ok=True)
+    run = CompanyRun(root, Path(arguments.agent), Path(arguments.reviewer))
+    report = {
+        "schema_version": "asdi.company-scenario-report/v0",
+        "result": "pass",
+        "evidence_root": str(root),
+        "execution_mode": "local fixture agents; no model APIs; no production infrastructure",
+        "product_lifecycle": run.product_lifecycle(),
+        "self_healing_lifecycle": run.self_healing_lifecycle(),
+        "learning_events": (root / "product" / "learning.jsonl").read_text().splitlines(),
+        "limitations": {
+            "fixture_agents": True,
+            "live_model_agents": False,
+            "remote_merge": False,
+            "production_deployment": False,
+            "strict_container_egress_accepted": False,
+            "guardrails_enforced": False,
+        },
+    }
+    report_path = root / "company-scenario-report.json"
+    report_path.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n")
+    print(json.dumps(report, indent=2, sort_keys=True))
+    return 0 if report["result"] == "pass" else 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
