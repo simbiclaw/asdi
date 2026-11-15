@@ -151,6 +151,133 @@ class CompanyRun:
             )
         return self.engine.execute_agent(mission_id, agent_path=self.agent, variant=variant)
 
+    def detect_defect(self, *, scenario: str = "load") -> tuple[dict, dict | None]:
+        observation = self.product.observe(scenario=scenario)
+        if observation["healthy"]:
+            return observation, None
+        return observation, self.product.raise_defect(observation)
+
+    def repair_defect(
+        self,
+        defect: dict,
+        *,
+        parent_mission_id: str,
+        authorization: MergeAuthorization,
+        external_reference: str,
+        traffic: int = 4,
+    ) -> dict:
+        parent = self.store.load(parent_mission_id)
+        repair = self.store.create_mission(
+            objective=f"Repair defect {defect['defect_id']}",
+            why="Boundedly repair the detected local defect and verify the outcome.",
+            constraints=[
+                "maximum two repair attempts",
+                self.agent_constraint,
+                "local target only",
+                "no production secrets",
+                "T0 human merge authorization",
+            ],
+            mission_kind="repair",
+            parent_mission_id=parent_mission_id,
+            detection_evidence=defect,
+            guardrails=self.guardrails,
+            external_reference=(
+                f"{external_reference}::repair::{defect['defect_id']}"
+                if external_reference
+                else f"repair::{defect['defect_id']}"
+            ),
+            reset_generation=int(parent.get("reset_generation", 1)),
+        )
+        repair_id = repair["mission_id"]
+        self.engine.decompose(repair_id)
+        triage = self.engine.record_triage(repair_id, defect)
+        self.run_agent(repair_id, "repair")
+        repaired_workspace = self.store.mission_root(repair_id) / "workspace"
+        self.engine.self_verify(repair_id, app_path=repaired_workspace / "app.py")
+        review = self.engine.independent_review(repair_id, reviewer_path=self.reviewer)
+        if any(not result["passed"] for result in review):
+            raise RuntimeError(f"independent repair review failed for {repair_id}")
+        self.engine.classify(repair_id)
+        merge = self.engine.merge(
+            repair_id, target_root=self.target, authorization=authorization
+        )
+        repair_deployment = self.product.deploy(repair_id, repaired_workspace)
+        verification = self.product.verify_repair(traffic=traffic)
+        closure = self.product.close_defect(defect, verification)
+        if verification["closure"] == "reopened":
+            try:
+                rollback = self.product.rollback(
+                    reason=f"repair verification failed: {defect['defect_id']}"
+                )
+                verification["rollback"] = rollback
+            except ValueError:
+                verification["rollback"] = None
+        self.engine.complete_task(
+            repair_id,
+            "deployment",
+            {"deployment": repair_deployment},
+            status="repair_deployed",
+        )
+        self.engine.complete_task(
+            repair_id,
+            "verification",
+            {
+                "closure": verification["closure"],
+                "passed": verification["passed"],
+                "rollback": verification.get("rollback"),
+            },
+            status="production_verified",
+        )
+        repair_state = self.store.load(repair_id)
+        return {
+            "action": "repair",
+            "defect": defect,
+            "repair_mission_id": repair_id,
+            "triage": triage,
+            "repair_status": repair_state["status"],
+            "repair_guardrails": repair_state["guardrails"],
+            "repair_budget": repair_state["budget"],
+            "repair_tasks": repair_state["tasks"],
+            "repair_merge": merge,
+            "repair_deployment": repair_deployment,
+            "production_verification": {
+                "passed": verification["passed"],
+                "closure": verification["closure"],
+                "outcomes": len(verification["outcomes"]),
+                "rollback": verification.get("rollback"),
+            },
+            "closure": closure,
+            "repair_events": [
+                event["type"] for event in self.store.events(repair_id)
+            ],
+        }
+
+    def monitor(
+        self,
+        *,
+        parent_mission_id: str,
+        authorization: MergeAuthorization,
+        external_reference: str,
+        scenario: str = "load",
+        traffic: int = 4,
+        auto_repair: bool = True,
+    ) -> dict:
+        observation, defect = self.detect_defect(scenario=scenario)
+        if defect is None or not auto_repair:
+            return {
+                "action": "none",
+                "observation": observation,
+                "defect": defect,
+            }
+        result = self.repair_defect(
+            defect,
+            parent_mission_id=parent_mission_id,
+            authorization=authorization,
+            external_reference=external_reference,
+            traffic=traffic,
+        )
+        return {"observation": observation, **result}
+
     def product_lifecycle(self) -> dict:
         mission = self.store.create_mission(
             objective="Deliver a controlled local prototype feature",
@@ -191,81 +318,29 @@ class CompanyRun:
             external_reference="asdi-local-self-healing-2026-11-15",
         )
         feature_id = feature["mission_id"]
-        self._implement(feature_id, "buggy")
-        self.engine.merge(feature_id, target_root=self.target, authorization=AUTHORIZATION)
-        workspace = self.store.mission_root(feature_id) / "workspace"
-        deployment = self.product.deploy(feature_id, workspace)
-        observation = self.product.observe(scenario="load")
-        if observation["healthy"]:
-            raise RuntimeError("expected prototype defect was not detected")
-        defect = self.product.raise_defect(observation)
-
-        repair = self.store.create_mission(
-            objective="Repair the detected local prototype load defect",
-            why="Close the self-healing lifecycle with bounded repair and production verification.",
-            constraints=[
-                "maximum two repair attempts",
-                self.agent_constraint,
-                "local target only",
-                "no production secrets",
-                "T0 human merge authorization",
-            ],
-            mission_kind="repair",
+        deployment = self.execute_feature_mission(
+            feature_id,
+            authorization=AUTHORIZATION,
+            variant="buggy",
+            expose=False,
+        )
+        observation, defect = self.detect_defect()
+        repair = self.repair_defect(
+            defect,
             parent_mission_id=feature_id,
-            detection_evidence=defect,
-            guardrails=self.guardrails,
+            authorization=AUTHORIZATION,
             external_reference="asdi-local-self-healing-2026-11-15",
-        )
-        repair_id = repair["mission_id"]
-        self.engine.decompose(repair_id)
-        triage = self.engine.record_triage(repair_id, defect)
-        self.run_agent(repair_id, "repair")
-        repaired_workspace = self.store.mission_root(repair_id) / "workspace"
-        self.engine.self_verify(repair_id, app_path=repaired_workspace / "app.py")
-        review = self.engine.independent_review(repair_id, reviewer_path=self.reviewer)
-        if any(not result["passed"] for result in review):
-            raise RuntimeError(f"independent repair review failed for {repair_id}")
-        self.engine.classify(repair_id)
-        merge = self.engine.merge(repair_id, target_root=self.target, authorization=AUTHORIZATION)
-        repair_deployment = self.product.deploy(repair_id, repaired_workspace)
-        verification = self.product.verify_repair(traffic=4)
-        closure = self.product.close_defect(defect, verification)
-        self.engine.complete_task(
-            repair_id,
-            "deployment",
-            {"deployment": repair_deployment},
-            status="repair_deployed",
-        )
-        self.engine.complete_task(
-            repair_id,
-            "verification",
-            {"closure": verification["closure"], "passed": verification["passed"]},
-            status="production_verified",
+            traffic=4,
         )
         feature_state = self.store.load(feature_id)
-        repair_state = self.store.load(repair_id)
         return {
             "stage": "self_healing_lifecycle",
             "feature_mission_id": feature_id,
             "defective_deployment": deployment,
             "detection": observation,
             "defect": defect,
-            "repair_mission_id": repair_id,
-            "triage": triage,
-            "repair_status": repair_state["status"],
-            "repair_guardrails": repair_state["guardrails"],
-            "repair_budget": repair_state["budget"],
-            "repair_tasks": repair_state["tasks"],
-            "repair_merge": merge,
-            "repair_deployment": repair_deployment,
-            "production_verification": {
-                "passed": verification["passed"],
-                "closure": verification["closure"],
-                "outcomes": len(verification["outcomes"]),
-            },
-            "closure": closure,
+            **repair,
             "feature_events": [event["type"] for event in self.store.events(feature_id)],
-            "repair_events": [event["type"] for event in self.store.events(repair_id)],
         }
 
 

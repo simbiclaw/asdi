@@ -152,6 +152,24 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--decision-reference", required=True)
     run.add_argument("--no-exposure", action="store_true")
     run.add_argument("--traffic", type=int, default=4)
+    monitor = commands.add_parser(
+        "monitor",
+        help="Observe the current local release and optionally trigger bounded repair",
+    )
+    monitor.add_argument("--parent-mission-id", required=True)
+    monitor.add_argument("--scenario", choices=("normal", "load"), default="load")
+    monitor.add_argument("--traffic", type=int, default=4)
+    monitor.add_argument("--auto-repair", action="store_true")
+    monitor.add_argument("--agent", default="scripts/fixture_agent.py")
+    monitor.add_argument("--live-agent-command")
+    monitor.add_argument("--agent-proxy", default="http://127.0.0.1:7890")
+    monitor.add_argument("--reviewer", default="scripts/fixture_reviewer.py")
+    monitor.add_argument("--external-reference")
+    monitor.add_argument("--max-turns", type=int, default=24)
+    monitor.add_argument("--max-spend-usd", type=float, default=2.0)
+    monitor.add_argument("--wall-clock-seconds", type=int, default=120)
+    monitor.add_argument("--approver")
+    monitor.add_argument("--decision-reference")
     return parser
 
 
@@ -166,6 +184,25 @@ def main(argv: list[str] | None = None, *, stdout: Any = None) -> int:
             stdout.write(text + "\n")
     root = Path(arguments.root).resolve()
     store = LifecycleStore(root)
+
+    def build_agent(arguments: Any) -> Path | CommandAgent:
+        if not arguments.live_agent_command:
+            return Path(arguments.agent)
+        command_argv = shlex.split(arguments.live_agent_command)
+        if not command_argv or not Path(command_argv[0]).is_absolute():
+            raise ValueError("live_agent_executable_must_be_absolute")
+        return CommandAgent(
+            name="live_cli",
+            argv=tuple(command_argv),
+            timeout_seconds=560,
+            env=(
+                ("HTTP_PROXY", arguments.agent_proxy),
+                ("HTTPS_PROXY", arguments.agent_proxy),
+                ("ALL_PROXY", arguments.agent_proxy),
+                ("NO_PROXY", "localhost,127.0.0.1"),
+                ("CODEX_HOME", "/Users/russell/.codex"),
+            ),
+        )
 
     if arguments.command == "admit":
         mission = store.create_mission(
@@ -226,26 +263,11 @@ def main(argv: list[str] | None = None, *, stdout: Any = None) -> int:
         except (FileNotFoundError, json.JSONDecodeError):
             output(_json_output({"error": "mission_not_found"}))
             return 2
-        agent: Path | CommandAgent
-        if arguments.live_agent_command:
-            command_argv = shlex.split(arguments.live_agent_command)
-            if not command_argv or not Path(command_argv[0]).is_absolute():
-                output(_json_output({"error": "live_agent_executable_must_be_absolute"}))
-                return 2
-            agent = CommandAgent(
-                name="live_cli",
-                argv=tuple(command_argv),
-                timeout_seconds=560,
-                env=(
-                    ("HTTP_PROXY", arguments.agent_proxy),
-                    ("HTTPS_PROXY", arguments.agent_proxy),
-                    ("ALL_PROXY", arguments.agent_proxy),
-                    ("NO_PROXY", "localhost,127.0.0.1"),
-                    ("CODEX_HOME", "/Users/russell/.codex"),
-                ),
-            )
-        else:
-            agent = Path(arguments.agent)
+        try:
+            agent = build_agent(arguments)
+        except ValueError as error:
+            output(_json_output({"error": str(error)}))
+            return 2
         runner = CompanyRun(root, agent, Path(arguments.reviewer))
         try:
             result = runner.execute_feature_mission(
@@ -261,6 +283,53 @@ def main(argv: list[str] | None = None, *, stdout: Any = None) -> int:
             )
         except (ValueError, RuntimeError) as error:
             output(_json_output({"error": "mission_execution_failed", "message": str(error)}))
+            return 3
+        output(_json_output(result))
+        return 0
+
+    if arguments.command == "monitor":
+        if arguments.auto_repair and (
+            not arguments.approver or not arguments.decision_reference
+        ):
+            output(
+                _json_output(
+                    {
+                        "error": "auto_repair_requires_t0_authorization",
+                        "message": "provide --approver and --decision-reference",
+                    }
+                )
+            )
+            return 2
+        try:
+            agent = build_agent(arguments)
+        except ValueError as error:
+            output(_json_output({"error": str(error)}))
+            return 2
+        runner = CompanyRun(
+            root,
+            agent,
+            Path(arguments.reviewer),
+            guardrails=MissionGuardrails(
+                max_turns=arguments.max_turns,
+                max_spend_usd=arguments.max_spend_usd,
+                wall_clock_seconds=arguments.wall_clock_seconds,
+            ),
+        )
+        try:
+            result = runner.monitor(
+                parent_mission_id=arguments.parent_mission_id,
+                authorization=MergeAuthorization(
+                    approver=arguments.approver or "not_required",
+                    decision_reference=arguments.decision_reference or "observation_only",
+                    authority="T0_human",
+                ),
+                external_reference=arguments.external_reference or "",
+                scenario=arguments.scenario,
+                traffic=arguments.traffic,
+                auto_repair=arguments.auto_repair,
+            )
+        except (ValueError, RuntimeError) as error:
+            output(_json_output({"error": "monitoring_failed", "message": str(error)}))
             return 3
         output(_json_output(result))
         return 0

@@ -53,7 +53,7 @@ PYTHONPATH=src python3 -m unittest discover -s tests -v
 git diff --check
 ```
 
-Result: **46 tests, OK, 3 expected AF_UNIX skips.**
+Result: **51 tests, OK, 3 expected AF_UNIX skips.**
 
 ## Truthful status
 
@@ -64,9 +64,10 @@ Result: **46 tests, OK, 3 expected AF_UNIX skips.**
 | Live command-agent compatibility | Implemented and tested; live vendor CLI not invoked |
 | Mission guardrails | Local turns/spend/wall clock implemented and verified |
 | Work-item index and bounded reset | Implemented and verified locally |
+| Durable self-healing CLI | Implemented and verified locally |
 | Local deployment/rollback/flags | Implemented and verified |
 | Remote merge / production deployment | Not implemented; intentionally disabled |
-| Live model adapter in company loop | Not integrated yet |
+| Live model adapter in company loop | Command adapter and Codex smoke path integrated; live provider/model issue unresolved |
 | Strict container egress | Not accepted |
 | Turn/spend/wall-clock guardrails | Implemented locally; production acceptance remains unfinished |
 

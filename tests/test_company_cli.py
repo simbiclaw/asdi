@@ -188,3 +188,105 @@ class CompanyCliTests(unittest.TestCase):
         self.assertIsNone(result["controlled_exposure"])
         self.assertIsNone(result["experiment_verdict"])
         self.assertEqual(result["default_flag_response"]["response"]["variant"], "off")
+
+    def test_monitor_detects_repairs_and_closes_local_defect(self) -> None:
+        baseline = self.cli(
+            "--root",
+            str(self.root),
+            "admit",
+            "--objective",
+            "Healthy baseline release",
+            "--why",
+            "Provide a known-good local release",
+            "--external-reference",
+            "WORK-MONITOR-BASELINE",
+        )
+        self.cli(
+            "--root",
+            str(self.root),
+            "run",
+            "--mission-id",
+            baseline["mission_id"],
+            "--agent",
+            str(AGENT),
+            "--reviewer",
+            str(REVIEWER),
+            "--approver",
+            "test_owner",
+            "--decision-reference",
+            "baseline deployment",
+            "--variant",
+            "good",
+            "--no-exposure",
+        )
+        defective = self.cli(
+            "--root",
+            str(self.root),
+            "admit",
+            "--objective",
+            "Introduce controlled local load defect",
+            "--why",
+            "Exercise monitoring-triggered bounded repair",
+            "--external-reference",
+            "WORK-MONITOR-DEFECT",
+        )
+        self.cli(
+            "--root",
+            str(self.root),
+            "run",
+            "--mission-id",
+            defective["mission_id"],
+            "--agent",
+            str(AGENT),
+            "--reviewer",
+            str(REVIEWER),
+            "--approver",
+            "test_owner",
+            "--decision-reference",
+            "defective controlled deployment",
+            "--variant",
+            "buggy",
+            "--traffic",
+            "4",
+        )
+        monitor = self.cli(
+            "--root",
+            str(self.root),
+            "monitor",
+            "--parent-mission-id",
+            defective["mission_id"],
+            "--external-reference",
+            "WORK-MONITOR-DEFECT",
+            "--scenario",
+            "load",
+            "--auto-repair",
+            "--agent",
+            str(AGENT),
+            "--reviewer",
+            str(REVIEWER),
+            "--approver",
+            "test_owner",
+            "--decision-reference",
+            "authorized bounded local repair",
+            "--max-turns",
+            "24",
+            "--traffic",
+            "4",
+        )
+        self.assertEqual(monitor["action"], "repair")
+        self.assertFalse(monitor["observation"]["healthy"])
+        self.assertEqual(monitor["repair_status"], "production_verified")
+        self.assertTrue(monitor["production_verification"]["passed"])
+        self.assertEqual(monitor["production_verification"]["closure"], "closed_verified")
+        self.assertFalse(monitor["closure"]["reopened"])
+        healthy = self.cli(
+            "--root",
+            str(self.root),
+            "monitor",
+            "--parent-mission-id",
+            monitor["repair_mission_id"],
+            "--scenario",
+            "normal",
+        )
+        self.assertEqual(healthy["action"], "none")
+        self.assertTrue(healthy["observation"]["healthy"])
