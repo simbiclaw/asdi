@@ -41,7 +41,7 @@ This is the live reconciliation record. Detailed acceptance evidence remains in 
 4. **Production sandbox image and secret-injection boundary** must be selected and audited.
 5. **Container egress transport on macOS/Docker Desktop** requires an architectural decision if this remains the host platform.
 6. **ADR-0007 replacement** is required before autonomous operation: development-open bridge networking is noncompliant by definition.
-7. **Live model agent integration** is required to replace deterministic fixture agents in the integrated company loop; the explicit command-adapter path now exists but has not invoked a live vendor CLI.
+7. **Live model agent integration** is required to replace deterministic fixture agents in the integrated company loop. The explicit command/Codex adapter paths exist; an initial live smoke attempt was stopped by the configured wall-clock guardrail and needs provider/runtime tuning or a faster local model decision.
 
 ## Current execution boundary
 

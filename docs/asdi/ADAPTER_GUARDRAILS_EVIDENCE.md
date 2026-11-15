@@ -13,6 +13,12 @@
 
 The adapter accepts token substitution for `{workspace}`, `{mission_id}`, `{objective}`, and `{variant}`. It does not use a shell and requires an absolute executable. This allows a local Claude Code/Codex/Hermes CLI command to be substituted without changing the lifecycle engine.
 
+## Live-CLI smoke attempt
+
+A Codex-specific adapter was added at [`scripts/codex_lifecycle_adapter.py`](../scripts/codex_lifecycle_adapter.py). It invokes `codex exec` in workspace-write mode, validates the requested artifacts, and records stdout/stderr.
+
+One opt-in integration attempt used the installed Codex CLI against a temporary local target. The lifecycle engine stopped it at the configured wall-clock guardrail after 300 seconds with `guardrail_exceeded`. No production resource was contacted by ASDI and no merge/deployment occurred. This is a live-agent integration failure, not a guardrail failure; the guardrail behaved correctly.
+
 ## Verification
 
 ```sh

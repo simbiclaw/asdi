@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import shlex
 import tempfile
 import time
 from pathlib import Path
@@ -28,7 +29,14 @@ AUTHORIZATION = MergeAuthorization(
 
 
 class CompanyRun:
-    def __init__(self, root: Path, agent: Path | CommandAgent, reviewer: Path) -> None:
+    def __init__(
+        self,
+        root: Path,
+        agent: Path | CommandAgent,
+        reviewer: Path,
+        *,
+        guardrails: MissionGuardrails | None = None,
+    ) -> None:
         self.root = root
         self.store = LifecycleStore(root)
         self.engine = MissionEngine(self.store)
@@ -36,6 +44,11 @@ class CompanyRun:
         self.target = ensure_local_target(root / "target")
         self.agent = agent
         self.reviewer = reviewer
+        self.guardrails = guardrails or MissionGuardrails(
+            max_turns=24,
+            max_spend_usd=2.0,
+            wall_clock_seconds=120,
+        )
 
     @property
     def agent_constraint(self) -> str:
@@ -53,7 +66,10 @@ class CompanyRun:
 
     def run_agent(self, mission_id: str, variant: str) -> dict:
         if isinstance(self.agent, CommandAgent):
-            return self.engine.execute_agent(mission_id, agent=self.agent, variant=variant)
+            timeout = 560 if self.agent.name == "live_cli" else 10
+            return self.engine.execute_agent(
+                mission_id, agent=self.agent, variant=variant, timeout=timeout
+            )
         return self.engine.execute_agent(mission_id, agent_path=self.agent, variant=variant)
 
     def product_lifecycle(self) -> dict:
@@ -68,7 +84,7 @@ class CompanyRun:
                 "T0 human merge authorization",
             ],
             mission_kind="feature",
-            guardrails=MissionGuardrails(max_turns=24, max_spend_usd=2.0, wall_clock_seconds=120),
+            guardrails=self.guardrails,
         )
         mission_id = mission["mission_id"]
         self._implement(mission_id, "good")
@@ -126,7 +142,7 @@ class CompanyRun:
                 "T0 human merge authorization",
             ],
             mission_kind="feature",
-            guardrails=MissionGuardrails(max_turns=24, max_spend_usd=2.0, wall_clock_seconds=120),
+            guardrails=self.guardrails,
         )
         feature_id = feature["mission_id"]
         self._implement(feature_id, "buggy")
@@ -151,7 +167,7 @@ class CompanyRun:
             mission_kind="repair",
             parent_mission_id=feature_id,
             detection_evidence=defect,
-            guardrails=MissionGuardrails(max_turns=24, max_spend_usd=2.0, wall_clock_seconds=120),
+            guardrails=self.guardrails,
         )
         repair_id = repair["mission_id"]
         self.engine.decompose(repair_id)
@@ -212,10 +228,10 @@ def main() -> int:
     parser.add_argument("--agent", default="scripts/fixture_agent.py")
     parser.add_argument(
         "--live-agent-command",
-        nargs="+",
-        help="Explicit argv command adapter; supports {workspace}, {mission_id}, {objective}, and {variant}.",
+        help="Explicit argv command string; supports {workspace}, {mission_id}, {objective}, and {variant}.",
     )
     parser.add_argument("--reviewer", default="scripts/fixture_reviewer.py")
+    parser.add_argument("--wall-clock-seconds", type=int, default=120)
     arguments = parser.parse_args()
     root = Path(arguments.root).resolve() if arguments.root else Path(tempfile.mkdtemp(prefix=f"asdi-company-{time.strftime('%Y%m%d-%H%M%S')}-"))
     root.mkdir(parents=True, exist_ok=True)
@@ -225,12 +241,21 @@ def main() -> int:
             parser.error("live agent executable must be an absolute path")
         agent = CommandAgent(
             name="live_cli",
-            argv=tuple(arguments.live_agent_command),
+            argv=tuple(shlex.split(arguments.live_agent_command)),
             timeout_seconds=300,
         )
     else:
         agent = Path(arguments.agent)
-    run = CompanyRun(root, agent, Path(arguments.reviewer))
+    run = CompanyRun(
+        root,
+        agent,
+        Path(arguments.reviewer),
+        guardrails=MissionGuardrails(
+            max_turns=48,
+            max_spend_usd=2.0,
+            wall_clock_seconds=arguments.wall_clock_seconds,
+        ),
+    )
     runner_info = (
         {"kind": "command_agent", "name": agent.name}
         if isinstance(agent, CommandAgent)
