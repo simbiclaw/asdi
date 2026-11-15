@@ -8,6 +8,7 @@ import unittest
 from pathlib import Path
 
 from asdi.egress import EgressProxy
+from asdi.run_contract import RunContractValidationError, validate_run_contract
 from asdi.runtime import RunStore
 from asdi.sandbox import ContainerSandbox, SandboxSpec
 from tests.test_run_launcher import synthetic_contract
@@ -35,6 +36,51 @@ class SandboxTests(unittest.TestCase):
                 "allowlist": list(allowlist),
             }
         return contract
+
+    def development_contract(self) -> dict:
+        value = self.contract()
+        value["boundaries"]["network"] = {
+            "mode": "development_open",
+            "allowlist": [],
+            "override_reason": "owner_approved",
+            "override_reference": "owner-2026-11-15-dev-flow-first",
+            "scope": "development_only",
+        }
+        return value
+
+    def test_development_open_profile_is_explicit_and_noncompliant(self) -> None:
+        created = self.store.create_run(self.development_contract())
+        sandbox = ContainerSandbox(
+            SandboxSpec(
+                image="asdi-sandbox-test:local",
+                runtime_executable="/usr/bin/python3",
+                docker_path="/usr/local/bin/docker",
+                container_user="65534:65534",
+                network_profile="development_open",
+            ),
+            self.store,
+        )
+        evidence = sandbox.prepare(created["run_id"], self.development_contract(), command=())
+        argv = sandbox.docker_run_argv(
+            created["run_id"],
+            evidence,
+            ("/usr/bin/python3", "/workspace/fixture.py"),
+        )
+        self.assertFalse(evidence["isolation_compliant"])
+        self.assertEqual(evidence["network_mode"], "bridge")
+        self.assertEqual(evidence["egress_mode"], "development_open_noncompliant")
+        self.assertIn("bridge", argv)
+        self.assertIn(
+            "ASDI_SANDBOX_MODE=container_development_open_noncompliant",
+            argv,
+        )
+        self.assertIsNone(sandbox.proxy)
+
+    def test_development_open_contract_requires_explicit_owner_override(self) -> None:
+        value = self.development_contract()
+        del value["boundaries"]["network"]["override_reason"]
+        with self.assertRaises(RunContractValidationError):
+            validate_run_contract(value)
 
     def test_container_profile_is_hardened_and_uses_no_ip_network(self) -> None:
         created = self.store.create_run(self.contract())

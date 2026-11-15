@@ -927,6 +927,18 @@ class RunLauncher:
                 config.container_executable_path,
                 config,
             )
+            if sandbox_spec.network_profile == "development_open" and not allow_noncompliant_test:
+                self._start_failure(
+                    run_id,
+                    adapter_name,
+                    isolation_mode,
+                    "unsafe_start_blocked",
+                    "development_open networking requires explicit noncompliant development authorization",
+                    command=command,
+                )
+                raise RuntimeErrorStateError(
+                    "development_open networking requires explicit noncompliant development authorization"
+                )
             sandbox = ContainerSandbox(sandbox_spec, self.store)
             try:
                 sandbox.verify_daemon_and_image()
@@ -951,7 +963,12 @@ class RunLauncher:
                             "argv": list(command),
                         },
                         "isolation_compliant": True,
-                        "isolation_mode": "container_network_none",
+                        "isolation_compliant": bool(evidence["isolation_compliant"]),
+                        "isolation_mode": (
+                            "container_development_open_noncompliant"
+                            if evidence["network_mode"] == "bridge"
+                            else "container_network_none"
+                        ),
                         "sandbox": evidence,
                     },
                     expected_statuses={"created"},
@@ -961,7 +978,11 @@ class RunLauncher:
                     "runtime_starting",
                     {
                         "adapter": adapter_name,
-                        "isolation": "container_network_none",
+                        "isolation": (
+                            "container_development_open_noncompliant"
+                            if evidence["network_mode"] == "bridge"
+                            else "container_network_none"
+                        ),
                         "argv": list(command),
                         "sandbox": evidence,
                     },

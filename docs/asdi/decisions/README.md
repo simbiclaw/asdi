@@ -8,6 +8,7 @@
 | [ADR-0004](ADR-0004-github-protection.md) | GitHub repository rulesets and legacy branch protection | **Deferred — owner declined current GitHub-native enforcement; execution/merge remain disabled** | Repository owner | ASDI-003 probe evidence |
 | [ADR-0005](ADR-0005-run-contract-implementation.md) | Initial ASDI-010 implementation approach | Accepted for non-executing validator: Python standard library only, no external dependency | Repository owner may override | ASDI-010 evidence |
 | [ADR-0006](ADR-0006-runtime-launch-boundary.md) | ASDI-011 process launch and identity boundary | Accepted: synthetic host-process tests only; vendor CLIs fail closed without ASDI-012 | Repository owner may override | ASDI-011 evidence |
+| [ADR-0007](ADR-0007-development-open-network-profile.md) | Owner-approved noncompliant bridge-network profile for development flow bring-up | **Accepted for development only; forbidden for production/autonomous acceptance** | Repository owner | Owner direction, 2026-11-15; ASDI-012 Docker Desktop socket blocker |
 
 Statuses are limited to `proposed`, `accepted`, `rejected`, and `deferred`. A deferred decision does not authorize implementation of a downstream capability that depends on it.
 
@@ -16,3 +17,4 @@ Statuses are limited to `proposed`, `accepted`, `rejected`, and `deferred`. A de
 1. Review the D-9 test evidence from ASDI-020 and choose Multica, Paperclip, or another supported board after the compatibility spike.
 2. Confirm D-4 sensitive-log model policy and authorize verification of the D-8 polling budget.
 3. Select deployment topology and provider values in ADR-0003 before production infrastructure implementation.
+4. Review ADR-0007's expiry/replacement: strict ASDI-012 egress remains required before autonomous operation.

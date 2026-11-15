@@ -23,6 +23,7 @@ from asdi.run_contract import (
     RunContractValidationError,
     build_run_contract,
 )
+from asdi.sandbox import SandboxSpec
 
 
 def synthetic_contract() -> dict:
@@ -123,6 +124,28 @@ class RunLauncherTests(unittest.TestCase):
         self.assertEqual(state["status"], "failed")
         self.assertEqual(state["result"]["reason"], "sandbox_not_configured")
         self.assertFalse(state["isolation_compliant"])
+
+    def test_development_open_network_requires_explicit_authorization(self) -> None:
+        created = self.launcher.create_run(synthetic_contract())
+        run_id = created["run_id"]
+        with self.assertRaises(RuntimeErrorStateError):
+            self.launcher.start_runtime(
+                run_id,
+                CodexAdapter.name,
+                RuntimeAdapterConfig(
+                    executable_path="/usr/bin/python3",
+                    container_executable_path="/usr/bin/python3",
+                ),
+                isolation_mode="container",
+                sandbox_spec=SandboxSpec(
+                    image="asdi-sandbox-test:local",
+                    runtime_executable="/usr/bin/python3",
+                    network_profile="development_open",
+                ),
+            )
+        state = self.store.load_run(run_id)
+        self.assertEqual(state["status"], "failed")
+        self.assertEqual(state["result"]["reason"], "unsafe_start_blocked")
 
     def test_actual_process_cancellation_persists_terminal_evidence(self) -> None:
         created = self.launcher.create_run(

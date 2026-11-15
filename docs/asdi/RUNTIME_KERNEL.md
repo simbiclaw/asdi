@@ -37,7 +37,7 @@ Failure/cancellation paths end only in `failed` or `cancelled`. Start failures i
 ## Security boundary at this ticket
 
 - The launcher calls `validate_run_contract` at creation and again before start.
-- Vendor runtime adapters require an explicit hardened ASDI-012 sandbox; ASDI-012 is not accepted yet.
+- Vendor runtime adapters require an explicit ASDI-012 sandbox. Enforced ASDI-012 is not accepted yet; an owner-approved `development_open` profile may run noncompliant development fixtures only.
 - Synthetic host-process mode is explicitly labelled non-compliant and is restricted to allowed absolute utilities.
 - The child environment does not inherit the launcher environment or secrets.
 - The human environment is not production and no external runtime is invoked by this ticket.

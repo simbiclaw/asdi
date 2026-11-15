@@ -1,6 +1,6 @@
 # ASDI Implementation Status
 
-**Reconciled:** 2026-11-13  
+**Reconciled:** 2026-11-15
 **Branch:** `asdi/asdi-012-container-sandbox`  
 **Authority:** ASDI Design REV H and ASDI Stack REV G
 
@@ -14,8 +14,8 @@ This is the live reconciliation record. Detailed acceptance evidence remains in 
 | ASDI-003 | ASDI-000 | Fail-closed / deferred | Owner deferred GitHub-native protection in ADR-0004. No scoped execution identity, merge authority, or autonomous merge path is enabled. See [`GATE_003_EVIDENCE.md`](GATE_003_EVIDENCE.md). |
 | ASDI-010 | ASDI-000 | Pass | Contract schema, defaults, provenance, fixtures, validation, and launch preflight pass. See [`GATE_010_EVIDENCE.md`](GATE_010_EVIDENCE.md) and [`GATE_010_VERIFICATION.md`](GATE_010_VERIFICATION.md). |
 | ASDI-011 | ASDI-010 | Pass | Board-neutral durable launcher, Claude/Codex/Hermes adapters, real child cancellation, events/usage/failure/recovery, and `done_check` recheck pass at kernel level. Vendor CLI invocation remains intentionally unverified. See [`GATE_011_EVIDENCE.md`](GATE_011_EVIDENCE.md). |
-| ASDI-012 | ASDI-011 | **Fail / implementation in progress** | Hardened no-network container lifecycle, cancellation, workspace separation, environment boundary, and fail-closed setup have live evidence. Container-side egress does **not** pass because Docker Desktop/macOS cannot mount the host-side Unix socket. See [`GATE_012_EVIDENCE.md`](GATE_012_EVIDENCE.md). |
-| ASDI-013 | ASDI-010/011/012 | Blocked | Cannot start while ASDI-012 is failed. Existing launcher `done_check` recheck does not satisfy live turn/spend/wall-clock acceptance. |
+| ASDI-012 | ASDI-011 | **Fail / implementation in progress** | Hardened no-network container lifecycle, cancellation, workspace separation, environment boundary, and fail-closed setup have live evidence. Container-side egress does **not** pass because Docker Desktop/macOS cannot mount the host-side Unix socket. An owner-approved `development_open` bridge profile now permits noncompliant flow bring-up only. See [`GATE_012_EVIDENCE.md`](GATE_012_EVIDENCE.md), [`DEV_FLOW_EVIDENCE.md`](DEV_FLOW_EVIDENCE.md), and ADR-0007. |
+| ASDI-013 | ASDI-010/011/012 | Blocked for autonomous acceptance | Development flow can proceed, but autonomous acceptance cannot pass while ASDI-012 is failed. Existing launcher `done_check` recheck does not satisfy live turn/spend/wall-clock acceptance. |
 | ASDI-014 | ASDI-011 | Partial | Run state, JSONL events, usage, sandbox, egress decisions, and cleanup evidence are persisted. Queryable retrieval, retention/redaction policy, and full event schema/observability interface remain. |
 | ASDI-020 | ASDI-001/011/012/013 | Blocked | D-9 spike requires the missing sandbox and guardrail capabilities and an owner board decision. |
 | ASDI-021 through ASDI-022 | Gate 1 / D-9 | Blocked | Board integration and admission are explicitly out of scope pending D-9. |
@@ -40,7 +40,8 @@ This is the live reconciliation record. Detailed acceptance evidence remains in 
 3. **GitHub protection path** was deferred; H1 remains fail-closed.
 4. **Production sandbox image and secret-injection boundary** must be selected and audited.
 5. **Container egress transport on macOS/Docker Desktop** requires an architectural decision if this remains the host platform.
+6. **ADR-0007 replacement** is required before autonomous operation: development-open bridge networking is noncompliant by definition.
 
 ## Current execution boundary
 
-Synthetic host-process tests are allowed only for process-kernel testing. No autonomous vendor runtime is authorized. The current ASDI-012 implementation may run only explicit no-network compatibility probes and must not be used for autonomous work.
+Synthetic host-process tests are allowed only for process-kernel testing. The owner-approved `development_open` profile may exercise the flow with no production credentials/data and no merge/deployment authority; it is explicitly noncompliant. No autonomous vendor runtime is authorized, and ASDI-012 acceptance remains failed.

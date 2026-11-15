@@ -43,6 +43,7 @@ class SandboxSpec:
     cpus: float = 1.0
     pids_limit: int = 128
     stop_timeout: int = 5
+    network_profile: str = "contract"
 
 
 class ContainerSandbox:
@@ -110,6 +111,16 @@ class ContainerSandbox:
         allowlist = tuple(network.get("allowlist", []))
         if network["mode"] == "allowlist" and not allowlist:
             raise RuntimeErrorStateError("allowlist mode requires at least one destination")
+        development_open = (
+            network["mode"] == "development_open"
+            or self.spec.network_profile == "development_open"
+        )
+        if self.spec.network_profile == "development_open" and network[
+            "mode"
+        ] != "development_open":
+            raise RuntimeErrorStateError(
+                "development_open sandbox profile requires a development_open contract"
+            )
 
         run_root = self.store.run_root(run_id)
         workspace = run_root / "workspace"
@@ -120,8 +131,9 @@ class ContainerSandbox:
             "workspace": str(workspace),
             "branch": branch,
             "image": self.spec.image,
-            "network_mode": "none",
-            "egress_mode": network["mode"],
+            "network_mode": "bridge" if development_open else "none",
+            "egress_mode": "development_open_noncompliant" if development_open else network["mode"],
+            "isolation_compliant": False if development_open else True,
             "allowlist": list(allowlist),
         }
         if network["mode"] == "allowlist":
@@ -154,6 +166,7 @@ class ContainerSandbox:
         user = self.spec.container_user
         if user is None and hasattr(os, "getuid"):
             user = f"{os.getuid()}:{os.getgid()}"
+        development_open = evidence["network_mode"] == "bridge"
         argv = [
             "run",
             "--name",
@@ -163,7 +176,7 @@ class ContainerSandbox:
             "--cidfile",
             str(evidence["container_id_file"]),
             "--network",
-            "none",
+            "bridge" if development_open else "none",
             "--init",
             "--cap-drop",
             "ALL",
@@ -196,7 +209,12 @@ class ContainerSandbox:
                 "--env",
                 f"ASDI_ALLOWED_BRANCH={evidence['branch']}",
                 "--env",
-                "ASDI_SANDBOX_MODE=container_network_none",
+                "ASDI_SANDBOX_MODE="
+                + (
+                    "container_development_open_noncompliant"
+                    if development_open
+                    else "container_network_none"
+                ),
             )
         )
         if self.proxy is not None:
