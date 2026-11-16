@@ -26,6 +26,8 @@
 
 Contract validation, evidence store, and static-gate runner primitives are implemented and tested. Per-run container orchestration, in-container agent execution, base-branch harness enforcement, and guardrail negative tests are next.
 
+**Update:** per-run network, workspace/evidence volumes, non-root container execution, static verifier, evidence persistence, and turn-kill test now pass. Phase 1 remains in progress until all negative guardrail/evidence tests and the final CLI lifecycle pass.
+
 ## Next
 
 Phase 1: REV K launcher, verifier container, guardrails, evidence store, and one working agent adapter.

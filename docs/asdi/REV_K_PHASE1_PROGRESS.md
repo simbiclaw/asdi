@@ -38,3 +38,18 @@ The REV K Phase 1 tests prove valid/missing `done_check`, evidence retention, ha
 * outside-process guardrail kill;
 * base-branch harness checkout and overlay;
 * live negative tests for a red verifier, weakened proof, and each guardrail limit.
+
+## Update
+
+Implemented and verified with Docker:
+
+* one internal per-run network;
+* one workspace volume and one evidence volume;
+* non-root isolated agent execution;
+* clean base export;
+* verifier static checks over the named head volume;
+* unsigned content-addressed evidence statement;
+* evidence hash verification after teardown;
+* turn guardrail kill with a hanging agent.
+
+Remaining Phase 1 negatives: red verifier, weakened harness proof, spend limit, token/turn edge, and explicit key-absence assertions.

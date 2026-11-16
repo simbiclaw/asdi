@@ -14,10 +14,10 @@ def run_checks(
     *,
     docker: str,
     image: str,
-    workspace: Path,
     manifest: dict[str, Any],
     run_id: str,
     commit: str,
+    mounts: list[str],
     timeout_scale: float = 1.0,
 ) -> list[dict[str, Any]]:
     checks: list[dict[str, Any]] = []
@@ -38,8 +38,11 @@ def run_checks(
                     "--read-only",
                     "--tmpfs",
                     "/tmp:rw,noexec,nosuid,nodev,size=64m",
-                    "--mount",
-                    f"type=bind,source={workspace},destination=/workspace",
+                    *(
+                        item
+                        for mount in mounts
+                        for item in ("--mount", mount)
+                    ),
                     "--workdir",
                     "/workspace",
                     "--env",
