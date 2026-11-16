@@ -45,6 +45,23 @@ The test also asserts:
 * no Docker socket appears in agent mounts;
 * the volume setup helper did not become the run path.
 
+## Verifier authority and clean-environment evidence
+
+Additional regressions prove:
+
+1. An agent exits 0, but a red verifier forces `status=failed`.
+2. `_fresh_export` re-exports base-branch verification; an agent edit changing `verify/bin/verify` from `exit 0` to `exit 101` is ignored.
+3. The runtime environment contains no key or token names.
+
+## Full suite
+
+```sh
+PYTHONPATH=.:src python3 -m unittest discover -s tests -v
+git diff --check
+```
+
+Result: **73 tests, OK, 3 expected AF_UNIX skips.**
+
 ## Current Phase 1 gap
 
 The verifier now mounts the run-head and base-branch volumes. Next checks must prove:

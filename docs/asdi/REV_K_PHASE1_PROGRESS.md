@@ -31,13 +31,26 @@ git diff --check
 
 The REV K Phase 1 tests prove valid/missing `done_check`, evidence retention, hash validation, and tamper detection.
 
-## Still required for Phase 1 exit
+## Negative evidence completed
 
 * per-run network/container lifecycle;
 * agent adapter running inside the container;
 * outside-process guardrail kill;
 * base-branch harness checkout and overlay;
 * live negative tests for a red verifier, weakened proof, and each guardrail limit.
+
+Implemented and verified:
+
+* an agent exit 0 cannot overturn a forced red verifier;
+* `_fresh_export` restores base-branch harness content after an agent weakens it;
+* turn guardrail kills a hanging isolated agent;
+* runtime key/token names are absent.
+
+## Still required for Phase 1 exit
+
+* durable `launcher status`/`kill` surface;
+* spend reporting or explicit local-model token/wall-clock-only evidence;
+* live Docker negative tests for each guardrail and weakened harness.
 
 ## Update
 
