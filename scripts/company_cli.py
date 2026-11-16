@@ -6,6 +6,8 @@ from __future__ import annotations
 import argparse
 import json
 import shlex
+import shutil
+import sys
 import time
 from pathlib import Path
 from typing import Any
@@ -145,6 +147,9 @@ def build_parser() -> argparse.ArgumentParser:
     )
     run.add_argument("--mission-id", required=True)
     run.add_argument("--agent", default="scripts/fixture_agent.py")
+    run.add_argument("--live", action="store_true")
+    run.add_argument("--model", default="qwen3.6-35b-dspark-local")
+    run.add_argument("--codex-path", default=shutil.which("codex"))
     run.add_argument("--live-agent-command")
     run.add_argument("--agent-proxy", default="http://127.0.0.1:7890")
     run.add_argument("--reviewer", default="scripts/fixture_reviewer.py")
@@ -162,6 +167,9 @@ def build_parser() -> argparse.ArgumentParser:
     monitor.add_argument("--traffic", type=int, default=4)
     monitor.add_argument("--auto-repair", action="store_true")
     monitor.add_argument("--agent", default="scripts/fixture_agent.py")
+    monitor.add_argument("--live", action="store_true")
+    monitor.add_argument("--model", default="qwen3.6-35b-dspark-local")
+    monitor.add_argument("--codex-path", default=shutil.which("codex"))
     monitor.add_argument("--live-agent-command")
     monitor.add_argument("--agent-proxy", default="http://127.0.0.1:7890")
     monitor.add_argument("--reviewer", default="scripts/fixture_reviewer.py")
@@ -189,6 +197,34 @@ def main(argv: list[str] | None = None, *, stdout: Any = None) -> int:
     store = LifecycleStore(root)
 
     def build_agent(arguments: Any) -> Path | CommandAgent:
+        if arguments.live:
+            adapter = Path(__file__).resolve().parent / "codex_lifecycle_adapter.py"
+            return CommandAgent(
+                name=f"codex_{arguments.model}",
+                argv=(
+                    sys.executable,
+                    str(adapter),
+                    "--workspace",
+                    "{workspace}",
+                    "--mission-id",
+                    "{mission_id}",
+                    "--objective",
+                    "{objective}",
+                    "--variant",
+                    "{variant}",
+                    "--model",
+                    arguments.model,
+                    "--codex-path",
+                    str(arguments.codex_path),
+                ),
+                timeout_seconds=560,
+                env=(
+                    ("HTTP_PROXY", arguments.agent_proxy),
+                    ("HTTPS_PROXY", arguments.agent_proxy),
+                    ("ALL_PROXY", arguments.agent_proxy),
+                    ("NO_PROXY", "localhost,127.0.0.1"),
+                ),
+            )
         if not arguments.live_agent_command:
             return Path(arguments.agent)
         command_argv = shlex.split(arguments.live_agent_command)

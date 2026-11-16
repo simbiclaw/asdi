@@ -155,7 +155,7 @@ class CompanyRun:
 
     def run_agent(self, mission_id: str, variant: str) -> dict:
         if isinstance(self.agent, CommandAgent):
-            timeout = 560 if self.agent.name == "live_cli" else 10
+            timeout = self.agent.timeout_seconds
             return self.engine.execute_agent(
                 mission_id, agent=self.agent, variant=variant, timeout=timeout
             )

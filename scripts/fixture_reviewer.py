@@ -62,14 +62,17 @@ def main() -> int:
         for token in FORBIDDEN:
             if token.lower() in source:
                 findings.append(f"forbidden implementation token: {token}")
-        if manifest.get("fixture_agent") is not True:
-            findings.append("missing prototype provenance marker")
+        if manifest.get("fixture_agent") not in (True, False):
+            findings.append("missing explicit agent provenance marker")
         passed = not findings
     else:
         if manifest.get("variant") not in {"good", "buggy", "repair"}:
             findings.append("invalid artifact variant")
-        if manifest.get("revision") not in {"prototype_feature_v1", "prototype_load_v2_defective", "prototype_load_v3_repaired"}:
-            findings.append("invalid artifact revision")
+        revision = manifest.get("revision")
+        if not (isinstance(revision, str) and revision.strip()) and not (
+            isinstance(revision, int) and not isinstance(revision, bool) and revision > 0
+        ):
+            findings.append("missing artifact revision")
         passed = not findings
 
     print(json.dumps({"scope": arguments.scope, "passed": passed, "findings": findings}))

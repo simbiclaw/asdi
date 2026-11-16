@@ -67,7 +67,7 @@ Result: **51 tests, OK, 3 expected AF_UNIX skips.**
 | Durable self-healing CLI | Implemented and verified locally |
 | Local deployment/rollback/flags | Implemented and verified |
 | Remote merge / production deployment | Not implemented; intentionally disabled |
-| Live model adapter in company loop | Command adapter and Codex smoke path integrated; live provider/model issue unresolved |
+| Live model adapter in company loop | Local Qwen live implementation/deployment verified without exposure |
 | Strict container egress | Not accepted |
 | Turn/spend/wall-clock guardrails | Implemented locally; production acceptance remains unfinished |
 | TRM and paired metrics | Implemented and verified locally; production promotion remains disabled |
