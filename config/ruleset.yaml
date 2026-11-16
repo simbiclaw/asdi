@@ -1,0 +1,9 @@
+version: 1
+target_branch: main
+required_status_checks:
+  - ci
+  - asdi/policy
+required_up_to_date_branch: true
+merge_identities: [merge-bot]
+refused_merge_identities: [archon, agents]
+judgment_paths_require_human: true

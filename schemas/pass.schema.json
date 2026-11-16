@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://asdi.local/schemas/pass.schema.json",
+  "title": "ASDI review pass output",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "pass", "reviewed_commit", "verdict", "findings", "independent_family"],
+  "properties": {
+    "schema": { "const": 1 },
+    "pass": { "const": "review" },
+    "reviewed_commit": { "type": "string", "minLength": 1 },
+    "verdict": { "enum": ["pass", "fail", "blocked", "error"] },
+    "independent_family": { "enum": [true, false, "unavailable"] },
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "disposition"],
+        "properties": {
+          "id": { "type": "string" },
+          "severity": { "enum": ["act", "consider", "noted", "dismissed"] },
+          "disposition": { "enum": ["act", "consider", "noted", "dismissed"] },
+          "evidence": { "type": "string" },
+          "strike": { "type": "boolean" }
+        }
+      }
+    }
+  }
+}

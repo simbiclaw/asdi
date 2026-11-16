@@ -1,0 +1,19 @@
+version: 1
+identities:
+  archon:
+    kind: status
+    may_merge: false
+    may_push_branches: false
+    may_post_status: true
+  merge-bot:
+    kind: merge
+    may_merge: true
+    may_push_branches: false
+    may_post_status: true
+  agents:
+    kind: agent
+    may_merge: false
+    may_push_branches: true
+    may_post_status: false
+allowed_comment_resumers:
+  - simbiclaw

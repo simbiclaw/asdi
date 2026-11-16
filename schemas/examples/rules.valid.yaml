@@ -1,0 +1,14 @@
+rules:
+  - id: R-001
+    statement: Empty lists still emit a header row
+    class: project-hard
+    scope: ["src/export/**"]
+    enforcement:
+      layer: 3
+      mechanism: tests/export/test_empty.py
+      check: pytest tests/export/test_empty.py
+    negative_test: .asdi/seeds/S-export-empty.patch
+    owner: human
+    introduced_by: initial harness
+    recurrences: 0
+    status: active

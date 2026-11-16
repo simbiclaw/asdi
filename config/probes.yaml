@@ -1,0 +1,8 @@
+version: 1
+allowed_methods: [GET]
+allowlisted_paths:
+  - /healthz
+  - /readyz
+authentication: false
+writes: false
+timeout_seconds: 5

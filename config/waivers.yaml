@@ -1,0 +1,12 @@
+version: 1
+waivers: []
+never_waivable:
+  - merge_authority
+  - done_check
+  - sandbox
+  - secrets_outside_sandbox
+  - irreversible_actions
+  - protected_paths
+  - verification_claims
+  - evidence_validity
+  - new_dependency_cooldown

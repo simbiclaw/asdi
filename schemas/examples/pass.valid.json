@@ -1,0 +1,10 @@
+{
+  "schema": 1,
+  "pass": "review",
+  "reviewed_commit": "abc123",
+  "verdict": "pass",
+  "independent_family": false,
+  "findings": [
+    { "id": "F-001", "disposition": "noted", "evidence": "No issue found", "strike": false }
+  ]
+}

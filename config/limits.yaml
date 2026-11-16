@@ -1,0 +1,20 @@
+version: 1
+defaults:
+  turns: 200
+  spend_usd: 8
+  minutes: 90
+  tokens: null
+zones:
+  agent:
+    cpus: "2"
+    memory: 4g
+  run:
+    cpus: "2"
+    memory: 4g
+  verifier:
+    cpus: "2"
+    memory: 4g
+  prod:
+    cpus: "4"
+    memory: 8g
+    oom_score_adj: -500

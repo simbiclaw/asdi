@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://asdi.local/schemas/static-gates.schema.json",
+  "title": "ASDI static gate manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "checks", "policy"],
+  "properties": {
+    "version": { "const": 1 },
+    "checks": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "command", "blocking", "timeout_seconds"],
+        "properties": {
+          "id": { "type": "string" },
+          "command": { "type": "array", "minItems": 1, "items": { "type": "string" } },
+          "blocking": { "type": "boolean" },
+          "timeout_seconds": { "type": "integer", "minimum": 1 },
+          "applies_to": { "type": "array", "items": { "type": "string" } }
+        }
+      }
+    },
+    "policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["new_violations", "legacy_findings"],
+      "properties": {
+        "new_violations": { "const": "reject" },
+        "legacy_findings": { "const": "track_without_expanding" }
+      }
+    }
+  }
+}

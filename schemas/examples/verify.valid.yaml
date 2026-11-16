@@ -1,0 +1,5 @@
+schema: 2
+product: toy-notes
+services: []
+drive_kinds: [cli, http]
+self_test: { feature: export-csv }

@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://asdi.local/schemas/feature.schema.json",
+  "title": "ASDI feature front matter",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "title", "paths", "class_floor", "drive", "proof", "negative_control", "limits"],
+  "properties": {
+    "id": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
+    "title": { "type": "string", "minLength": 1 },
+    "paths": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "type": "string" } },
+    "class_floor": { "enum": ["agent-mergeable", "judgment"] },
+    "drive": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "command"],
+      "properties": {
+        "kind": { "enum": ["cli", "http", "ui", "job", "webhook", "property"] },
+        "command": { "type": "string", "minLength": 1 },
+        "url": { "type": "string", "minLength": 1 }
+      }
+    },
+    "proof": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [],
+      "properties": {
+        "compare": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["file", "equals"],
+          "properties": {
+            "file": { "type": "string" },
+            "equals": { "type": "string" }
+          }
+        },
+        "http_status": { "type": "integer" },
+        "contains": { "type": "string" }
+      }
+    },
+    "negative_control": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mutate", "expect"],
+      "properties": {
+        "mutate": { "type": "string" },
+        "expect": { "const": "fail" }
+      }
+    },
+    "limits": { "type": "array", "items": { "type": "string" } },
+    "prod_probe": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["http_get", "expect_status"],
+      "properties": {
+        "http_get": { "type": "string", "pattern": "^/" },
+        "expect_status": { "type": "integer", "minimum": 200, "maximum": 299 }
+      }
+    },
+    "last_verified": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["commit", "date"],
+      "properties": {
+        "commit": { "type": "string", "minLength": 1 },
+        "date": { "type": "string", "format": "date" }
+      }
+    }
+  }
+}

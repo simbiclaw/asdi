@@ -1,0 +1,10 @@
+version: 1
+work_in_progress_limit: 3
+diff_budget_lines: 400
+evidence_retention_days_after_pr_close: 30
+experiment_expiry_days: 14
+experiment_wip_limit: 3
+production_verification_hours: 72
+repair_attempts: 2
+poller_interval_seconds: 60
+poller_stale_after_seconds: 300

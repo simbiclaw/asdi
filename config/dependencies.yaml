@@ -1,0 +1,7 @@
+version: 1
+minimum_release_age_days: 7
+exemptions: []
+allow_install_scripts: false
+install_from_lockfile_only: true
+new_dependency_class: judgment
+existing_bump_class: agent-mergeable

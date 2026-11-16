@@ -1,0 +1,25 @@
+{
+  "_type": "https://in-toto.io/Statement/v1",
+  "subject": [{ "name": "toy-notes", "digest": { "gitCommit": "abc123" } }],
+  "predicateType": "https://asdi.local/verification/v1",
+  "predicate": {
+    "manifest_id": "m-01JABCDEF",
+    "source": "run",
+    "run_id": "r-01JABCDEF",
+    "task_type": "feature.cli",
+    "producer": { "kind": "verifier", "image_digest": "sha256:placeholder" },
+    "environment": {
+      "run_image_digest": "sha256:placeholder",
+      "tool_versions": { "python": "3.12" }
+    },
+    "inputs": {
+      "harness_commit": "base123",
+      "static_gates": "sha256:placeholder",
+      "product_profile": "sha256:placeholder"
+    },
+    "checks": [{ "id": "feature:export-csv", "status": "pass", "control": "caught", "limits": [] }],
+    "files": [],
+    "started": "2026-11-15T14:00:00Z",
+    "finished": "2026-11-15T14:02:10Z"
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "version": 1,
+  "id": "toy-notes",
+  "run_image": "asdi/toy-notes-run:latest",
+  "services": [],
+  "task_types": ["feature.cli", "bugfix.http"],
+  "architecture_baseline": "single Python process; SQLite storage; shell CLI and local HTTP service"
+}

@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ASDI Stack doc</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0b1a2e; --bg2:#0f2240; --grid:#16325a; --line:#2c5a92; --ink:#dbe8f7; --dim:#8fa9c8;
+  --cyan:#6fd3ff; --amber:#ffc46b; --red:#ff7a7a; --green:#7ee0a5; --violet:#b9a2ff;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.55 "IBM Plex Sans",system-ui,sans-serif}
+body{background-image:
+  linear-gradient(var(--grid) 1px,transparent 1px),linear-gradient(90deg,var(--grid) 1px,transparent 1px),
+  linear-gradient(rgba(22,50,90,.45) 1px,transparent 1px),linear-gradient(90deg,rgba(22,50,90,.45) 1px,transparent 1px);
+  background-size:96px 96px,96px 96px,24px 24px,24px 24px;background-attachment:fixed}
+main{max-width:1120px;margin:0 auto;padding:48px 28px 96px}
+h1,h2,h3{font-weight:600;letter-spacing:-.01em;margin:0}
+h1{font-size:30px;line-height:1.2}
+h2{font-size:20px;margin:56px 0 14px;padding-bottom:8px;border-bottom:1px dashed var(--line);display:flex;gap:12px;align-items:baseline}
+h2 .n{font:500 12px "IBM Plex Mono",monospace;color:var(--cyan);border:1px solid var(--line);padding:2px 7px}
+h3{font-size:15px;margin:20px 0 8px;color:var(--cyan)}
+p{margin:8px 0}
+.mono,code{font-family:"IBM Plex Mono",monospace;font-size:.92em}
+code{background:rgba(111,211,255,.08);border:1px solid var(--grid);padding:0 4px}
+.dim{color:var(--dim)}
+.tag{font:500 11px "IBM Plex Mono",monospace;letter-spacing:.08em;text-transform:uppercase;color:var(--amber)}
+.titleblock{border:1.5px solid var(--line);background:rgba(11,26,46,.88);padding:22px 24px;display:grid;grid-template-columns:1fr auto;gap:16px}
+.titleblock .meta{font:12px/1.7 "IBM Plex Mono",monospace;color:var(--dim);text-align:right;border-left:1px dashed var(--line);padding-left:16px}
+.panel{border:1px solid var(--line);background:rgba(15,34,64,.85);padding:16px 18px;margin:12px 0}
+.verdict{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:16px}
+.verdict .card{border:1px solid var(--line);background:rgba(15,34,64,.92);padding:14px 16px;position:relative}
+.verdict .card .rank{font:600 28px "IBM Plex Mono",monospace;color:var(--cyan);position:absolute;right:14px;top:8px;opacity:.5}
+.verdict .card b{display:block;font-size:16px;margin-bottom:4px}
+.verdict .card .score{font:600 13px "IBM Plex Mono",monospace;color:var(--amber)}
+table{width:100%;border-collapse:collapse;font-size:13px;background:rgba(11,26,46,.9)}
+th,td{border:1px solid var(--grid);padding:7px 8px;text-align:left;vertical-align:top}
+th{font:500 11px "IBM Plex Mono",monospace;color:var(--dim);text-transform:uppercase;letter-spacing:.05em;background:rgba(22,50,90,.6)}
+td.s{font:600 13px "IBM Plex Mono",monospace;text-align:center;width:34px}
+.s0,.s1{background:rgba(255,122,122,.22);color:#ffc1c1}
+.s2{background:rgba(255,196,107,.16);color:#ffe1b0}
+.s3{background:rgba(111,211,255,.08)}
+.s4{background:rgba(126,224,165,.16);color:#c9f5da}
+.s5{background:rgba(126,224,165,.32);color:#e4fff0}
+td.tot{font:600 14px "IBM Plex Mono",monospace;color:var(--amber);text-align:center}
+tr.ko td:first-child{text-decoration:line-through;text-decoration-color:var(--red)}
+.ko-badge{display:inline-block;font:500 10px "IBM Plex Mono",monospace;color:var(--red);border:1px solid var(--red);padding:0 4px;margin-left:6px}
+.legend{display:flex;gap:14px;flex-wrap:wrap;font:12px "IBM Plex Mono",monospace;color:var(--dim);margin:8px 0}
+.legend span i{display:inline-block;width:12px;height:12px;vertical-align:-2px;margin-right:5px;border:1px solid var(--grid)}
+.cols{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+ul{margin:6px 0;padding-left:20px} li{margin:3px 0}
+svg text{font-family:"IBM Plex Mono",monospace}
+.scroll{overflow-x:auto}
+pre{background:#071322;border:1px solid var(--line);padding:14px;overflow-x:auto;font:12.5px/1.6 "IBM Plex Mono",monospace;margin:10px 0}
+.k{color:var(--violet)} .str{color:var(--green)} .c{color:#5f7fa6} .num{color:var(--amber)}
+.warn{border-left:3px solid var(--amber);padding-left:12px}
+a{color:var(--cyan)}
+@media(max-width:820px){.verdict,.cols,.titleblock{grid-template-columns:1fr}.titleblock .meta{text-align:left;border-left:0;padding-left:0}}
+</style>
+</head><body>
+<main>
+<div class="titleblock">
+  <div>
+    <div class="tag">Stack doc · REV K</div>
+    <h1>ASDI stack: mandated pair + Archon, one Mac Studio, GitHub passive</h1>
+    <p class="dim">The stack that implements <a href="https://claude.ai/artifact/5T3yXpRFvqP1ybgTobuW6E">Design doc</a>. This doc names the tool for each part; the build order is in the guide (<code>ASDI-BUILD-GUIDE.md</code>, v4). The Design doc, this doc and the guide are synchronized at REV K. The open-field tournament is kept as a one-table record (§05) and the corrections as a log (§07).</p>
+  </div>
+  <div class="meta">REV K · 2026-11-15<br>SET: DESIGN · STACK · GUIDE<br>C-0: MULTICA/PAPERCLIP + ARCHON<br>C-1: LOOPS LOCAL<br>C-2: MAC STUDIO ONLY<br>C-3: CONTAINERS, NO VMs<br>C-4: ARCHON IN OWN CONTAINER<br>C-5: ASDI-RUN VERIFICATION<br>SCALE 0–5 · 10 DIMS<br>MAX WEIGHTED 110<br>NOT BENCH-RUN</div>
+</div>
+
+<h2><span class="n">00</span>Board choice (D-9): deferred to the deploy gate</h2>
+<div class="panel warn"><b>C-2 (from you, 2026-11-13): ASDI runs on the Mac Studio M3 Ultra only.</b> REV F picked Multica because multi-machine was the mainline, and this doc said to choose Paperclip on one host. By that rule the pick flips, so it goes back to you. You have since deferred it to the deploy gate with every other open decision. The prototype runs on Multica behind a board adapter, so either pair is a config change.</div>
+<div class="verdict" style="grid-template-columns:1fr 1fr">
+  <div class="card"><span class="rank">1</span><span class="tag">Recommended on one host</span><b>Paperclip + Archon</b><span class="score">76 / 110 · KO 14</span><p class="dim">Hard spend stop and built-in heartbeats matter more when agents, production and models compete for one machine. The adapter receiver is now built once instead of once per Mac.</p></div>
+  <div class="card"><span class="rank">2</span><span class="tag">Current in the Design doc</span><b>Multica + Archon</b><span class="score">75 / 110 · KO 13</span><p class="dim">Keeps squads, a lighter human surface and native runtimes. Its deciding strength, multi-host dispatch, no longer applies; pick it if a second host is likely later.</p></div>
+</div>
+<p class="dim">The 1-point gap is within scoring noise. Either pair fits everything else in this doc; only the dispatch row in §01 changes.</p>
+<div class="panel"><p><b>Archon rule:</b> Archon wraps outcomes and pipelines; it never scripts how the build agent works. A build run is one agent task launched by the board (Multica or Paperclip); the agent picks its method and <code>done_check</code> is checked by the agent CLI's own stop hook where it has one, and re-checked for every CLI by the launcher's verifier in a clean container (C-5). Archon is never called from inside an agent (no nested budgets, no agents inside agents), and it never uses interactive approval nodes.</p></div>
+
+<h2><span class="n">01</span>Stack by layer</h2>
+<div class="scroll"><table>
+<tr><th>Layer</th><th>Pick</th><th>Notes</th></tr>
+<tr><td>Board and dispatch</td><td><b>Paperclip or Multica (D-9)</b></td><td>Server on Compose on the agent network, behind a board adapter. Multica: one daemon, native runtimes for Claude Code, Codex and Hermes. Paperclip: HTTP-adapter receiver launching the same CLIs, hard budget stop, heartbeats</td></tr>
+<tr><td>Workflow engine</td><td><b>Archon</b></td><td>Runs in its own container. Pass 1 pipelines: PR gate, post-merge check, one review pass, class check, packet, fix loop, triage, sweeps. Pass 2 adds four review passes, compounding, skill evals, seed suite, drift and readouts. Timers are due-dates in Postgres plus hourly idempotent sweeps</td></tr>
+<tr><td>Code host and gates</td><td><b>GitHub, passive</b></td><td>Code, PR UI, rulesets (required statuses <code>ci</code> and <code>asdi/policy</code>, up-to-date branch), CODEOWNERS. No merge queue, no Actions, no gh-aw, no webhooks</td></tr>
+<tr><td>Event intake</td><td><b>Local poller</b></td><td>Archon sweep every 60 s over the GitHub API (D-8)</td></tr>
+<tr><td>CI and images</td><td><b>Local, in throwaway verifier containers</b></td><td>Static gates and tests run in a clean container per check, never inside Archon. Images go by digest to a registry on the ops network that only CI can push to. Image signing is Pass 2</td></tr>
+<tr><td>Deploy</td><td><b>Pull deployer on the prod network</b></td><td>Deploys only a main commit that passed the post-merge check. Blue/green swap, smoke test, swap back on failure. Not Archon: the agent side has no route to production</td></tr>
+<tr><td>Flags and experiments</td><td><b>GrowthBook</b></td><td>Pass 2. Pass 1 uses a flag file with an expiry list. Self-hosted; sequential tests and bandits help at low traffic</td></tr>
+<tr><td>Errors</td><td><b>Bugsink</b></td><td>One container, Sentry-SDK compatible, small footprint. GlitchTip if licence matters</td></tr>
+<tr><td>Metrics and logs</td><td><b>Prometheus · Loki · Grafana</b></td><td>Agents query through MCP servers</td></tr>
+<tr><td>Triage</td><td><b>Archon workflow + local model</b></td><td>Daily: reads Bugsink and Grafana, clusters, opens board issues under the charter (D-4)</td></tr>
+<tr><td>Ingress, proxy, zones</td><td><b>Tunnel · Traefik or Caddy · Docker networks</b></td><td>Zones are Docker networks: prod, agent, staging, ops, and one per run. Tunnel provider, proxy and container runtime are deferred</td></tr>
+<tr><td>Models</td><td><b>vllm-mlx on the Studio</b></td><td>Reserved instance for products; agent pool preemptible. Prod containers have CPU and memory limits and OOM priority on the same host</td></tr>
+<tr><td>Run launch</td><td><b>ASDI launcher</b></td><td>ASDI-owned, with one adapter per agent CLI (Claude Code, Codex). One container and network per run, guardrails enforced from outside, the only caller of the Docker socket proxy</td></tr>
+<tr><td>Verification</td><td><b>ASDI verifier + the product's <code>verify/</code></b></td><td>Re-runs static gates and the product's proofs in a clean container, read from the base branch (C-5)</td></tr>
+<tr><td>Evidence</td><td><b>Directory on an ops volume</b></td><td>One hashed statement per run. Pass 2 signs it</td></tr>
+<tr><td>Egress and secrets</td><td><b>Allowlisting egress proxy</b></td><td>Adds tokens and the model key, so nothing secret sits inside a run</td></tr>
+<tr><td>Hardening parts</td><td><b>Signer · package proxy · probe runner</b></td><td>Pass 2 only, after the full-loop checkpoint</td></tr>
+</table></div>
+
+<h2><span class="n">02</span>Loops on the Studio, passive GitHub</h2>
+<div class="panel scroll">
+<svg viewBox="0 0 1040 310" width="100%" role="img" aria-label="Active loops on the Mac Studio poll GitHub and post statuses; GitHub passively stores code, enforces rulesets and shows PRs to you; the merge bot merges directly; prod pulls images from a local registry">
+  <defs><marker id="g1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0L10,5L0,10z" fill="#6fd3ff"/></marker>
+  <marker id="g2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0L10,5L0,10z" fill="#ffc46b"/></marker></defs>
+  <rect x="10" y="10" width="660" height="270" fill="rgba(126,224,165,.04)" stroke="#7ee0a5" stroke-dasharray="5 4"/>
+  <text x="22" y="28" fill="#7ee0a5" font-size="11">MAC STUDIO · active: every loop, test, decision, build, deploy</text>
+  <rect x="700" y="10" width="330" height="270" fill="rgba(143,169,200,.05)" stroke="#2c5a92" stroke-dasharray="5 4"/>
+  <text x="712" y="28" fill="#8fa9c8" font-size="11">GITHUB · passive: stores and enforces</text>
+  <g font-size="12">
+  <rect x="24" y="48" width="140" height="64" fill="#0f2240" stroke="#7ee0a5"/><text x="94" y="74" fill="#dbe8f7" text-anchor="middle">AGENT CONTAINERS</text><text x="94" y="92" fill="#8fa9c8" font-size="10.5" text-anchor="middle">board · launcher</text>
+  <rect x="214" y="48" width="180" height="64" fill="#0f2240" stroke="#6fd3ff"/><text x="304" y="72" fill="#dbe8f7" text-anchor="middle">ARCHON</text><text x="304" y="90" fill="#8fa9c8" font-size="10.5" text-anchor="middle">poller · pr-gate · loops</text><text x="304" y="104" fill="#8fa9c8" font-size="10.5" text-anchor="middle">posts statuses</text>
+  <rect x="444" y="128" width="190" height="44" fill="#0f2240" stroke="#7ee0a5"/><text x="539" y="148" fill="#dbe8f7" text-anchor="middle">MERGE BOT</text><text x="539" y="164" fill="#8fa9c8" font-size="10.5" text-anchor="middle">merges when class ok</text>
+  <rect x="214" y="200" width="180" height="60" fill="#0f2240" stroke="#7ee0a5"/><text x="304" y="224" fill="#dbe8f7" text-anchor="middle">LOCAL REGISTRY</text><text x="304" y="242" fill="#8fa9c8" font-size="10.5" text-anchor="middle">images by digest</text>
+  <rect x="444" y="200" width="190" height="60" fill="rgba(255,122,122,.08)" stroke="#ff7a7a"/><text x="539" y="224" fill="#dbe8f7" text-anchor="middle">PROD NETWORK</text><text x="539" y="242" fill="#8fa9c8" font-size="10.5" text-anchor="middle">pulls · smoke test</text>
+  <rect x="716" y="48" width="300" height="64" fill="#0f2240" stroke="#2c5a92"/><text x="866" y="72" fill="#dbe8f7" text-anchor="middle">REPO · PRs · RULESETS</text><text x="866" y="90" fill="#8fa9c8" font-size="10.5" text-anchor="middle">required statuses · CODEOWNERS</text><text x="866" y="104" fill="#8fa9c8" font-size="10.5" text-anchor="middle">up-to-date branch · no bypass</text>
+  <rect x="716" y="196" width="300" height="64" fill="rgba(255,196,107,.14)" stroke="#ffc46b" stroke-width="1.5"/><text x="866" y="222" fill="#dbe8f7" text-anchor="middle">◆ YOU</text><text x="866" y="240" fill="#ffc46b" font-size="10.5" text-anchor="middle">review judgment PRs · notifications</text>
+  </g>
+  <g fill="none" stroke="#6fd3ff">
+    <path d="M94,48 V38 H760 V48" marker-end="url(#g1)"/>
+    <path d="M394,66 H716" marker-end="url(#g1)"/>
+    <path d="M716,94 H394" marker-end="url(#g1)"/>
+    <path d="M394,106 H420 V150 H444" marker-end="url(#g1)"/>
+    <path d="M634,150 H760 V112" marker-end="url(#g1)"/>
+    <path d="M304,112 V200" marker-end="url(#g1)"/>
+    <path d="M394,230 H444" marker-end="url(#g1)"/>
+    <path d="M900,112 V196" stroke="#ffc46b" marker-end="url(#g2)"/>
+  </g>
+  <text x="560" y="34" fill="#6fd3ff" font-size="10">push branches</text>
+  <text x="540" y="62" fill="#6fd3ff" font-size="10">statuses</text>
+  <text x="510" y="90" fill="#6fd3ff" font-size="10">poll events (60 s)</text>
+  <text x="664" y="146" fill="#6fd3ff" font-size="10">merge</text>
+  <text x="312" y="160" fill="#6fd3ff" font-size="10">build</text>
+  <text x="22" y="300" fill="#8fa9c8" font-size="11">Every arrow into GitHub starts on the Studio (outbound only). GitHub never calls in, so there are no webhooks and no inbound tunnel to the agent side.</text>
+</svg></div>
+<div class="scroll"><table>
+<tr><th>Function</th><th>On the Mac Studio (active)</th><th>On GitHub (passive)</th></tr>
+<tr><td>Board, dispatch, agent runs</td><td>Board server and the ASDI launcher; one container per run on its own network</td><td>—</td></tr>
+<tr><td>CI, review passes, class check</td><td>Archon PR gate calls the verifier, runs the review and class check, then posts <code>ci</code> and <code>asdi/policy</code>. The same checks run on main after a merge</td><td>Receives statuses</td></tr>
+<tr><td>Event intake</td><td>Poller reconciles PRs, pushes, review comments and new commits on main every 60 s</td><td>Answers API calls; nothing calls in</td></tr>
+<tr><td>Fix loop, triage, readout, timers, compounding, TRM</td><td>Archon + sweeps, state in Postgres</td><td>—</td></tr>
+<tr><td>Merge</td><td>Merge bot merges when <code>asdi/policy</code> passes; you merge until agent merges are on</td><td>Rulesets: required statuses, up-to-date branch, CODEOWNERS for judgment paths, no bypass</td></tr>
+<tr><td>Your judgment review</td><td>Notifications</td><td>PR UI</td></tr>
+</table></div>
+<p class="dim">Three identities: Archon posts statuses only; the merge bot can only merge PRs whose required checks are green; agents can only push branches and open PRs. Test: if GitHub is unreachable, no loop crashes or loses state. Merges and pushes pause, the poller catches up, production keeps serving.</p>
+
+<h2><span class="n">03</span>Multica vs Paperclip on one host</h2>
+<div class="scroll"><table id="pair"><tr><th>Mandated pair</th><th>R1<br><span style="color:#8fa9c8">Fabric</span><br><span style="color:#ffc46b">×3</span></th><th>R2<br><span style="color:#8fa9c8">Enforce</span><br><span style="color:#ffc46b">×3</span></th><th>R3<br><span style="color:#8fa9c8">Durable</span><br><span style="color:#ffc46b">×3</span></th><th>R4<br><span style="color:#8fa9c8">Build</span><br><span style="color:#ffc46b">×3</span></th><th>R5<br><span style="color:#8fa9c8">Prod</span><br><span style="color:#ffc46b">×2</span></th><th>R6<br><span style="color:#8fa9c8">Human</span><br><span style="color:#ffc46b">×2</span></th><th>R7<br><span style="color:#8fa9c8">Agents</span><br><span style="color:#ffc46b">×2</span></th><th>R8<br><span style="color:#8fa9c8">Ops</span><br><span style="color:#ffc46b">×2</span></th><th>R9<br><span style="color:#8fa9c8">Mature</span><br><span style="color:#ffc46b">×1</span></th><th>R10<br><span style="color:#8fa9c8">Local</span><br><span style="color:#ffc46b">×1</span></th><th>Total<br>/110</th><th>KO sum</th></tr><tr><td><b>Paperclip + Archon</b> · one host</td><td class="s s3">3</td><td class="s s4">4</td><td class="s s4">4</td><td class="s s3">3</td><td class="s s4">4</td><td class="s s3">3</td><td class="s s4">4</td><td class="s s2">2</td><td class="s s3">3</td><td class="s s5">5</td><td class="tot">76</td><td class="s">14</td></tr><tr><td><b>Multica + Archon</b> · one host</td><td class="s s3">3</td><td class="s s4">4</td><td class="s s3">3</td><td class="s s3">3</td><td class="s s4">4</td><td class="s s4">4</td><td class="s s4">4</td><td class="s s2">2</td><td class="s s3">3</td><td class="s s5">5</td><td class="tot">75</td><td class="s">13</td></tr><tr><td><span class="dim">Paperclip + Archon · two hosts (REV F)</span></td><td class="s s2">2</td><td class="s s4">4</td><td class="s s4">4</td><td class="s s3">3</td><td class="s s4">4</td><td class="s s3">3</td><td class="s s4">4</td><td class="s s2">2</td><td class="s s3">3</td><td class="s s5">5</td><td class="tot">73</td><td class="s">13</td></tr><tr><td><span class="dim">Multica + Archon · two hosts (REV F)</span></td><td class="s s3">3</td><td class="s s4">4</td><td class="s s3">3</td><td class="s s3">3</td><td class="s s4">4</td><td class="s s4">4</td><td class="s s4">4</td><td class="s s2">2</td><td class="s s3">3</td><td class="s s5">5</td><td class="tot">75</td><td class="s">13</td></tr></table></div>
+<div class="cols">
+<div class="panel"><h3>Multica + Archon wins on</h3><ul>
+<li><s>Native multi-host dispatch</s>: no longer counts on one host; it returns if you add a machine</li>
+<li>Runtimes auto-detected with a liveness check, no receiver to build</li>
+<li>Squads with leader agents, matching your architect role without a company structure</li>
+<li>A Hermes runtime, so local-model workers stay possible</li>
+</ul></div>
+<div class="panel"><h3>Paperclip + Archon wins on</h3><ul>
+<li>A hard budget stop at 100% (Multica needs caps in the launcher)</li>
+<li>Heartbeats as built-in scheduled wakeups</li>
+<li>Board approvals that map onto your exposure gate</li>
+</ul><p class="dim">Cost: company and governance ceremony to configure away, which is why R6 stays a point lower.</p></div>
+</div>
+<p class="dim">What moved: on one host only R1 changes. Paperclip goes 2 → 3 because its weakness there was an adapter receiver per machine and no multi-host dispatch; Multica stays at 3 because its multi-host strength no longer earns anything. Separately, reconfiguring Archon to own pipelines (not the build process) added +1 each on R2, R3 and R4 against the original tournament configuration.</p>
+
+<h2><span class="n">04</span>Consequences and failure modes</h2>
+<div class="cols">
+<div class="panel"><h3>Consequences</h3><ul>
+<li>The Studio is a single point of failure for production and delivery. Recovery means replacement hardware plus an offsite restore.</li>
+<li>Two Postgres-backed servers (board, Archon), the prod containers and local models share 256 GB. Memory caps per zone and production-first admission are what keep users safe.</li>
+<li>Every run gets its own container and network from the first build phase. All zones share one Docker daemon and one kernel, so the socket proxy and container hardening carry the isolation.</li>
+<li>Timers are hourly sweeps, not durable workflows. If a window ever needs minute precision, revisit.</li>
+<li>Guardrails are enforced by the ASDI launcher from outside the run, whichever board is used. Paperclip also has a native spend stop.</li>
+<li>Build order is lifecycle first: the thinnest version of every part until a production error comes back as a merged fix, then hardening. The guide §13 has the phases.</li>
+<li>Up to 60 s latency per GitHub event, which these loops tolerate.</li>
+</ul></div>
+<div class="panel"><h3>Watch for</h3><table>
+<tr><th>Failure</th><th>Mitigation</th></tr>
+<tr><td>Archon drifts back into scripting the build agent</td><td>New Archon workflows touching a build run are judgment-class</td></tr>
+<tr><td>Missed sweep leaves a window open</td><td>Idempotent catch-up; overdue items in the digest</td></tr>
+<tr><td>Board and Archon disagree on state</td><td>The board owns work items, Archon owns pipeline runs; nightly reconciliation</td></tr>
+<tr><td>Runaway spend</td><td>Launcher caps; gate rejects runs over budget</td></tr>
+<tr><td>Poller misses events; merges stall</td><td>Reconcile against current state each pass; stale-check alert</td></tr>
+<tr><td>Status token leaks</td><td>Status-only rights; rotate</td></tr>
+</table></div>
+</div>
+<div class="panel"><h3>Verify when each part is built</h3><p class="dim">Only the GitHub check runs up front. Timing for the rest is in the guide §13.5.</p><ul>
+<li>Multica (if kept): task-cancel API for the steer agent; a runtime as a wrapper command for per-run containers and budget caps. Paperclip (if chosen): cancelling a running task through the adapter; adapter receiver as a container launcher.</li>
+<li>Archon: a review pass on a different model family than the build agent; one Postgres with two databases or two instances (backup scope).</li>
+<li>GitHub: rulesets requiring a status from a specific identity, and whether that identity must be a GitHub App; API rate budget for a 60 s poll.</li>
+</ul></div>
+
+<h2><span class="n">05</span>Open-field record</h2>
+<p class="dim">Scores from the open tournament, before your constraints. Kept so the trade-off stays visible: the mandated pair gives up 7–11 points against A and C, mostly on per-run isolation and durable timers. These rows were scored for two hosts and are not re-scored.</p>
+<div class="scroll"><table id="rec"><tr><th>Open-field stack</th><th>R1<br><span style="color:#8fa9c8">Fabric</span><br><span style="color:#ffc46b">×3</span></th><th>R2<br><span style="color:#8fa9c8">Enforce</span><br><span style="color:#ffc46b">×3</span></th><th>R3<br><span style="color:#8fa9c8">Durable</span><br><span style="color:#ffc46b">×3</span></th><th>R4<br><span style="color:#8fa9c8">Build</span><br><span style="color:#ffc46b">×3</span></th><th>R5<br><span style="color:#8fa9c8">Prod</span><br><span style="color:#ffc46b">×2</span></th><th>R6<br><span style="color:#8fa9c8">Human</span><br><span style="color:#ffc46b">×2</span></th><th>R7<br><span style="color:#8fa9c8">Agents</span><br><span style="color:#ffc46b">×2</span></th><th>R8<br><span style="color:#8fa9c8">Ops</span><br><span style="color:#ffc46b">×2</span></th><th>R9<br><span style="color:#8fa9c8">Mature</span><br><span style="color:#ffc46b">×1</span></th><th>R10<br><span style="color:#8fa9c8">Local</span><br><span style="color:#ffc46b">×1</span></th><th>Total<br>/110</th><th>KO sum</th><th>Status</th></tr><tr><td>A · GitHub-native + workflow engine</td><td class="s s4">4</td><td class="s s5">5</td><td class="s s5">5</td><td class="s s4">4</td><td class="s s4">4</td><td class="s s3">3</td><td class="s s3">3</td><td class="s s3">3</td><td class="s s3">3</td><td class="s s3">3</td><td class="tot">86</td><td class="s">18</td><td class="dim">C-1: loops would run on GitHub</td></tr><tr><td>C · Multica + workflow engine (DBOS)</td><td class="s s3">3</td><td class="s s4">4</td><td class="s s5">5</td><td class="s s3">3</td><td class="s s4">4</td><td class="s s4">4</td><td class="s s5">5</td><td class="s s2">2</td><td class="s s3">3</td><td class="s s5">5</td><td class="tot">83</td><td class="s">15</td><td class="dim">C-0: core not mandated pair</td></tr><tr><td>B · GitHub-native, lean</td><td class="s s4">4</td><td class="s s5">5</td><td class="s s3">3</td><td class="s s4">4</td><td class="s s4">4</td><td class="s s3">3</td><td class="s s3">3</td><td class="s s4">4</td><td class="s s3">3</td><td class="s s3">3</td><td class="tot">82</td><td class="s">16</td><td class="dim">C-1: loops would run on GitHub</td></tr><tr><td>P+D · Paperclip + workflow engine</td><td class="s s2">2</td><td class="s s3">3</td><td class="s s5">5</td><td class="s s3">3</td><td class="s s4">4</td><td class="s s3">3</td><td class="s s4">4</td><td class="s s2">2</td><td class="s s3">3</td><td class="s s5">5</td><td class="tot">73</td><td class="s">13</td><td class="dim">C-0: core not mandated pair</td></tr><tr><td>S4 · OpenHands Agent Canvas</td><td class="s s4">4</td><td class="s s3">3</td><td class="s s2">2</td><td class="s s2">2</td><td class="s s2">2</td><td class="s s3">3</td><td class="s s5">5</td><td class="s s3">3</td><td class="s s2">2</td><td class="s s5">5</td><td class="tot">66</td><td class="s">11</td><td class="dim">C-0: core not mandated pair</td></tr><tr><td>M+A · original tournament configuration</td><td class="s s3">3</td><td class="s s3">3</td><td class="s s2">2</td><td class="s s2">2</td><td class="s s4">4</td><td class="s s4">4</td><td class="s s4">4</td><td class="s s2">2</td><td class="s s3">3</td><td class="s s5">5</td><td class="tot">66</td><td class="s">10</td><td class="dim">Superseded by reconfiguration</td></tr><tr><td>P+A · original tournament configuration</td><td class="s s2">2</td><td class="s s3">3</td><td class="s s3">3</td><td class="s s2">2</td><td class="s s4">4</td><td class="s s3">3</td><td class="s s4">4</td><td class="s s2">2</td><td class="s s3">3</td><td class="s s5">5</td><td class="tot">64</td><td class="s">10</td><td class="dim">Superseded by reconfiguration</td></tr><tr class="ko"><td>S1 · Multica-centric (Design doc REV D as written)<span class="ko-badge">KO</span></td><td class="s s3">3</td><td class="s s3">3</td><td class="s s2">2</td><td class="s s1">1</td><td class="s s3">3</td><td class="s s4">4</td><td class="s s5">5</td><td class="s s3">3</td><td class="s s3">3</td><td class="s s5">5</td><td class="tot">65</td><td class="s">9</td><td class="dim">Knocked out (R4)</td></tr><tr class="ko"><td>S6 · Symphony-spec DIY<span class="ko-badge">KO</span></td><td class="s s2">2</td><td class="s s4">4</td><td class="s s3">3</td><td class="s s1">1</td><td class="s s2">2</td><td class="s s2">2</td><td class="s s3">3</td><td class="s s4">4</td><td class="s s3">3</td><td class="s s5">5</td><td class="tot">60</td><td class="s">10</td><td class="dim">Knocked out (R4)</td></tr></table></div>
+<p class="dim">Dimensions: R1 runtime fabric, R2 enforcement, R3 durable state, R4 build effort, R5 production loop, R6 human surface, R7 agent coverage, R8 ops burden, R9 maturity, R10 local-first. Knockouts: R1 &lt; 2, R2 &lt; 3, R4 &lt; 2. Tiebreak: knockout sum, then R1.</p>
+
+<h2><span class="n">06</span>Decisions deferred to the deploy gate</h2>
+<div class="panel"><p class="dim">Both are deferred, with the rest of the register in the guide §4. The recommendations below are input for that gate.</p><p><b>D-9 · Core pair on one host.</b> Recommended: Paperclip + Archon (§00, §03). Keep Multica + Archon if a second host is likely. Choosing Paperclip changes the Design doc's dispatcher, the guide's Phase 2 and the &quot;who enforces what&quot; section, nothing else.</p><p><b>D-8 · How local loops learn about GitHub events.</b> Recommended: the local 60 s poller. All logic stays local and there's no inbound path. Alternatives: a self-hosted Actions runner as a pure event relay (needs a workflow file per repo and Linux with sudo), or webhooks through a tunnel (rejected: an inbound path into the agent side).</p></div>
+
+<h2><span class="n">07</span>Revision log</h2>
+<div class="panel"><ul class="dim">
+<li><b>E16:</b> the Multica pick from the original tournament was never re-tested against the full design. Fixed by the open-field tournament.</li>
+<li><b>E17:</b> missed GitHub Agentic Workflows. Scored as options A and B, then excluded by C-1.</li>
+<li><b>E18:</b> "nine thin services" were really stateful workflows. Now about seven Archon pipelines.</li>
+<li><b>E19:</b> designed a triage engine when existing tools do it. Now a short Archon workflow over Bugsink and Grafana.</li>
+<li><b>E20:</b> paired combinations were left unscored. Added (M+A, P+A, P+D).</li>
+<li><b>E21:</b> added a self-hosted Forgejo server, confusing where loops run with where code is hosted. Withdrawn; GitHub stays passive.</li>
+<li><b>REV C–F:</b> core mandated (C-0); loops local (C-1); DBOS dropped inside the mandate; this doc compacted.</li>
+<li><b>REV G (C-2):</b> ASDI narrowed to the Mac Studio. Not an analysis error: the two-host constraint changed. It removes Multica's deciding advantage, so the pick is reopened as D-9.</li>
+<li><b>C-3 (2026-11-13):</b> no VMs. Every role is a Docker container on the Studio, and Archon runs in its own container. All open decisions are deferred to deployment time.</li>
+<li><b>REV K (2026-11-15):</b> synchronized with the Design doc and the guide, and renumbered to match them (H to J were not used here). Added the parts ASDI builds itself: launcher, verifier, evidence store, egress proxy. Merge path is a direct merge with a post-merge check on main; the merge queue is gone. Zones are Docker networks. Signing, the package proxy, the probe runner and GrowthBook are Pass 2. Decisions are deferred to the deploy gate.</li>
+<li><b>REV K, agent-neutral (2026-11-15):</b> nothing depends on one agent CLI. Runs use Claude Code or Codex through one launcher adapter; <code>AGENTS.md</code> is the instruction file and <code>CLAUDE.md</code> imports it.</li>
+</ul></div>
+
+<h2><span class="n">08</span>Sources</h2>
+<ul class="dim" style="font-size:13px">
+<li><a href="https://agentpedia.codes/blog/multica-guide">Multica guide</a> · <a href="https://skillselion.com/skills/multica-ai/multica/multica-creating-agents">Multica agent config</a> · <a href="https://skillsmp.com/creators/multica-ai/multica/server-internal-service-builtin-skills-multica-runtimes-and-repos">Multica runtimes</a></li>
+<li><a href="https://flag-shark.pages.dev/blog/open-source-feature-flag-tools-compared-2026">open-source flag tools compared</a> · <a href="https://guptadeepak.com/tools/top-5-feature-flag-management-tools-2026/">GrowthBook experimentation features</a></li>
+<li><a href="https://ssojet.com/blog/best-sentry-alternatives-error-tracking">Sentry alternatives</a> · <a href="https://www.ssdnodes.com/learn/self-hosted-error-tracking-sentry-alternatives">self-hosted error tracking RAM</a> · <a href="https://cubeapm.com/faqs/sentry-alternatives-for-error-monitoring/">licence notes</a></li>
+<li><a href="https://github.blog/changelog/2026-10-28-github-agentic-workflows-generally-available">GitHub Agentic Workflows GA</a> · <a href="https://github.github.com/gh-aw/reference/self-hosted-runners/">gh-aw self-hosted runners</a> (why A and B need GitHub to run loops)</li>
+<li><a href="https://www.beri.net/article/temporal-vs-inngest-vs-restate-vs-dbos-durable-execution-agent-cost">Temporal vs Inngest vs Restate vs DBOS</a> (the open-field workflow engine)</li>
+<li><a href="https://claude.ai/artifact/5T3yXpRFvqP1ybgTobuW6E">Design doc</a> · <a href="https://claude.ai/artifact/4Gt9igdQvShZtt4JVjPyks">Original stack tournament</a></li>
+</ul>
+</main>
+</body></html>

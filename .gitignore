@@ -1,3 +1,4 @@
-# Python bytecode and cache artifacts are generated, not source.
+.DS_Store
 __pycache__/
 *.py[cod]
+/.venv/
