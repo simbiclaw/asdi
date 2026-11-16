@@ -22,6 +22,10 @@
 | Agent token is refused on merge | pass | `merge/dry_run.py`, merge-policy tests |
 | `agent` cannot reach `prod` | pass | `tests/zone_probe.sh`; separate `asdi-agent` and `asdi-prod` Docker networks |
 
+## REV K Phase 1
+
+Contract validation, evidence store, and static-gate runner primitives are implemented and tested. Per-run container orchestration, in-container agent execution, base-branch harness enforcement, and guardrail negative tests are next.
+
 ## Next
 
 Phase 1: REV K launcher, verifier container, guardrails, evidence store, and one working agent adapter.
