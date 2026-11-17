@@ -2,7 +2,7 @@
 
 **Revision set:** REV K  
 **Current pass:** Pass 1  
-**Current phase:** Phase 0 — scaffold  
+**Current phase:** Phase 1 — launcher and verifier (remediation workflow added)
 
 ## Completed
 
@@ -36,9 +36,23 @@ Contract validation, evidence store, static-gate runner, per-run container orche
 
 **Update:** per-run network, workspace/evidence volumes, non-root container execution, static verifier, evidence persistence, turn-kill test, red-verifier override test, base-harness tamper-ignoration test, spend preflight, and durable status/kill CLI now pass.
 
+## Verification remediation workflow
+
+The user-directed remediation/specification-escalation loop is implemented as a durable controller:
+
+- Initial audit does not consume either remediation cycle.
+- A failed audit runs at most two builder remediation cycles, each followed by a fresh configured verifier invocation.
+- Candidate identity records the commit plus a dirty-worktree tree digest when applicable.
+- A verifier-reported specification defect, `SPEC_*` blocked reason, or finding marked as a specification defect/conflict enters an immediate hold.
+- A builder mutation of an authoritative specification enters an immediate hold without consuming the defect rule.
+- Two persistent failures produce the required Specification Feedback Report and hold.
+- Explicit owner decisions are recorded durably and release the hold with the selected disposition.
+
+See [`docs/asdi/REMEDIATION_WORKFLOW_EVIDENCE.md`](docs/asdi/REMEDIATION_WORKFLOW_EVIDENCE.md).
+
 ## Next
 
-Phase 1: complete Docker-path CLI integration and local Qwen adapter execution, then Phase 3 toy product/harness.
+Complete the independent conformance audit of this remediation slice, finish the remaining Phase 1 Docker/local-model integration evidence, then begin Phase 3 toy product/harness.
 
 ## Boundaries
 

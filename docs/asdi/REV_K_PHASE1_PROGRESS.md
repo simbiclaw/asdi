@@ -68,3 +68,7 @@ Implemented and verified with Docker:
 Negative evidence completed: red verifier, weakened harness proof, spend limit, turn guardrail, and explicit key/token absence.
 
 Durable operations added: `run`, `status`, `list`, and `kill`.
+
+## Update — 2026-11-17
+
+Added the user-directed verification remediation and specification-escalation control plane. It durably distinguishes the initial audit, two fresh remediation cycles, immediate specification-defect holds, builder specification mutation, persistent failure, owner decisions and hold release. Local controller/CLI tests pass; the slice remains pending independent conformance audit.
