@@ -1,6 +1,6 @@
 # Autonomous Mission Runner Evidence
 
-**Date:** 2026-11-15  
+**Date:** 2026-11-15
 **Result:** **Local prototype PASS**
 
 ## Capability

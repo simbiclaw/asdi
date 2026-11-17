@@ -1,7 +1,7 @@
 # Development Flow Evidence — Noncompliant Network Profile
 
-**Date:** 2026-11-15  
-**Decision:** [`ADR-0007`](decisions/ADR-0007-development-open-network-profile.md)  
+**Date:** 2026-11-15
+**Decision:** [`ADR-0007`](decisions/ADR-0007-development-open-network-profile.md)
 **Result:** `development_flow_pass` — **not ASDI-012 acceptance**
 
 ## Command
@@ -14,7 +14,7 @@ This used the explicit `development_open`, bridge-network profile. It requires `
 
 ## Flow result
 
-Evidence root:  
+Evidence root:
 `/private/var/folders/yf/nn0v06c92fv8yc2z36cqqjw80000gn/T/asdi-dev-flow-20261115-043127-fuqvh_ue`
 
 | Stage | Run | Result |

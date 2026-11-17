@@ -1,6 +1,6 @@
 # Reset and Work-Reference Evidence
 
-**Date:** 2026-11-15  
+**Date:** 2026-11-15
 **Result:** **Local prototype PASS**
 
 ## Capability
@@ -36,5 +36,5 @@ Regression evidence:
 
 Full suite: **46 tests, OK, 3 expected AF_UNIX skips.**
 
-Latest integrated scenario evidence root:  
+Latest integrated scenario evidence root:
 `/private/var/folders/yf/nn0v06c92fv8yc2z36cqqjw80000gn/T/asdi-company-20261115-073004-04bprp0y`

@@ -1,8 +1,8 @@
 # ASDI-003 Repository Baseline Evidence
 
-**Date:** 2026-11-13  
-**Repository:** [`https://github.com/simbiclaw/asdi`](https://github.com/simbiclaw/asdi)  
-**Network path:** local HTTP proxy `127.0.0.1:7890`  
+**Date:** 2026-11-13
+**Repository:** [`https://github.com/simbiclaw/asdi`](https://github.com/simbiclaw/asdi)
+**Network path:** local HTTP proxy `127.0.0.1:7890`
 **Result:** **FAIL — externally blocked; no permissive fallback configured**
 
 ## Owner direction recorded on 2026-11-13

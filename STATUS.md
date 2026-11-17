@@ -1,7 +1,7 @@
 # ASDI REV K implementation status
 
-**Revision set:** REV K  
-**Current pass:** Pass 1  
+**Revision set:** REV K
+**Current pass:** Pass 1
 **Current phase:** Phase 1 — launcher and verifier (remediation cycle 1)
 
 ## Completed

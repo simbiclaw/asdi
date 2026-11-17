@@ -1,7 +1,7 @@
 # Specification Feedback Report — Handbook synchronization metadata
 
-**Date:** 2026-11-17  
-**Status:** **Awaiting explicit owner direction**  
+**Date:** 2026-11-17
+**Status:** **Awaiting explicit owner direction**
 **Affected claim:** four-document REV K synchronization and full four-spec acceptance
 
 ## Requirement

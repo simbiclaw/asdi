@@ -1,6 +1,6 @@
 # REV K Phase 1 progress
 
-**Date:** 2026-11-16  
+**Date:** 2026-11-16
 **Status:** **In progress — core verifier/evidence primitives implemented**
 
 ## Implemented

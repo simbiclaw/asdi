@@ -1,8 +1,8 @@
 # ASDI Implementation Map
 
-**Audit date:** 2026-11-13  
-**Audited path:** `/Users/russell/workspace/ASDI`  
-**Ticket:** ASDI-000  
+**Audit date:** 2026-11-13
+**Audited path:** `/Users/russell/workspace/ASDI`
+**Ticket:** ASDI-000
 **Baseline document:** [`ASDI_Codex_Implementation_Backlog_REV_H_G.md`](../../ASDI_Codex_Implementation_Backlog_REV_H_G.md)
 
 ## Repository inventory

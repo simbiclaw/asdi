@@ -1,9 +1,9 @@
 # ADR-0001: Board and Dispatch Platform
 
-**Ticket:** ASDI-001  
-**Date:** 2026-11-13  
-**Status:** Deferred — blocked on repository owner review of ASDI-020 compatibility evidence  
-**Owner:** Repository owner  
+**Ticket:** ASDI-001
+**Date:** 2026-11-13
+**Status:** Deferred — blocked on repository owner review of ASDI-020 compatibility evidence
+**Owner:** Repository owner
 **Decision ID:** D-9
 
 ## Context

@@ -1,8 +1,8 @@
 # ASDI Pilot Target
 
-**Ticket:** ASDI-002  
-**Date:** 2026-11-13  
-**Owner:** Repository owner  
+**Ticket:** ASDI-002
+**Date:** 2026-11-13
+**Owner:** Repository owner
 **Status:** **Repository selected by owner; pilot service interface still blocked on owner design/approval**
 
 ## Finding

@@ -1,7 +1,7 @@
 # ADR-0007: Development-Open Network Profile
 
-**Date:** 2026-11-15  
-**Owner:** Repository owner  
+**Date:** 2026-11-15
+**Owner:** Repository owner
 **Status:** Accepted for development flow bring-up only; noncompliant with ASDI-012 acceptance
 
 ## Context

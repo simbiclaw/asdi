@@ -1,7 +1,7 @@
 # Live Qwen Local Agent Evidence
 
-**Date:** 2026-11-16  
-**Owner-selected runtime:** LiteLLM model `qwen3.6-35b-dspark-local`  
+**Date:** 2026-11-16
+**Owner-selected runtime:** LiteLLM model `qwen3.6-35b-dspark-local`
 **Result:** **Governed local lifecycle PASS without exposure**
 
 ## Runtime path
@@ -18,8 +18,8 @@ The parent assistant prompt and tools do not leak into the nested model request.
 
 ## Successful governed mission
 
-**Mission:** `mission_aa327a3b-269d-457a-b962-d420b7a476e7`  
-**External reference:** `LIVE-QWEN-35B-DSPARK-5`  
+**Mission:** `mission_aa327a3b-269d-457a-b962-d420b7a476e7`
+**External reference:** `LIVE-QWEN-35B-DSPARK-5`
 **Status:** `deployed`
 
 Evidence:

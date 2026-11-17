@@ -1,7 +1,7 @@
 # ASDI-012 Container Sandbox Evidence
 
-**Date:** 2026-11-13  
-**Ticket:** ASDI-012  
+**Date:** 2026-11-13
+**Ticket:** ASDI-012
 **Result:** **FAIL — do not proceed to ASDI-013 as an autonomous runtime**
 
 ## Changed paths
@@ -26,7 +26,7 @@ docker image inspect safeclaw:cc-2.1.283 --format '{{.Id}}'
 docker ps -a --filter 'name=asdi-' --format '{{.ID}} {{.Names}}'
 ```
 
-Normal repository suite result: **33 tests, OK, 3 expected AF_UNIX skips**.  
+Normal repository suite result: **33 tests, OK, 3 expected AF_UNIX skips**.
 AF_UNIX/Docker tests were then rerun with local elevated execution and passed.
 
 ## Host-side egress proxy evidence
@@ -48,10 +48,10 @@ This proves only the host authority and SOCKS5 implementation. It does **not** p
 
 ## Live container evidence
 
-Docker server: Docker Desktop 4.81.0 / Engine 29.6.1, Linux/arm64.  
+Docker server: Docker Desktop 4.81.0 / Engine 29.6.1, Linux/arm64.
 Local compatibility image: `safeclaw:cc-2.1.283`, SHA `sha256:6fd4ab59c08dd461c6abde00c0f8b5f40966abf4f6cc5fbba40475a8dd786046`. This is **not a production trust decision**. The `safeclaw-us-egress` proxy image was intentionally excluded.
 
-Final probe evidence root:  
+Final probe evidence root:
 `/var/folders/yf/nn0v06c92fv8yc2z36cqqjw80000gn/T/asdi-gate-012-20261113-070618-b5t2mtbm`
 
 Observed:

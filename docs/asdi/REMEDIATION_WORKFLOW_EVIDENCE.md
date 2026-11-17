@@ -1,6 +1,6 @@
 # Remediation and specification-escalation workflow evidence
 
-**Date:** 2026-11-17  
+**Date:** 2026-11-17
 **Result:** **Initial audit failed; remediation cycle 1 implemented and locally verified**
 
 ## Implemented behavior

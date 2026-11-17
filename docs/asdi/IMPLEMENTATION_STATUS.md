@@ -1,7 +1,7 @@
 # ASDI Implementation Status
 
 **Reconciled:** 2026-11-15
-**Branch:** `asdi/asdi-012-container-sandbox`  
+**Branch:** `asdi/asdi-012-container-sandbox`
 **Authority:** ASDI Design REV H and ASDI Stack REV G
 
 This is the live reconciliation record. Detailed acceptance evidence remains in the gate documents linked below.

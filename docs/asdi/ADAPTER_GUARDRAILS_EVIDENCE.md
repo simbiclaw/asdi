@@ -1,6 +1,6 @@
 # Adapter Interface and Guardrails Evidence
 
-**Date:** 2026-11-15  
+**Date:** 2026-11-15
 **Result:** **Local prototype PASS** — live model service was not invoked
 
 ## What was added
@@ -29,8 +29,8 @@ PYTHONPATH=src python3 -m unittest discover -s tests -v
 git diff --check
 ```
 
-Latest integrated scenario result: **PASS**.  
-Evidence root:  
+Latest integrated scenario result: **PASS**.
+Evidence root:
 `/private/var/folders/yf/nn0v06c92fv8yc2z36cqqjw80000gn/T/asdi-company-20261115-070326-frgvzumk`
 
 Both missions used:

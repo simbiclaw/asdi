@@ -1,6 +1,6 @@
 # ASDI Company Lifecycle Evidence
 
-**Date:** 2026-11-15  
+**Date:** 2026-11-15
 **Result:** **Local integrated lifecycle PASS** — not production autonomy and not strict ASDI-012 acceptance
 
 ## Command
@@ -9,7 +9,7 @@
 PYTHONPATH=src:. python3 scripts/run_company_scenarios.py
 ```
 
-Latest evidence root:  
+Latest evidence root:
 `/private/var/folders/yf/nn0v06c92fv8yc2z36cqqjw80000gn/T/asdi-company-20261115-045849-uwu6sn7n`
 
 Report: `company-scenario-report.json`

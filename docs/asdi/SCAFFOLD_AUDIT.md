@@ -1,7 +1,7 @@
 # ASDI Scaffold Audit
 
-**Audit date:** 2026-11-13  
-**Ticket:** ASDI-000  
+**Audit date:** 2026-11-13
+**Ticket:** ASDI-000
 **Scope:** Every hook and structural check present in the inspected working directory.
 
 ## Inspection method

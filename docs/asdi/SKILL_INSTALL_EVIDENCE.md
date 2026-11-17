@@ -1,7 +1,7 @@
 # ASDI Build Conformance skill installation
 
-**Date:** 2026-11-17  
-**Scope:** ASDI repository implementation/build slices only  
+**Date:** 2026-11-17
+**Scope:** ASDI repository implementation/build slices only
 **Result:** Installed
 
 ## Source

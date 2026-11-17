@@ -1,7 +1,7 @@
 # ADR-0008: Integrated Local Lifecycle Prototype
 
-**Date:** 2026-11-15  
-**Owner:** Repository owner  
+**Date:** 2026-11-15
+**Owner:** Repository owner
 **Status:** Accepted as a local, single-host lifecycle prototype; not accepted as production autonomy
 
 ## Context

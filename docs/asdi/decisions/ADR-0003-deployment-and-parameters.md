@@ -1,8 +1,8 @@
 # ADR-0003: Deployment Topology and Operational Parameters
 
-**Ticket:** ASDI-001  
-**Date:** 2026-11-13  
-**Owner:** Repository owner  
+**Ticket:** ASDI-001
+**Date:** 2026-11-13
+**Owner:** Repository owner
 **Status:** Deferred — no topology or numeric threshold is selected; do not treat illustrative values as approved
 
 ## Context

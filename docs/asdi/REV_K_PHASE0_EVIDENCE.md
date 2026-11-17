@@ -1,6 +1,6 @@
 # REV K Phase 0 evidence
 
-**Date:** 2026-11-16  
+**Date:** 2026-11-16
 **Result:** **Phase 0 scaffold PASS**
 
 ## Commands

@@ -1,8 +1,8 @@
 # ADR-0002: Operating Model Decisions
 
-**Ticket:** ASDI-001  
-**Date:** 2026-11-13  
-**Owner:** Repository owner for unresolved items; implementation follows the stated working-design baseline for accepted items  
+**Ticket:** ASDI-001
+**Date:** 2026-11-13
+**Owner:** Repository owner for unresolved items; implementation follows the stated working-design baseline for accepted items
 **Statuses:** see individual decision records below
 
 ## D-4 — Sensitive log/model privacy
