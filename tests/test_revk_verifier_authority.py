@@ -51,7 +51,8 @@ class VerifierAuthorityTests(unittest.TestCase):
             verify_dir = base_export / "verify" / "bin"
             verify_dir.mkdir(parents=True)
             fake_docker = root / "fake-docker"
-            fake_docker.write_text("#!/bin/sh\nexit 0\n")
+            fake_log = root / "docker-args.log"
+            fake_docker.write_text(f"#!/bin/sh\nprintf '%s\\n' \"$@\" >> {fake_log}\nexit 0\n")
             fake_docker.chmod(0o755)
             runtime = FakeRuntime(root / "workspace", root / "evidence")
             runtime.docker = str(fake_docker)
@@ -79,6 +80,12 @@ class VerifierAuthorityTests(unittest.TestCase):
             )
             self.assertEqual(check["status"], "pass")
             self.assertEqual(check["exit_code"], 0)
+            docker_invocations = fake_log.read_text().splitlines()
+            self.assertTrue(docker_invocations)
+            self.assertTrue(
+                all("destination=/opt/base,readonly" in line for line in docker_invocations if "asdi-base-fixture" in line)
+            )
+            self.assertFalse(any("destination=/opt/base:ro" in line for line in docker_invocations))
 
     def test_successful_agent_cannot_overturn_red_verifier(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

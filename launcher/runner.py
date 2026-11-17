@@ -510,7 +510,7 @@ class REVKLauncher:
                 commit=self._head(),
                 mounts=[
                     f"type=volume,source=asdi-workspace-{run_id.removeprefix('r-').replace('-', '')[:16]},destination=/workspace",
-                    f"type=volume,source={base_volume},destination=/opt/base:ro",
+                    f"type=volume,source={base_volume},destination=/opt/base,readonly",
                 ],
             )
             verify_check = self._run_base_verify(
@@ -564,7 +564,7 @@ class REVKLauncher:
             "--mount",
             f"type=volume,source=asdi-workspace-{short},destination=/workspace",
             "--mount",
-            f"type=volume,source={base_volume},destination=/opt/base:ro",
+            f"type=volume,source={base_volume},destination=/opt/base,readonly",
             "--workdir",
             "/workspace",
             "--env",
