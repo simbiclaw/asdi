@@ -13,8 +13,15 @@ ROOT = Path(__file__).resolve().parents[1]
 CONTRACT = ROOT / "schemas/examples/run-contract.valid.json"
 
 
-class HangProcess:
+class TurnOutputProcess:
     returncode = None
+    stdout = iter(
+        [
+            '{"event":"turn","turn":1}\n',
+            '{"event":"turn","turn":2}\n',
+            '{"event":"usage","tokens":1,"usd":0}\n',
+        ]
+    )
 
     def poll(self) -> int:
         return None
@@ -47,10 +54,13 @@ class KillTrackingRuntime(DockerRuntime):
 
     def start(self, **kwargs):
         self.kwargs = kwargs
-        return HangProcess()
+        return TurnOutputProcess()
 
     def kill(self, name: str) -> None:
         self.killed = True
+
+    def inspect_image(self, image: str) -> str:
+        return f"sha256:{image}"
 
     def copy_volume(self, volume: str, destination: Path, image: str) -> None:
         pass

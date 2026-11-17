@@ -68,12 +68,20 @@ class RemediationConfig:
     verifier_command: tuple[str, ...]
     spec_paths: tuple[str, ...]
     max_cycles: int = MAX_REMEDIATION_CYCLES
+    builder_timeout_seconds: float = 3600.0
+    verifier_timeout_seconds: float = 3600.0
 
 
 class RemediationController:
     """Durable Loop A controller with fail-closed Loop B escalation."""
 
     def __init__(self, root: str | Path, config: RemediationConfig) -> None:
+        if config.max_cycles > MAX_REMEDIATION_CYCLES:
+            raise ValueError(
+                f"remediation ceiling cannot exceed {MAX_REMEDIATION_CYCLES} cycles"
+            )
+        if config.max_cycles < 0:
+            raise ValueError("remediation ceiling cannot be negative")
         self.root = Path(root).resolve()
         self.config = config
         self.state_path = self.root / "state.json"
@@ -110,10 +118,12 @@ class RemediationController:
             "base_revision": self.config.base_revision,
             "phase": self.config.phase,
             "scope": self.config.scope,
-            "builder_command": list(self.config.builder_command),
-            "verifier_command": list(self.config.verifier_command),
+            "builder_command": [str(item) for item in self.config.builder_command],
+            "verifier_command": [str(item) for item in self.config.verifier_command],
             "spec_paths": list(self.config.spec_paths),
             "max_cycles": self.config.max_cycles,
+            "builder_timeout_seconds": self.config.builder_timeout_seconds,
+            "verifier_timeout_seconds": self.config.verifier_timeout_seconds,
         }
 
     @classmethod
@@ -134,6 +144,8 @@ class RemediationController:
             verifier_command=tuple(config_data["verifier_command"]),
             spec_paths=tuple(config_data["spec_paths"]),
             max_cycles=int(config_data["max_cycles"]),
+            builder_timeout_seconds=float(config_data["builder_timeout_seconds"]),
+            verifier_timeout_seconds=float(config_data["verifier_timeout_seconds"]),
         )
         controller = cls(root_path, config)
         controller.state = state
@@ -197,7 +209,34 @@ class RemediationController:
                 revision = f"{revision}+worktree:{completed.stdout.strip()}"
         return revision
 
-    def _run_command(self, command: tuple[str, ...], *, cycle: int, kind: str) -> dict[str, Any]:
+    def _protect_specs(self) -> dict[str, int]:
+        protected: dict[str, int] = {}
+        for relative in self.config.spec_paths:
+            path = self.config.repo_root / relative
+            if path.is_file():
+                protected[relative] = path.stat().st_mode & 0o777
+                path.chmod(0o444)
+        return protected
+
+    def _restore_specs(self, modes: dict[str, int]) -> None:
+        for relative, mode in modes.items():
+            (self.config.repo_root / relative).chmod(mode)
+
+    def _spec_mode_mutations(self, protected: dict[str, int]) -> list[str]:
+        return [
+            relative
+            for relative in protected
+            if (self.config.repo_root / relative).stat().st_mode & 0o777 != 0o444
+        ]
+
+    def _run_command(
+        self,
+        command: tuple[str, ...],
+        *,
+        cycle: int,
+        kind: str,
+        timeout_seconds: float,
+    ) -> dict[str, Any]:
         started = time.time()
         try:
             completed = subprocess.run(
@@ -206,6 +245,7 @@ class RemediationController:
                 capture_output=True,
                 text=True,
                 check=False,
+                timeout=timeout_seconds,
             )
             result = {
                 "command": list(command),
@@ -240,7 +280,12 @@ class RemediationController:
                 cycle=cycle,
                 report=str(cycle_root / "conformance-report.json"),
             )
-        execution = self._run_command(tuple(command), cycle=cycle, kind="verification")
+        execution = self._run_command(
+            tuple(command),
+            cycle=cycle,
+            kind="verification",
+            timeout_seconds=self.config.verifier_timeout_seconds,
+        )
         report_path = cycle_root / "conformance-report.json"
         if not report_path.exists():
             report = {
@@ -273,7 +318,12 @@ class RemediationController:
                 findings=str(findings_path),
                 requirement=self.config.requirement_id,
             )
-        return self._run_command(tuple(command), cycle=cycle, kind="builder")
+        return self._run_command(
+            tuple(command),
+            cycle=cycle,
+            kind="builder",
+            timeout_seconds=self.config.builder_timeout_seconds,
+        )
 
     @staticmethod
     def _has_spec_defect(report: dict[str, Any]) -> tuple[bool, str]:
@@ -556,7 +606,42 @@ class RemediationController:
             self.enforce_hold()
             before_revision = self._candidate()
             cycle_root = self.root / f"remediation-cycle-{cycle}"
-            builder = self._run_builder(cycle=cycle, findings_path=findings_path)
+            protected_modes = self._protect_specs()
+            try:
+                builder = self._run_builder(cycle=cycle, findings_path=findings_path)
+                mode_mutations = self._spec_mode_mutations(protected_modes)
+            finally:
+                self._restore_specs(protected_modes)
+            attempted_spec_paths = [
+                relative
+                for relative in self.config.spec_paths
+                if relative in builder.get("stderr", "")
+            ]
+            if mode_mutations or (builder.get("exit_code") != 0 and attempted_spec_paths):
+                feedback = self._enter_spec_feedback(
+                    trigger="specification_mutation_during_builder_remediation",
+                    report=initial_report,
+                    report_path=initial_report_path,
+                    reason=(
+                        "builder changed permissions or content of a read-only "
+                        "authoritative specification file: " + ", ".join(mode_mutations)
+                    ),
+                )
+                self._record_cycle(
+                    cycle=cycle,
+                    report={"result": "blocked", "spec_mutation": self._spec_changes()},
+                    report_path=cycle_root / "conformance-report.json",
+                    builder_execution=builder,
+                    before_revision=before_revision,
+                    after_revision=self._candidate(),
+                    spec_changes=self._spec_changes(),
+                )
+                return {
+                    "action": "escalated_to_specification_feedback",
+                    "cycle": cycle,
+                    "trigger": "specification_mutation_during_builder_remediation",
+                    "feedback": feedback,
+                }
             after_revision = self._candidate()
             spec_changes = self._spec_changes()
             if spec_changes["changed"]:

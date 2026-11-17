@@ -11,6 +11,7 @@ from pathlib import Path
 
 from asdi.governance import TRMLedger, paired_metrics
 from asdi.lifecycle import LifecycleStore, MissionGuardrails, MergeAuthorization, ProductOps
+from launcher.contract import load_contract
 from launcher.runner import DockerRuntime, REVKLauncher
 from launcher.state import load_run_state, list_run_states
 
@@ -30,9 +31,11 @@ def build_parser() -> argparse.ArgumentParser:
     commands = parser.add_subparsers(dest="command", required=True)
     run = commands.add_parser("run", help="Run a REV K contract")
     run.add_argument("--contract", required=True)
-    run.add_argument("--max-turns", type=int, default=24)
-    run.add_argument("--max-spend-usd", type=float, default=2.0)
-    run.add_argument("--minutes", type=int, default=10)
+    run.add_argument("--max-turns", type=int, default=None)
+    run.add_argument("--max-tokens", type=int, default=None)
+    run.add_argument("--max-spend-usd", type=float, default=None)
+    run.add_argument("--minutes", type=int, default=None)
+    run.add_argument("--agent-cost-usd", type=float, default=0.0)
     status = commands.add_parser("status", help="Show a launcher run")
     status.add_argument("--run-id", required=True)
     listing = commands.add_parser("list", help="List launcher runs")
@@ -50,15 +53,19 @@ def main(argv: list[str] | None = None) -> int:
     runs_root = root / "runs"
     if args.command == "run":
         contract = json.loads(Path(args.contract).read_text())
-        contract["guardrails"] = {
-            "turns": args.max_turns,
-            "spend_usd": args.max_spend_usd,
-            "minutes": args.minutes,
-            "tokens": None,
-        }
+        guardrails = contract["guardrails"]
+        if args.max_turns is not None:
+            guardrails["turns"] = args.max_turns
+        if args.max_tokens is not None:
+            guardrails["tokens"] = args.max_tokens
+        if args.max_spend_usd is not None:
+            guardrails["spend_usd"] = args.max_spend_usd
+        if args.minutes is not None:
+            guardrails["minutes"] = args.minutes
         temporary = root / ".current-contract.json"
         temporary.parent.mkdir(parents=True, exist_ok=True)
         temporary.write_text(json.dumps(contract, indent=2, sort_keys=True) + "\n")
+        contract = load_contract(temporary)
         runtime = DockerRuntime(args.docker)
         launcher = REVKLauncher(
             root=root,
@@ -67,9 +74,9 @@ def main(argv: list[str] | None = None) -> int:
             agent_image=args.agent_image,
             runtime=runtime,
             agent_script=args.agent_script,
-            agent_default_cost_usd=0.0,
+            agent_default_cost_usd=args.agent_cost_usd,
         )
-        result = launcher.run(args.contract)
+        result = launcher.run(temporary)
         print(json.dumps(result.__dict__, indent=2, sort_keys=True))
         return 0 if result.status == "succeeded" else 3
     if args.command == "status":

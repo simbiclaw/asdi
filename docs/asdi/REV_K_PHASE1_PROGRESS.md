@@ -72,3 +72,7 @@ Durable operations added: `run`, `status`, `list`, and `kill`.
 ## Update — 2026-11-17
 
 Added the user-directed verification remediation and specification-escalation control plane. It durably distinguishes the initial audit, two fresh remediation cycles, immediate specification-defect holds, builder specification mutation, persistent failure, owner decisions and hold release. Local controller/CLI tests pass; the slice remains pending independent conformance audit.
+
+## Independent audit response — 2026-11-17
+
+The initial audit failed candidate `df21e4e` without consuming a remediation cycle. Cycle 1 repairs the cited verifier base-volume/verify execution path, evidence provenance, external usage guardrails, CLI override validation, remediation ceiling, specification mutation boundary and subprocess timeout. Focused and full suites pass. A fresh independent audit is required before acceptance.

@@ -3,11 +3,14 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
+import queue
 import shutil
 import subprocess
 import tempfile
+import threading
 import time
 import uuid
 from dataclasses import dataclass
@@ -204,6 +207,12 @@ class DockerRuntime:
             timeout=60,
         )
 
+    def inspect_image(self, image: str) -> str:
+        result = self._run(["image", "inspect", "--format", "{{.Id}}", image], timeout=10)
+        if result.returncode != 0:
+            raise RuntimeError(f"cannot inspect run image: {result.stderr}")
+        return result.stdout.strip()
+
 
 class REVKLauncher:
     """Pass 1 launcher using one isolated Docker run and one verifier."""
@@ -240,6 +249,7 @@ class REVKLauncher:
         network = f"asdi-run-{short}"
         volume = f"asdi-evidence-{short}"
         workspace_volume = f"asdi-workspace-{short}"
+        base_volume = f"asdi-base-{short}"
         container = f"asdi-agent-{short}"
         run_root = self.runs_root / run_id
         workspace = run_root / "workspace"
@@ -258,10 +268,14 @@ class REVKLauncher:
         )
 
         self._fresh_export(workspace)
+        base_export = run_root / "base"
+        self._fresh_export(base_export)
         self.runtime.create_network(network)
         self.runtime.create_volume(volume)
         self.runtime.create_volume(workspace_volume)
+        self.runtime.create_volume(base_volume)
         self.runtime.populate_volume(workspace_volume, workspace)
+        self.runtime.populate_volume(base_volume, base_export, destination="/opt/base")
         self.runtime.chown_volume(workspace_volume, "/workspace", "1001:1001")
         self.runtime.chown_volume(volume, "/evidence", "1001:1001")
 
@@ -286,7 +300,51 @@ class REVKLauncher:
         ]
         started = time.time()
         turns = 0
+        tokens = 0
+        spend_used = 0.0
         agent_exit: int | None = None
+        output_lines: queue.Queue[str] = queue.Queue()
+        reader_finished = threading.Event()
+
+        def drain_process_output() -> None:
+            try:
+                if process.stdout is None:
+                    return
+                for line in process.stdout:
+                    output_lines.put(line)
+            finally:
+                reader_finished.set()
+
+        def observe_runtime_events() -> None:
+            nonlocal turns, tokens, spend_used
+            while True:
+                try:
+                    raw = output_lines.get_nowait()
+                except queue.Empty:
+                    return
+                try:
+                    event = json.loads(raw)
+                except json.JSONDecodeError:
+                    continue
+                if event.get("event") == "turn":
+                    turns += 1
+                if event.get("event") == "usage":
+                    tokens += int(event.get("tokens", 0))
+                    spend_used += float(event.get("usd", 0))
+
+        def enforce_runtime_guardrails() -> None:
+            token_limit = contract["guardrails"].get("tokens")
+            if token_limit is not None and tokens > int(token_limit):
+                self.runtime.kill(container)
+                raise RuntimeError("token guardrail exceeded")
+            spend_limit = contract["guardrails"].get("spend_usd")
+            if spend_limit is not None and spend_used > float(spend_limit):
+                self.runtime.kill(container)
+                raise RuntimeError("spend guardrail exceeded")
+            if turns > int(contract["guardrails"]["turns"]):
+                self.runtime.kill(container)
+                raise RuntimeError("turn guardrail exceeded")
+
         try:
             process = self.runtime.start(
                 name=container,
@@ -302,15 +360,17 @@ class REVKLauncher:
                 environment=environment,
             )
             limit = float(contract["guardrails"]["minutes"]) * 60
+            threading.Thread(target=drain_process_output, daemon=True).start()
             while process.poll() is None:
                 if time.time() - started > limit:
                     self.runtime.kill(container)
                     raise RuntimeError("wall-clock guardrail exceeded")
-                turns += 1
-                if turns > int(contract["guardrails"]["turns"]):
-                    self.runtime.kill(container)
-                    raise RuntimeError("turn guardrail exceeded")
+                observe_runtime_events()
+                enforce_runtime_guardrails()
                 time.sleep(0.1)
+            while not reader_finished.is_set() or not output_lines.empty():
+                observe_runtime_events()
+                enforce_runtime_guardrails()
             agent_exit = process.returncode
             stdout, stderr = process.communicate(timeout=5)
             (run_root / "agent.stdout.log").write_text(stdout or "")
@@ -322,14 +382,18 @@ class REVKLauncher:
             raise
 
         spend_limit = contract["guardrails"].get("spend_usd")
-        spend_used = self.agent_default_cost_usd
+        spend_used += self.agent_default_cost_usd
         if spend_limit is not None and spend_used > float(spend_limit):
             self.runtime.kill(container)
             raise RuntimeError("spend guardrail exceeded")
 
         self.runtime.copy_volume(volume, evidence_stage, self.verifier_image)
 
-        checks = self._verify_head(run_id=run_id, workspace=workspace)
+        checks = self._verify_head(
+            run_id=run_id,
+            workspace=workspace,
+            base_volume=base_volume,
+        )
         passed = agent_exit == 0 and all(check["status"] == "pass" for check in checks)
         status = "succeeded" if passed else "failed"
         result_path = evidence_stage / "result.json"
@@ -354,7 +418,29 @@ class REVKLauncher:
             )
             + "\n"
         )
-        evidence = EvidenceStore(self.root / "evidence").put(evidence_stage, json.loads(result_path.read_text()))
+        gates_path = base_export / ".asdi" / "static-gates.yaml"
+        profile_path = base_export / ".asdi" / "product.yaml"
+        evidence_metadata = {
+            "source": "run",
+            "producer": {
+                "kind": "verifier",
+                "image_digest": self.runtime.inspect_image(self.verifier_image),
+            },
+            "environment": {
+                "run_image_digest": self.runtime.inspect_image(self.agent_image),
+                "tool_versions": {"python": "container-image"},
+            },
+            "inputs": {
+                "harness_commit": self._revision(self.base_branch),
+                "static_gates": self._file_digest(gates_path),
+                "product_profile": self._file_digest(profile_path),
+            },
+        }
+        evidence = EvidenceStore(self.root / "evidence").put(
+            evidence_stage,
+            json.loads(result_path.read_text()),
+            metadata=evidence_metadata,
+        )
         runtime_evidence = {
             "network": network,
             "container": container,
@@ -362,6 +448,7 @@ class REVKLauncher:
             "workspace_volume": workspace_volume,
             "socket_mounted": False,
             "secrets_mounted": False,
+            "usage": {"turns": turns, "tokens": tokens, "spend_usd": spend_used},
         }
         self._save_state(
             run_root,
@@ -379,6 +466,7 @@ class REVKLauncher:
         self.runtime.remove_network(network)
         self.runtime.remove_volume(volume)
         self.runtime.remove_volume(workspace_volume)
+        self.runtime.remove_volume(base_volume)
         return RunResult(
             run_id=run_id,
             status=status,
@@ -399,7 +487,13 @@ class REVKLauncher:
         except (FileNotFoundError, KeyError, ValueError, json.JSONDecodeError):
             return time.time()
 
-    def _verify_head(self, *, run_id: str, workspace: Path) -> list[dict[str, Any]]:
+    def _verify_head(
+        self,
+        *,
+        run_id: str,
+        workspace: Path,
+        base_volume: str,
+    ) -> list[dict[str, Any]]:
         with tempfile.TemporaryDirectory() as temporary:
             base = Path(temporary) / "base"
             base.mkdir()
@@ -416,9 +510,15 @@ class REVKLauncher:
                 commit=self._head(),
                 mounts=[
                     f"type=volume,source=asdi-workspace-{run_id.removeprefix('r-').replace('-', '')[:16]},destination=/workspace",
-                    f"type=volume,source=asdi-base-{run_id.removeprefix('r-').replace('-', '')[:16]},destination=/opt/base",
+                    f"type=volume,source={base_volume},destination=/opt/base:ro",
                 ],
             )
+            verify_check = self._run_base_verify(
+                run_id=run_id,
+                base=base,
+                base_volume=base_volume,
+            )
+            checks.append(verify_check)
             (workspace / ".asdi-evidence" / "static-gates.json").parent.mkdir(
                 parents=True, exist_ok=True
             )
@@ -426,6 +526,88 @@ class REVKLauncher:
                 json.dumps({"run_id": run_id, "checks": checks}, indent=2, sort_keys=True) + "\n"
             )
             return checks
+
+    def _run_base_verify(
+        self,
+        *,
+        run_id: str,
+        base: Path,
+        base_volume: str,
+    ) -> dict[str, Any]:
+        """Run the base-branch verify entrypoint after static gates."""
+
+        verify_path = base / "verify" / "bin" / "verify"
+        started = time.time()
+        if not verify_path.is_file() or not os.access(verify_path, os.X_OK):
+            return {
+                "id": "verify:base-harness",
+                "status": "blocked",
+                "exit_code": None,
+                "duration_seconds": round(time.time() - started, 3),
+                "stdout": "",
+                "stderr": "base branch has no executable verify/bin/verify",
+            }
+        short = run_id.removeprefix("r-").replace("-", "")[:16]
+        command = [
+            self.runtime.docker,
+            "run",
+            "--rm",
+            "--network",
+            "none",
+            "--cap-drop",
+            "ALL",
+            "--security-opt",
+            "no-new-privileges",
+            "--read-only",
+            "--tmpfs",
+            "/tmp:rw,noexec,nosuid,nodev,size=64m",
+            "--mount",
+            f"type=volume,source=asdi-workspace-{short},destination=/workspace",
+            "--mount",
+            f"type=volume,source={base_volume},destination=/opt/base:ro",
+            "--workdir",
+            "/workspace",
+            "--env",
+            f"ASDI_RUN_ID={run_id}",
+            "--env",
+            "ASDI_HEAD=/workspace",
+            "--env",
+            "ASDI_BASE=/opt/base",
+            "--env",
+            "ASDI_EVIDENCE_DIR=/workspace/.asdi-evidence",
+            self.verifier_image,
+            "/opt/base/verify/bin/verify",
+        ]
+        try:
+            completed = subprocess.run(
+                command,
+                capture_output=True,
+                text=True,
+                timeout=900,
+                check=False,
+            )
+            status = "pass" if completed.returncode == 0 else "fail"
+            exit_code = completed.returncode
+            stdout = completed.stdout
+            stderr = completed.stderr
+        except subprocess.TimeoutExpired as error:
+            status = "error"
+            exit_code = None
+            stdout = error.stdout.decode() if isinstance(error.stdout, bytes) else str(error.stdout or "")
+            stderr = error.stderr.decode() if isinstance(error.stderr, bytes) else str(error.stderr or "")
+        except OSError as error:
+            status = "error"
+            exit_code = None
+            stdout = ""
+            stderr = str(error)
+        return {
+            "id": "verify:base-harness",
+            "status": status,
+            "exit_code": exit_code,
+            "duration_seconds": round(time.time() - started, 3),
+            "stdout": stdout[-4000:],
+            "stderr": stderr[-4000:],
+        }
 
     def _fresh_export(self, destination: Path) -> None:
         if destination.exists():
@@ -441,6 +623,21 @@ class REVKLauncher:
             check=True,
         )
         return result.stdout.strip()
+
+    def _revision(self, revision: str) -> str:
+        result = subprocess.run(
+            ["git", "-C", str(self.product_root), "rev-parse", revision],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        return result.stdout.strip()
+
+    @staticmethod
+    def _file_digest(path: Path) -> str:
+        if not path.is_file():
+            return hashlib.sha256(b"").hexdigest()
+        return hashlib.sha256(path.read_bytes()).hexdigest()
 
     def _export_tree(self, revision: str, output: Path) -> None:
         archive = output.parent / f".{output.name}-{uuid.uuid4().hex}.tar"

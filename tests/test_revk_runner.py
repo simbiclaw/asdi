@@ -15,6 +15,7 @@ ROOT = Path(__file__).resolve().parents[1]
 class FakeProcess:
     def __init__(self) -> None:
         self.returncode = 0
+        self.stdout = None
 
     def poll(self) -> int:
         return 0
@@ -28,6 +29,9 @@ class FakeRuntime(DockerRuntime):
         self.workspace = workspace
         self.evidence = evidence
         self.started = False
+        self.populated_volumes: list[str] = []
+        self.populated_sources: dict[str, Path] = {}
+        self.workspace_volume: str | None = None
 
     def create_network(self, name: str) -> None:
         self.network = name
@@ -37,9 +41,16 @@ class FakeRuntime(DockerRuntime):
 
     def populate_volume(self, volume: str, source: Path, *, destination: str = "/workspace") -> None:
         self.populated = (volume, source, destination)
+        self.populated_volumes.append(volume)
+        self.populated_sources[volume] = source
+        if destination == "/workspace":
+            self.workspace_volume = volume
 
     def chown_volume(self, volume: str, destination: str, ownership: str) -> None:
         self.ownership = (volume, destination, ownership)
+
+    def inspect_image(self, image: str) -> str:
+        return f"sha256:{image}"
 
     def remove_container(self, name: str) -> None:
         self.removed_container = True
@@ -149,6 +160,13 @@ class REVKRunnerTests(unittest.TestCase):
             self.assertNotIn("/var/run/docker.sock", str(runtime.kwargs["binds"]))
             self.assertTrue(result.evidence["valid"])
             self.assertEqual(runtime.populated[0], runtime.volume)
+            self.assertTrue(
+                any(volume.startswith("asdi-base-") for volume in runtime.populated_volumes)
+            )
             expected_workspace = root / "asdi" / "runs" / result.run_id / "workspace"
-            self.assertEqual(runtime.populated[1].resolve(), expected_workspace.resolve())
+            workspace_volume = runtime.workspace_volume
+            self.assertEqual(
+                runtime.populated_sources[workspace_volume].resolve(),
+                expected_workspace.resolve(),
+            )
             self.assertTrue((expected_workspace / "src" / "notes.py").is_file())

@@ -42,6 +42,44 @@ class VerifierAuthorityTests(unittest.TestCase):
         )
         return root
 
+    def test_verify_head_requires_base_harness_and_mounts_base_volume(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            product = self.make_product(root / "product")
+            base_export = root / "base"
+            base_export.mkdir()
+            verify_dir = base_export / "verify" / "bin"
+            verify_dir.mkdir(parents=True)
+            fake_docker = root / "fake-docker"
+            fake_docker.write_text("#!/bin/sh\nexit 0\n")
+            fake_docker.chmod(0o755)
+            runtime = FakeRuntime(root / "workspace", root / "evidence")
+            runtime.docker = str(fake_docker)
+            launcher = REVKLauncher(
+                root=root / "asdi",
+                product_root=product,
+                runtime=runtime,
+                agent_script=AGENT,
+            )
+            check = launcher._run_base_verify(
+                run_id="r-fixture",
+                base=base_export,
+                base_volume="asdi-base-fixture",
+            )
+            self.assertEqual(check["status"], "blocked")
+            self.assertIn("executable", check["stderr"])
+
+            verify = verify_dir / "verify"
+            verify.write_text("#!/bin/sh\nexit 0\n")
+            verify.chmod(0o755)
+            check = launcher._run_base_verify(
+                run_id="r-fixture",
+                base=base_export,
+                base_volume="asdi-base-fixture",
+            )
+            self.assertEqual(check["status"], "pass")
+            self.assertEqual(check["exit_code"], 0)
+
     def test_successful_agent_cannot_overturn_red_verifier(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             runtime = KillTrackingRuntime()

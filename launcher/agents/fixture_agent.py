@@ -15,6 +15,7 @@ def main() -> int:
     parser.add_argument("--commit", required=True)
     arguments = parser.parse_args()
     workspace = Path(arguments.workspace)
+    print(json.dumps({"event": "turn", "turn": 1}), flush=True)
     (workspace / "src" / "generated.py").write_text("VALUE = 'generated'\n")
     evidence = Path("/evidence")
     evidence.mkdir(parents=True, exist_ok=True)
@@ -34,6 +35,7 @@ def main() -> int:
         ],
     }
     (evidence / "result.json").write_text(json.dumps(result, indent=2) + "\n")
+    print(json.dumps({"event": "usage", "tokens": 1, "usd": 0}), flush=True)
     print(json.dumps({"ok": True}))
     return 0
 

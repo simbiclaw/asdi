@@ -1,7 +1,7 @@
 # Remediation and specification-escalation workflow evidence
 
 **Date:** 2026-11-17  
-**Result:** **Implemented and locally verified; independent conformance audit pending**
+**Result:** **Initial audit failed; remediation cycle 1 implemented and locally verified**
 
 ## Implemented behavior
 
@@ -45,4 +45,60 @@ The tests cover:
 
 The controller mechanically enforces report parsing, pass predicates, two-cycle accounting, candidate identity, durable escalation and owner-decision recording. It does not itself construct the container boundary. Builder and verifier commands must be wrapped by the ASDI launcher/container path when used for enforcement-class work; the current direct subprocess support is a local workflow control-plane implementation and must not be described as run-sandbox evidence.
 
-This slice still requires an independent `asdi-build-conformance` audit against its exact candidate revision before acceptance.
+## Independent initial audit
+
+- Candidate: `df21e4e`
+- Verifier: independent `asdi-build-conformance` agent
+- Result: `FAIL`
+- Remediation cycles consumed by the initial audit: `0`
+
+Primary implementation findings repaired in cycle 1:
+
+1. The remediation CLI could override the ceiling above two cycles.
+2. Specification mutation detection was post-hoc only and could miss a transient edit.
+3. Builder/verifier timeouts were caught but never supplied to `subprocess.run`.
+4. The verifier referenced a base volume that was never populated and did not run the base-branch verify entrypoint.
+5. Evidence identity collided across runs and lacked producer/environment/input metadata.
+6. Turn guardrail counted polling iterations rather than structured runtime turns, spend/token events were not enforced externally, and CLI guardrail overrides were discarded.
+
+The audit also reported `SPEC_SYNC_CONFLICT` for Design REV K versus the Handbook/Build Guide metadata. That issue is governed by [`docs/asdi/SPEC_FEEDBACK_HANDBOOK_SYNC.md`](SPEC_FEEDBACK_HANDBOOK_SYNC.md), not by implementation remediation.
+
+## Remediation cycle 1
+
+Implemented:
+
+- hard remediation ceiling of two cycles in the controller and CLI;
+- read-only specification protection plus content/mode mutation escalation;
+- configured builder/verifier subprocess timeouts;
+- populated base volume and execution of base `verify/bin/verify` after static gates;
+- unique content-addressed evidence identity with verifier/run image, base harness, gate-manifest and product-profile bindings;
+- structured `turn` and `usage` events, external token/spend/turn enforcement, and persisted usage evidence;
+- validated launcher CLI override contract and explicit local-agent cost.
+
+Focused execution:
+
+```sh
+PYTHONPATH=src:. python3 -m unittest tests.test_remediation_controller tests.test_revk_phase1 tests.test_revk_runner tests.test_revk_verifier_authority tests.test_revk_guardrails tests.test_launcher_cli
+```
+
+Observed:
+
+```text
+Ran 20 tests in 3.389s
+OK
+```
+
+Full execution:
+
+```sh
+PYTHONPATH=.:src python3 -m unittest discover -s tests -v
+```
+
+Observed:
+
+```text
+Ran 89 tests in 10.735s
+OK (skipped=3)
+```
+
+The three skips are the existing expected AF_UNIX sandbox limitations, not new failures. A fresh independent verifier must audit the cycle-1 commit. Actual Docker execution of the repaired verifier path remains outstanding until that audit or a subsequent execution run provides host evidence.

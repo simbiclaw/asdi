@@ -24,7 +24,13 @@ class EvidenceStore:
                 digest.update(block)
         return digest.hexdigest()
 
-    def put(self, source_dir: str | Path, result: dict[str, Any]) -> dict[str, Any]:
+    def put(
+        self,
+        source_dir: str | Path,
+        result: dict[str, Any],
+        *,
+        metadata: dict[str, Any],
+    ) -> dict[str, Any]:
         source = Path(source_dir).resolve()
         result_path = source / "result.json"
         if not result_path.is_file():
@@ -33,13 +39,53 @@ class EvidenceStore:
         required = {"schema", "run_id", "commit", "features"}
         if set(observed) != required:
             raise ValueError("result.json fields do not match schema 2")
+        if not observed.get("run_id") or not observed.get("commit"):
+            raise ValueError("evidence must be bound to a run and revision")
         for feature in observed.get("features", []):
             if "limits" not in feature:
                 raise ValueError("every feature check must state limits")
         if result is not None and observed != result:
             raise ValueError("result does not match caller-provided result")
 
-        manifest_id = "m-" + hashlib.sha256(observed["commit"].encode()).hexdigest()[:24]
+        metadata_required = {"source", "producer", "environment", "inputs"}
+        if set(metadata) != metadata_required:
+            raise ValueError(
+                "evidence metadata must contain source, producer, environment and inputs"
+            )
+        if not isinstance(metadata["producer"], dict) or metadata["producer"].get("kind") != "verifier":
+            raise ValueError("evidence producer must identify the verifier")
+        if not isinstance(metadata["environment"], dict) or not metadata["environment"].get(
+            "run_image_digest"
+        ):
+            raise ValueError("evidence environment must contain the run image digest")
+        inputs = metadata.get("inputs")
+        required_inputs = {"harness_commit", "static_gates", "product_profile"}
+        if not isinstance(inputs, dict) or set(inputs) != required_inputs:
+            raise ValueError("evidence inputs must bind harness, gates and product profile")
+
+        statement_identity = {
+            "subject": [{"name": "asdi-run", "digest": {"gitCommit": observed["commit"]}}],
+            "predicateType": "https://asdi.local/verification/v1",
+            "predicate": {
+                "source": metadata["source"],
+                "run_id": observed["run_id"],
+                "producer": metadata["producer"],
+                "environment": metadata["environment"],
+                "inputs": metadata["inputs"],
+                "checks": [
+                    {
+                        "id": f"feature:{item['id']}",
+                        "status": item["status"],
+                        "control": item["control"],
+                        "limits": item["limits"],
+                    }
+                    for item in observed["features"]
+                ],
+            },
+        }
+        manifest_id = "m-" + hashlib.sha256(
+            json.dumps(statement_identity, sort_keys=True, separators=(",", ":")).encode()
+        ).hexdigest()[:24]
         manifest_root = self.root / manifest_id
         if manifest_root.exists():
             return self.verify(manifest_id)
@@ -67,17 +113,12 @@ class EvidenceStore:
             "predicateType": "https://asdi.local/verification/v1",
             "predicate": {
                 "manifest_id": manifest_id,
-                "source": "run",
+                "source": metadata["source"],
                 "run_id": observed["run_id"],
-                "checks": [
-                    {
-                        "id": f"feature:{item['id']}",
-                        "status": item["status"],
-                        "control": item["control"],
-                        "limits": item["limits"],
-                    }
-                    for item in observed["features"]
-                ],
+                "producer": metadata["producer"],
+                "environment": metadata["environment"],
+                "inputs": metadata["inputs"],
+                "checks": statement_identity["predicate"]["checks"],
                 "files": file_records,
             },
         }
@@ -106,15 +147,16 @@ class EvidenceStore:
                 failures.append(f"hash mismatch {item['path']}")
         if failures:
             raise ValueError("invalid evidence: " + "; ".join(failures))
+        if not statement["predicate"].get("producer", {}).get("image_digest"):
+            failures.append("missing producer image digest")
+        if not statement["predicate"].get("environment", {}).get("run_image_digest"):
+            failures.append("missing run image digest")
+        inputs = statement["predicate"].get("inputs", {})
+        if set(inputs) != {"harness_commit", "static_gates", "product_profile"}:
+            failures.append("incomplete evidence input binding")
+        if failures:
+            raise ValueError("invalid evidence: " + "; ".join(failures))
         return {"manifest_id": manifest_id, "valid": True, "statement": statement, "result": result}
-
-
-def _sha256(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as handle:
-        for block in iter(lambda: handle.read(1024 * 1024), b""):
-            digest.update(block)
-    return digest.hexdigest()
 
 
 def _sha256(path: Path) -> str:

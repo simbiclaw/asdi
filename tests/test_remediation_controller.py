@@ -111,6 +111,7 @@ raise SystemExit(0 if result == "pass" else 1)
         builder_override: Path | None = None,
         *,
         state_name: str | None = None,
+        max_cycles: int = 2,
     ) -> RemediationController:
         return RemediationController(
             self.state_root / (state_name or self._testMethodName),
@@ -123,6 +124,7 @@ raise SystemExit(0 if result == "pass" else 1)
                 builder_command=(str(builder_override or self._builder()),),
                 verifier_command=(str(verifier), "{report}"),
                 spec_paths=("AGENTS.md",),
+                max_cycles=max_cycles,
             ),
         )
 
@@ -223,3 +225,22 @@ git -c user.name=Builder -c user.email=builder@invalid commit -m 'spec mutation'
         self.assertEqual(exit_code, 0)
         self.assertIn('"status": "verified"', status_output.getvalue())
         self.assertTrue((state_root / "state.json").is_file())
+
+    def test_remediation_ceiling_is_hard_limited_to_two(self) -> None:
+        with self.assertRaisesRegex(ValueError, "cannot exceed 2"):
+            self._controller(self._verifier("pass"), max_cycles=3)
+        controller = RemediationController(
+            self.state_root / "one-cycle",
+            RemediationConfig(
+                requirement_id="R-REV-K-LAUNCHER",
+                repo_root=self.repo,
+                base_revision="main",
+                phase="Pass 1 / Phase 1",
+                scope="launcher verifier authority",
+                builder_command=(self._builder(),),
+                verifier_command=(self._verifier("pass"), "{report}"),
+                spec_paths=("AGENTS.md",),
+                max_cycles=1,
+            ),
+        )
+        self.assertEqual(controller.config.max_cycles, 1)
