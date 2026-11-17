@@ -24,13 +24,13 @@
 
 ## REV K Phase 1
 
-Contract validation, evidence store, and static-gate runner primitives are implemented and tested. Per-run container orchestration, in-container agent execution, base-branch harness enforcement, and guardrail negative tests are next.
+Contract validation, evidence store, static-gate runner, per-run container orchestration, non-root execution, named head/base/evidence volumes, and durable run/status/kill operations are implemented and tested.
 
-**Update:** per-run network, workspace/evidence volumes, non-root container execution, static verifier, evidence persistence, turn-kill test, red-verifier override test, and base-harness tamper-ignoration test now pass. Phase 1 remains in progress until durable status/kill CLI and all spend/key negatives pass.
+**Update:** per-run network, workspace/evidence volumes, non-root container execution, static verifier, evidence persistence, turn-kill test, red-verifier override test, base-harness tamper-ignoration test, spend preflight, and durable status/kill CLI now pass.
 
 ## Next
 
-Phase 1: REV K launcher, verifier container, guardrails, evidence store, and one working agent adapter.
+Phase 1: complete Docker-path CLI integration and local Qwen adapter execution, then Phase 3 toy product/harness.
 
 ## Boundaries
 

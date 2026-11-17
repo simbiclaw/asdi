@@ -38,14 +38,14 @@ class TRMLedgerTests(unittest.TestCase):
                 task_type="feature",
                 mission_id=f"stable-{index}",
                 evidence={"review": "pass"},
-                occurred_at="2026-12-16T00:00:00Z",
+                occurred_at="2027-01-01T00:00:00Z",
             )
         self.assertEqual(self.ledger.snapshot()["task_types"]["feature"]["maturity"], "T1")
         event = self.ledger.record_first_pass(
             task_type="feature",
             mission_id="stable-boundary",
             evidence={"review": "pass"},
-                occurred_at="2026-12-17T00:00:00Z",
+                occurred_at="2027-01-02T00:00:00Z",
         )
         first_pass_event = self.ledger.events()[-2]
         self.assertIsNone(first_pass_event.get("promotion_blocked"))

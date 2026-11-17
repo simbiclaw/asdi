@@ -17,6 +17,7 @@ from typing import Any
 from .contract import load_contract
 from .evidence import EvidenceStore
 from .static_gates import run_checks as run_container_checks
+from .state import atomic_json
 
 
 @dataclass
@@ -217,6 +218,7 @@ class REVKLauncher:
         verifier_image: str | None = None,
         runtime: DockerRuntime | None = None,
         agent_script: str | Path | None = None,
+        agent_default_cost_usd: float = 0.0,
     ) -> None:
         self.root = Path(root).resolve()
         self.runs_root = self.root / "runs"
@@ -228,6 +230,7 @@ class REVKLauncher:
         self.agent_script = Path(
             agent_script or Path(__file__).resolve().parent / "agents" / "fixture_agent.py"
         ).resolve()
+        self.agent_default_cost_usd = agent_default_cost_usd
         self.runs_root.mkdir(parents=True, exist_ok=True)
 
     def run(self, contract_path: str | Path) -> RunResult:
@@ -242,6 +245,17 @@ class REVKLauncher:
         workspace = run_root / "workspace"
         evidence_stage = run_root / "evidence"
         evidence_stage.mkdir(parents=True, exist_ok=True)
+        self._save_state(
+            run_root,
+            {
+                "run_id": run_id,
+                "status": "running",
+                "contract_path": str(Path(contract_path).resolve()),
+                "container": container,
+                "network": network,
+                "started_at": time.time(),
+            },
+        )
 
         self._fresh_export(workspace)
         self.runtime.create_network(network)
@@ -257,6 +271,9 @@ class REVKLauncher:
             "HOME": "/tmp",
             "PATH": "/usr/local/bin:/usr/bin:/bin",
         }
+        spend_limit = contract["guardrails"].get("spend_usd")
+        if spend_limit is not None and self.agent_default_cost_usd > float(spend_limit):
+            raise RuntimeError("spend guardrail exceeded before launch")
         command = [
             "/usr/bin/python3",
             "/opt/asdi/fixture_agent.py",
@@ -304,6 +321,12 @@ class REVKLauncher:
             self.runtime.kill(container)
             raise
 
+        spend_limit = contract["guardrails"].get("spend_usd")
+        spend_used = self.agent_default_cost_usd
+        if spend_limit is not None and spend_used > float(spend_limit):
+            self.runtime.kill(container)
+            raise RuntimeError("spend guardrail exceeded")
+
         self.runtime.copy_volume(volume, evidence_stage, self.verifier_image)
 
         checks = self._verify_head(run_id=run_id, workspace=workspace)
@@ -332,9 +355,6 @@ class REVKLauncher:
             + "\n"
         )
         evidence = EvidenceStore(self.root / "evidence").put(evidence_stage, json.loads(result_path.read_text()))
-        self.runtime.remove_network(network)
-        self.runtime.remove_volume(volume)
-        self.runtime.remove_volume(workspace_volume)
         runtime_evidence = {
             "network": network,
             "container": container,
@@ -343,6 +363,22 @@ class REVKLauncher:
             "socket_mounted": False,
             "secrets_mounted": False,
         }
+        self._save_state(
+            run_root,
+            {
+                "run_id": run_id,
+                "status": status,
+                "agent_exit_code": agent_exit,
+                "checks": checks,
+                "evidence": evidence,
+                "runtime": runtime_evidence,
+                "started_at": self._saved_started_at(run_root),
+                "finished_at": time.time(),
+            },
+        )
+        self.runtime.remove_network(network)
+        self.runtime.remove_volume(volume)
+        self.runtime.remove_volume(workspace_volume)
         return RunResult(
             run_id=run_id,
             status=status,
@@ -351,6 +387,17 @@ class REVKLauncher:
             evidence=evidence,
             runtime=runtime_evidence,
         )
+
+    def _save_state(self, run_root: Path, state: dict[str, Any]) -> None:
+        atomic_json(run_root / "launcher-state.json", state)
+
+    def _saved_started_at(self, run_root: Path) -> float:
+        try:
+            return float(
+                json.loads((run_root / "launcher-state.json").read_text())["started_at"]
+            )
+        except (FileNotFoundError, KeyError, ValueError, json.JSONDecodeError):
+            return time.time()
 
     def _verify_head(self, *, run_id: str, workspace: Path) -> list[dict[str, Any]]:
         with tempfile.TemporaryDirectory() as temporary:

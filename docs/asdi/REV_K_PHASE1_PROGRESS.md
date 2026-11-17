@@ -65,4 +65,6 @@ Implemented and verified with Docker:
 * evidence hash verification after teardown;
 * turn guardrail kill with a hanging agent.
 
-Remaining Phase 1 negatives: red verifier, weakened harness proof, spend limit, token/turn edge, and explicit key-absence assertions.
+Negative evidence completed: red verifier, weakened harness proof, spend limit, turn guardrail, and explicit key/token absence.
+
+Durable operations added: `run`, `status`, `list`, and `kill`.
