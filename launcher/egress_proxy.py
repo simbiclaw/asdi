@@ -70,15 +70,30 @@ class EgressHandler(BaseHTTPRequestHandler):
 
     def do_CONNECT(self) -> None:
         host, port = self._split_authority(self.path, 443)
-        allowed, reason, _addresses = self.authority.decide(host, port)
+        allowed, reason, addresses = self.authority.decide(host, port)
         if not allowed:
             self.send_error(403, reason)
             return
-        try:
-            remote = socket.create_connection((host, port), timeout=15)
-        except OSError:
+        remote = None
+        connect_error = None
+        for address in addresses:
+            try:
+                remote = socket.create_connection((address, port), timeout=15)
+                break
+            except OSError as error:
+                connect_error = error
+                remote = None
+        if remote is None:
+            self.log_message(
+                "CONNECT %s:%s connect_failed addresses=%r error=%r",
+                host,
+                port,
+                addresses,
+                connect_error,
+            )
             self.send_error(502, "connect_failed")
             return
+        self.log_message("CONNECT %s:%s authorized reason=%s", host, port, reason)
         try:
             self.connection.sendall(b"HTTP/1.1 200 Connection Established\r\n\r\n")
             self._relay(remote)
@@ -102,11 +117,22 @@ class EgressHandler(BaseHTTPRequestHandler):
 
     def _proxy_http(self, method: str) -> None:
         parsed = urllib.parse.urlsplit(self.path)
-        if parsed.scheme != "http" or not parsed.hostname:
-            self.send_error(400, "only_absolute_http_is_supported")
-            return
-        host = parsed.hostname.lower()
-        port = parsed.port or 80
+        if parsed.scheme:
+            if parsed.scheme != "http" or not parsed.hostname:
+                self.send_error(400, "only_http_is_supported")
+                return
+            host = parsed.hostname.lower()
+            port = parsed.port or 80
+            origin_path = parsed.path or "/"
+            if parsed.query:
+                origin_path += "?" + parsed.query
+        else:
+            if not self.path.startswith("/v1/"):
+                self.send_error(403, "only_local_model_api_is_allowed")
+                return
+            host = self.authority.model_host
+            port = self.authority.model_port
+            origin_path = self.path
         allowed, reason, _addresses = self.authority.decide(host, port)
         if not allowed:
             self.send_error(403, reason)
@@ -118,13 +144,14 @@ class EgressHandler(BaseHTTPRequestHandler):
             for key, value in self.headers.items()
             if key.lower()
             not in {"host", "connection", "proxy-connection", "authorization", "proxy-authorization"}
+            and key.lower() != "x-api-key"
         }
         headers["Host"] = self.headers.get("Host", parsed.netloc)
         if host == self.authority.model_host and self.authority.model_key:
             headers["Authorization"] = f"Bearer {self.authority.model_key}"
         try:
             connection = http.client.HTTPConnection(host, port, timeout=30)
-            connection.request(method, self.path, body=body, headers=headers)
+            connection.request(method, origin_path, body=body, headers=headers)
             response = connection.getresponse()
             payload = response.read()
         except OSError as error:

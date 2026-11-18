@@ -7,6 +7,7 @@ import hashlib
 import json
 import os
 import queue
+import shlex
 import shutil
 import subprocess
 import tempfile
@@ -20,6 +21,7 @@ from typing import Any
 
 from .contract import load_contract
 from .evidence import EvidenceStore
+from .agent_adapters import ADAPTERS, adapter_script
 from .static_gates import run_checks as run_container_checks
 from .state import atomic_json
 
@@ -295,6 +297,7 @@ class REVKLauncher:
         product_root: str | Path,
         base_branch: str = "main",
         agent_image: str = "safeclaw:cc-2.1.283",
+        agent_adapter: str = "fixture",
         verifier_image: str | None = None,
         proxy_image: str = "safeclaw-us-egress:cc-2.1.283",
         egress_network: str = "asdi-egress",
@@ -310,6 +313,9 @@ class REVKLauncher:
         self.product_root = Path(product_root).resolve()
         self.base_branch = base_branch
         self.agent_image = agent_image
+        if agent_adapter not in ADAPTERS:
+            raise ValueError(f"unknown agent adapter: {agent_adapter}")
+        self.agent_adapter = agent_adapter
         self.verifier_image = verifier_image or agent_image
         self.proxy_image = proxy_image
         self.egress_network = egress_network
@@ -325,7 +331,8 @@ class REVKLauncher:
         self.model_key_env = model_key_env
         self.runtime = runtime or DockerRuntime()
         self.agent_script = Path(
-            agent_script or Path(__file__).resolve().parent / "agents" / "fixture_agent.py"
+            agent_script
+            or adapter_script(Path(__file__).resolve().parent / "agents", agent_adapter)
         ).resolve()
         self.agent_default_cost_usd = agent_default_cost_usd
         self.runs_root.mkdir(parents=True, exist_ok=True)
@@ -425,15 +432,24 @@ class REVKLauncher:
             "ASDI_RUN_ID": run_id,
             "ASDI_EVIDENCE_DIR": "/evidence",
             "ASDI_MODEL_BASE_URL": self.model_base_url,
+            "ASDI_MODEL_PROXY_URL": f"http://{proxy}:8081",
+            "ASDI_AGENT_MODEL": contract.get("model") or "qwen3.6-35b-dspark-local",
+            "ASDI_OBJECTIVE": contract["objective"],
+            "ASDI_WHY": contract["why"],
+            "ASDI_CONSTRAINTS": "; ".join(contract.get("constraints", [])),
+            "ASDI_OUT_OF_SCOPE": "; ".join(contract.get("out_of_scope", [])),
+            "ASDI_DONE_CHECK": " ".join(
+                map(shlex.quote, contract["done_check"]["command"])
+            ),
             "HOME": "/tmp",
             "PATH": "/usr/local/bin:/usr/bin:/bin",
             "HTTP_PROXY": f"http://{proxy}:8081",
             "HTTPS_PROXY": f"http://{proxy}:8081",
-            "NO_PROXY": "localhost,127.0.0.1",
+            "NO_PROXY": f"localhost,127.0.0.1,{proxy}",
         }
         command = [
             "/usr/bin/python3",
-            "/opt/asdi/fixture_agent.py",
+            f"/opt/asdi/{ADAPTERS[self.agent_adapter].script_name}",
             "--workspace",
             "/workspace",
             "--run-id",
@@ -496,7 +512,7 @@ class REVKLauncher:
                 command=command,
                 binds=[
                     f"type=volume,source={workspace_volume},destination=/workspace",
-                    f"type=bind,source={self.agent_script},destination=/opt/asdi/fixture_agent.py,ro",
+                    f"type=bind,source={self.agent_script},destination=/opt/asdi/{ADAPTERS[self.agent_adapter].script_name},ro",
                     f"type=volume,source={volume},destination=/evidence",
                 ],
                 user="1001:1001",
@@ -710,6 +726,8 @@ class REVKLauncher:
             manifest = _minimal_yaml(gates_path.read_text())
             short = run_id.removeprefix("r-").replace("-", "")[:16]
             workspace_volume = f"asdi-workspace-{short}"
+            workspace_inspect = Path(temporary) / "workspace-inspect"
+            workspace_inspect.mkdir()
             checks = run_container_checks(
                 docker=self.runtime.docker,
                 image=self.verifier_image,
@@ -727,21 +745,32 @@ class REVKLauncher:
                 base_volume=base_volume,
             )
             checks.append(verify_check)
-            (workspace / ".asdi-evidence" / "static-gates.json").parent.mkdir(
+            (workspace_inspect / ".asdi-evidence" / "static-gates.json").parent.mkdir(
                 parents=True, exist_ok=True
             )
-            (workspace / ".asdi-evidence" / "static-gates.json").write_text(
+            (workspace_inspect / ".asdi-evidence" / "static-gates.json").write_text(
                 json.dumps({"run_id": run_id, "checks": checks}, indent=2, sort_keys=True) + "\n"
             )
-            self.runtime.copy_volume(workspace_volume, workspace, self.verifier_image)
+            for runtime_log in ("claude.stdout.log", "claude.stderr.log"):
+                runtime_log_path = workspace / runtime_log
+                if runtime_log_path.is_file():
+                    shutil.copy2(
+                        runtime_log_path,
+                        workspace_inspect / ".asdi-evidence" / runtime_log,
+                    )
+            self.runtime.copy_volume(
+                workspace_volume,
+                workspace_inspect,
+                self.verifier_image,
+            )
             self._collect_verify_result(
-                workspace=workspace,
+                workspace=workspace_inspect,
                 run_id=run_id,
                 commit=self._head(),
                 verify_check=verify_check,
                 verifier_result=verifier_result,
             )
-            workspace_evidence = workspace / ".asdi-evidence"
+            workspace_evidence = workspace_inspect / ".asdi-evidence"
             if workspace_evidence.is_dir():
                 for evidence_file in sorted(workspace_evidence.glob("*")):
                     if evidence_file.is_file() and evidence_file.name != "result.json":

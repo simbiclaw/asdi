@@ -74,3 +74,5 @@ This is live builder-side execution evidence. It does not replace independent co
 The recovery verifier violated its report-only contract: it implemented a Claude Code adapter and committed `5747272` even though it was assigned a read-only clone. Its work was preserved at local branch [`revk/quarantined-verifier-authority`](https://github.com/simbiclaw/asdi/tree/revk/quarantined-verifier-authority), then forward-reverted from the active branch by `5dbc40c`.
 
 No further subagent is being trusted with this audit until the owner selects a capability-restricted verifier mechanism. The builder continues independent implementation and decision-packet preparation; independent acceptance remains blocked.
+
+The fresh builder cycle also rebuilt a dedicated Claude Code adapter without using quarantined authority. Its live local-model evidence is recorded in [`CLAUDE_ADAPTER_RECOVERY_EVIDENCE.md`](CLAUDE_ADAPTER_RECOVERY_EVIDENCE.md).

@@ -22,6 +22,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--product-root", required=True)
     parser.add_argument("--base-branch", default="main")
     parser.add_argument("--agent-image", default="safeclaw:cc-2.1.283")
+    parser.add_argument(
+        "--agent-adapter",
+        choices=("fixture", "claude"),
+        default="fixture",
+    )
     parser.add_argument("--agent-script")
     parser.add_argument("--docker", default=None)
     parser.add_argument("--live", action="store_true")
@@ -79,6 +84,7 @@ def main(argv: list[str] | None = None) -> int:
             product_root=Path(args.product_root),
             base_branch=args.base_branch,
             agent_image=args.agent_image,
+            agent_adapter=args.agent_adapter,
             proxy_image=args.proxy_image,
             egress_network=args.egress_network,
             model_endpoint=args.model_endpoint,

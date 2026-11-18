@@ -85,3 +85,7 @@ The owner selected Option 3 with Option 2 preservation mechanics. The verifier-a
 Rebuilt builder-owned fixes for valid read-only base mounting, stronger evidence integrity checks, blocking/advisory static-gate semantics, terminal durable failures and complete resource cleanup. Full suite: **100 tests, OK, 4 expected skips**. Independent read-only audit remains required.
 
 Live Docker recovery run `r-e8707e74-fcbf-4f95-8dd2-dd95ba720716` succeeded with static and base-harness checks passing. Evidence manifest `m-c9c1d54e0ac4ee31ff13b5d5` remained valid after teardown; no socket or secrets were mounted. Independent read-only audit remains required.
+
+## Fresh builder-owned Claude adapter — 2026-11-18
+
+Added an explicit adapter registry and a dedicated Claude Code stream-JSON adapter with Stop-hook observation, contract-derived prompt context, external guardrails and proxy-origin model routing. Live run `r-5fc95790-5990-4b1b-bca2-842d6fe6e367` succeeded against local LiteLLM with 5 turns, 6,303 tokens and $0.027948 spend. Static and base-harness checks passed; no socket/secrets were mounted; manifest `m-6ab537ce486a96d903aa7039` remained valid after teardown. Independent audit remains required.
