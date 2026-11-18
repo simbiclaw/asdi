@@ -1,24 +1,26 @@
 #!/usr/bin/env python3
-"""ASDI PR reviewer: local poller + Pass 1 review pass + ``asdi/review`` status.
+"""ASDI PR reviewer: Pass 1 review pass (N-6) with two triggers.
 
-Build Guide V4 REV K section 10.1 step 3 and Phase 4 ("poller behind
-``events/``; on a new PR head: ... one review pass ...; poller health alert").
-Runs on the Studio inside Archon's container (C-4). It replaces any hosted
-reviewer: no GitHub Actions, no webhooks, no cloud runner (C-1, D-8).
+1. ``gate`` (the active trigger, owner override DD-48 of D-8 and C-1): GitHub
+   Actions runs it on every new PR head through ``.github/workflows/asdi-review.yml``.
+   The job named ``asdi/review`` is the merge gate: it exits 0 only when the
+   review passes, and it updates one sticky PR comment with the findings.
+2. ``run`` / ``poll`` / ``work`` (the REV K design, kept as the fallback): a
+   local 60 s poller on the Studio posts ``asdi/review`` as a commit status.
 
-Authority: Archon's identity may only post statuses. This module never merges,
-pushes, edits a PR or comments. ``asdi/review`` is informational; the ruleset
-requires ``ci`` and ``asdi/policy`` (section 9).
+Authority: the reviewer never merges, pushes or edits code. Its only writes
+are the ``asdi/review`` result and, in the gate, one PR comment.
 
 Commands:
+  gate       review one PR head now; exit 1 unless it passes (GitHub Actions)
   poll       one reconciliation pass over open PRs
   work       handle pending events until none is claimable
   run        poll + work every poller_interval_seconds (the service loop)
   health     report poller staleness; alert once when stale
   review     review one PR now (records and handles a single event)
 
-Statuses are posted only with --post. Without it the run is a dry run: the
-pass result and the Review section are still stored and printed.
+The local commands post statuses only with --post; without it they are a dry
+run that still stores and prints the result and the Review section.
 """
 
 from __future__ import annotations
@@ -26,6 +28,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import sys
 import time
 from pathlib import Path
@@ -36,7 +39,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from archon.config import ReviewerConfig, load_reviewer_config  # noqa: E402
-from archon.models import OpenAICompatibleModel, ReviewModel  # noqa: E402
+from archon.models import AnthropicModel, OpenAICompatibleModel, ReviewModel  # noqa: E402
 from archon.passes.review import (  # noqa: E402
     PullRequestInput,
     blocked,
@@ -55,6 +58,9 @@ SCHEMA = json.loads((ROOT / "schemas" / "pass.schema.json").read_text())
 def build_model(spec: dict[str, Any] | None) -> ReviewModel | None:
     if not spec:
         return None
+    if spec.get("kind") == "anthropic":
+        return AnthropicModel(name=spec["name"], family=spec.get("family", "anthropic"),
+                              effort=spec.get("effort", "high"))
     if spec.get("kind") != "openai-compatible":
         raise ValueError(f"unsupported reviewer model kind: {spec.get('kind')!r}")
     return OpenAICompatibleModel(name=spec["name"], family=spec["family"], base_url=spec["base_url"])
@@ -89,6 +95,77 @@ def describe(result: dict[str, Any]) -> str:
     return f"{text}; independent family {result['independent_family']}"[:140]
 
 
+def review_pull(
+    config: ReviewerConfig,
+    client: GitHubClient,
+    model: ReviewModel | None,
+    pull: dict[str, Any],
+    number: int,
+    sha: str,
+) -> tuple[dict[str, Any], str, str]:
+    """Run the review pass on one PR head; validate, store and render the result."""
+    pr = PullRequestInput(
+        repo=config.repo,
+        number=number,
+        head_sha=sha,
+        title=pull.get("title") or "",
+        body=pull.get("body") or "",
+        commit_messages=[c["commit"]["message"] for c in client.pull_commits(number)],
+        diff="",
+    )
+    try:
+        pr.diff = client.pull_diff(number)
+        result = run_review(pr, model, builder_families=config.builder_families, max_diff_chars=config.max_diff_chars)
+    except DiffUnavailable as error:
+        # Fail closed: a diff nobody can read is blocked, never passed (Guide 9.5).
+        family = independent_family(model.family if model else None, config.builder_families)
+        result = blocked(pr, model.name if model else "none", family, str(error))
+    _validate(result, SCHEMA, SCHEMA, "pass")
+    section = render_review_section(result)
+    return result, section, store_result(config, result, section)
+
+
+COMMENT_MARKER = "<!-- asdi-review -->"
+
+
+def gate(
+    config: ReviewerConfig,
+    client: GitHubClient,
+    model: ReviewModel | None,
+    *,
+    number: int,
+    sha: str,
+    comment: bool,
+    summary_path: str | None,
+    out: Callable[[str], None],
+) -> int:
+    """GitHub-triggered merge gate: one review of one PR head. Exit 0 only on pass.
+
+    Owner override of D-8 (DECISIONS.md, DD-48): GitHub starts this on each new
+    PR head; the job's own result is the required check.
+    """
+    pull = client.pull(number)
+    created_before = config.ignore_created_before and pull["created_at"] <= config.ignore_created_before
+    if number in config.ignore_prs or created_before:
+        out(f"PR #{number} is excluded from review by config/review.json; gate not applied.")
+        return 0
+    if pull["head"]["sha"] != sha:
+        out(f"PR #{number} head moved from {sha[:12]}; a newer run reviews the new head.")
+        return 1
+    result, section, manifest = review_pull(config, client, model, pull, number, sha)
+    out(f"PR #{number} @ {sha[:12]}: {result['status']} ({manifest})\n{section}")
+    if summary_path:
+        with open(summary_path, "a") as handle:
+            handle.write(section)
+    if comment and client.pull(number)["head"]["sha"] == sha:
+        verdict = {"pass": "passed", "fail": "failed", "blocked": "blocked"}[result["status"]]
+        body = (f"{COMMENT_MARKER}\n**ASDI review {verdict}** for `{sha[:12]}`.\n\n{section}\n"
+                "_A finding marked act must be fixed before merge. Findings are checked against the diff; "
+                "unsupported ones are demoted to consider._")
+        client.upsert_comment(number, COMMENT_MARKER, body)
+    return 0 if result["status"] == "pass" else 1
+
+
 def handle(
     event: Event,
     *,
@@ -109,25 +186,7 @@ def handle(
         inbox.supersede(event.id, "head moved before review")
         return "superseded"
 
-    pr = PullRequestInput(
-        repo=config.repo,
-        number=number,
-        head_sha=sha,
-        title=pull.get("title") or "",
-        body=pull.get("body") or "",
-        commit_messages=[c["commit"]["message"] for c in client.pull_commits(number)],
-        diff="",
-    )
-    try:
-        pr.diff = client.pull_diff(number)
-        result = run_review(pr, model, builder_families=config.builder_families, max_diff_chars=config.max_diff_chars)
-    except DiffUnavailable as error:
-        # Fail closed: a diff nobody can read is blocked, never passed (Guide 9.5).
-        family = independent_family(model.family if model else None, config.builder_families)
-        result = blocked(pr, model.name if model else "none", family, str(error))
-    _validate(result, SCHEMA, SCHEMA, "pass")
-    section = render_review_section(result)
-    manifest = store_result(config, result, section)
+    result, section, manifest = review_pull(config, client, model, pull, number, sha)
     out(f"PR #{number} @ {sha[:12]}: {result['status']} ({manifest})\n{section}")
 
     # A new head invalidates the verdict: re-check before posting (Guide 9.4, 10.2).
@@ -183,19 +242,31 @@ def health(config: ReviewerConfig, inbox: Inbox, now: float, out: Callable[[str]
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("command", choices=["poll", "work", "run", "health", "review"])
+    parser.add_argument("command", choices=["gate", "poll", "work", "run", "health", "review"])
     parser.add_argument("--config", default=None)
-    parser.add_argument("--pr", type=int, help="PR number for the review command")
+    parser.add_argument("--pr", type=int, help="PR number for the review and gate commands")
+    parser.add_argument("--sha", help="gate: the PR head commit the run was started for")
     parser.add_argument("--post", action="store_true", help="post the asdi/review status (default: dry run)")
     parser.add_argument("--once", action="store_true", help="run: one cycle, then exit")
     args = parser.parse_args(argv)
 
     config = load_reviewer_config(args.config)
-    inbox = Inbox(config.inbox_path)
     client = GitHubClient(config.repo, token_env=config.token_env)
-    model = build_model(config.model)
     out = print
     now = time.time
+
+    if args.command == "gate":
+        if args.pr is None or not args.sha:
+            parser.error("gate needs --pr and --sha")
+        try:
+            return gate(config, client, build_model(config.gate_model), number=args.pr, sha=args.sha,
+                        comment=config.gate_comment, summary_path=os.environ.get("GITHUB_STEP_SUMMARY"), out=out)
+        except GitHubError as error:
+            out(f"gate blocked: {error}")  # fail closed
+            return 1
+
+    inbox = Inbox(config.inbox_path)
+    model = build_model(config.model)
 
     if args.command == "health":
         return 0 if health(config, inbox, now(), out) else 1

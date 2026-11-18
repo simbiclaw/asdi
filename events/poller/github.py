@@ -94,6 +94,15 @@ class GitHubClient:
     def pull_commits(self, number: int) -> list[dict[str, Any]]:
         return self._request("GET", f"/repos/{self.repo}/pulls/{number}/commits?per_page=100")
 
+    def upsert_comment(self, number: int, marker: str, body: str) -> None:
+        """Keep one comment per PR, identified by a hidden marker, up to date."""
+        comments = self._request("GET", f"/repos/{self.repo}/issues/{number}/comments?per_page=100")
+        mine = [c for c in comments if marker in (c.get("body") or "")]
+        if mine:
+            self._request("PATCH", f"/repos/{self.repo}/issues/comments/{mine[-1]['id']}", body={"body": body})
+        else:
+            self._request("POST", f"/repos/{self.repo}/issues/{number}/comments", body={"body": body})
+
     def post_status(self, sha: str, *, state: str, context: str, description: str, target_url: str | None) -> None:
         body: dict[str, Any] = {"state": state, "context": context, "description": description[:140]}
         if target_url:

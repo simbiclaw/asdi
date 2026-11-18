@@ -1,0 +1,56 @@
+# ASDI review merge gate.
+#
+# OWNER OVERRIDE (DD-48, 2026-11-18): REV K C-1 and D-8 keep GitHub passive,
+# with no Actions. The owner directed that GitHub run the review as a merge
+# gate on every new PR head. This workflow is that exception. It is recorded
+# in DECISIONS.md, and the REV K documents themselves are unchanged.
+#
+# Safety:
+# - pull_request_target runs this workflow and the reviewer code from the BASE
+#   branch, so a PR cannot weaken its own gate (the same rule as Guide 9.3,
+#   where verify/ is read from the base branch).
+# - PR code is never checked out or executed. The diff is read through the API
+#   and reaches the model only as delimited data. The model has no tools.
+# - Make "asdi/review" a required status check in the branch ruleset for main.
+name: asdi-review
+
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
+  pull-requests: write # one sticky review comment; nothing else is written
+
+concurrency:
+  # A new head supersedes the review of the old one (Guide 9.4).
+  group: asdi-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  review:
+    name: asdi/review
+    if: ${{ !github.event.pull_request.draft }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out the base branch (never the PR head)
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          persist-credentials: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install the Anthropic SDK
+        run: python3 -m pip install --disable-pip-version-check anthropic==2.10.0
+
+      - name: Review the PR head
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          ASDI_ARCHON_GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: python3 archon/pr_review.py gate --pr "$PR_NUMBER" --sha "$PR_HEAD_SHA"

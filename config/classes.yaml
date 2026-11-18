@@ -12,6 +12,9 @@ judgment_paths:
   - ".asdi/rules.yaml"
   - "verify/verify.yaml"
   - "verify/bin/verify"
+  - ".github/**"
+  - "archon/**"
+  - "config/review.json"
 agent_mergeable_paths:
   - "tests/**"
   - "docs/**"

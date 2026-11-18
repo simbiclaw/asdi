@@ -1,88 +1,81 @@
-# ASDI PR reviewer (REV K Phase 4 review slice)
+# ASDI PR reviewer and merge gate
 
-**Status:** implemented and unit-tested. Ran live as a dry run against `simbiclaw/asdi`. It has not been run against a live reviewer model, and no status has been posted. **Not a Phase 4 acceptance claim.**
-**Owner direction:** 2026-11-18, "create a new PR reviewer per the REV K to settle the hosted PR reviewer conflicts with REV K" (crosswalk X-6 in `specs/001-always-on-loops/crosswalk.md`).
+**Status:** implemented and unit-tested; the gate's wiring was checked live against `simbiclaw/asdi`. No review has yet been run with a live model. The gate activates only once the workflow is on the default branch (see "Turning it on"). **Not a Phase 4 acceptance claim.**
 
-## Why it exists
+## Owner override (DD-48)
 
-A hosted, hourly Claude scheduled task was set up on 2026-11-18 to review new PRs. It conflicted with C-1 and Build Guide §3.4, which exclude "cloud agent runners or hosted automation". It also never worked: its sessions had no repository access. This component replaces it with the reviewer REV K specifies:
+On 2026-11-18 the owner directed: "i want you or github to run this review once a new pr lands (a merge gate), rather than review locally".
 
-| REV K requirement | Where it is met |
-|---|---|
-| C-1, D-8: loops run locally; GitHub is passive; no Actions or webhooks; 60 s poller | `events/poller/github.py` polls outward only; `archon/pr_review.py run` loops every `poller_interval_seconds` |
-| Guide §4: event intake behind the `events/` seam | `events/inbox.py` (Inbox) + `events/poller/` |
-| Guide §10.1 step 3: review in fresh context posts `asdi/review` | `archon/pr_review.py` `handle()`: one fresh model call per PR head; posts `asdi/review` only |
-| Guide §10.2 (N-6): pass output schema; a verdict counts only for the head being judged; no evidence means no `act`; `strike` only for correctness and security | `schemas/pass.schema.json` (now schema 2, as in the Guide); `archon/passes/review.py` `_check()`; head re-checked before posting |
-| Guide §10.3: Pass 1 runs one combined `review` pass on a different-family model, or records `independent_family: false` | `config/review.json` `passes[0]`, `builder_families`; `independent_family()` |
-| Guide §10.4 (N-21): agent-authored text reaches the reviewer in a delimited block labelled as the implementer's claims; reviewers have no tools with side effects | `build_prompt()` uses nonce-delimited blocks; `archon/models.py` sends no tools |
-| Guide §9.4: a new head invalidates earlier verdicts | Inbox supersedes older pending heads; the handler re-reads the head before posting |
-| Guide §9.5: reviewer unavailable → blocked, never self-review; poller stalled → alert after 5 min | Every failure path ends `blocked` (state `error`); `health` alerts once after `poller_stale_after_seconds` |
-| Design §08: Archon may only post statuses | Posting requires `identities.archon.may_post_status: true` and `may_merge: false`; nothing else is written to GitHub |
-| Guide §18: audit events | `review.requested`, `review.completed` in an append-only table |
-| DD-15 Pass 1 stand-in: notifications go to a log file | `.asdi-state/notifications.log` |
+REV K says otherwise. C-1 keeps GitHub passive ("No Actions, no webhooks"), and D-8 has events arrive through a local 60-second poller. The override is recorded as DD-48 in `DECISIONS.md`, as a `SPEC_CONFLICT` with C-1 and D-8. The four REV K documents are **not** edited.
 
-`asdi/review` is informational. The ruleset requires only `ci` and `asdi/policy` (Guide §9), so this reviewer cannot block or authorize a merge on its own.
+What changes and what stays:
 
-## Running it
-
-It runs on the Studio, inside Archon's container (C-4), on the `agent` and `ops` networks (DD-9). GitHub is reached through the egress proxy. The status token is read from the environment variable `ASDI_ARCHON_GITHUB_TOKEN` and is never stored in a file.
-
-```bash
-python3 archon/pr_review.py run              # service loop, dry run: stores results, posts nothing
-```
-
-```bash
-python3 archon/pr_review.py run --post       # also posts asdi/review statuses
-```
-
-```bash
-python3 archon/pr_review.py review --pr 3    # review one PR now (dry run)
-```
-
-```bash
-python3 archon/pr_review.py health           # exit 1 and one alert when the poller is stale
-```
-
-Results are content-addressed under `.asdi-state/evidence/reviews/<sha256>/`, as `pass.json` (schema 2) and `review.md`. `review.md` is the packet's Review section (Guide §10.5).
-
-## Configuration (`config/review.json`)
-
-| Key | Value | Note |
+| | REV K design | Now (DD-48) |
 |---|---|---|
-| `passes[0].model` | `qwen-local`, family `qwen`, OpenAI-compatible at `http://host.docker.internal:8000/v1` | DD-6 provisional default: a local model via vllm-mlx |
-| `builder_families` | `anthropic`, `openai` | DD-38: either agent CLI may build, so a reviewer from either family is not independent |
-| `ignore_prs`, `ignore_prs_created_before` | `[1, 2]`, `2026-11-18T08:38:16Z` | Owner direction: existing PRs stay untouched |
-| `max_diff_chars` | 200000 | A larger diff is `blocked`, never partly reviewed |
-| `lease_seconds`, `max_attempts` | 900, 3 | Proposed DD-40 and DD-41 (spec 001) |
+| Trigger | Local poller every 60 s | GitHub Actions on `pull_request_target`: opened, synchronize, reopened, ready_for_review |
+| Where it runs | Archon container on the Studio | GitHub-hosted runner |
+| Reviewer model | Local `qwen-local` via vllm-mlx (different family) | `claude-opus-5-5` via the Anthropic SDK (same family as Claude Code builds: `independent_family: false`, allowed in Pass 1 by Guide §10.3) |
+| Result | `asdi/review` commit status (informational) | Job `asdi/review` passes or fails; make it a **required check**. Plus one sticky PR comment with the findings, and the same text in the job summary |
+| Review logic | Unchanged: N-6 schema 2, nonce-delimited untrusted text, `act` needs evidence present in the diff, strike only for correctness and security, fail closed | Same code (`archon/passes/review.py`) |
 
-## Live dry-run evidence (2026-11-18)
+The local poller path (`archon/pr_review.py run`) is kept as the REV K fallback. Reverting the override means deleting the workflow and running the poller.
 
-Run from a cloud container with a scratch config. No reviewer model was reachable, and nothing was posted.
+## How the gate decides
 
-| Step | Result |
-|---|---|
-| `poll` | Listed open PRs on `simbiclaw/asdi`; recorded 0 events, because #1 and #2 are ignored |
-| `health` | `poller ok` |
-| `review --pr 2` | `blocked`: GitHub returns HTTP 406 for the diff (too large). The first run exposed two defects: a tight 3× retry, and 406 handled as a transient error. Both are fixed and covered by tests |
-| `review --pr 1` | `blocked`: diff exceeds 200000 characters |
+| Outcome | Job | Comment |
+|---|---|---|
+| No `act` findings | pass | "ASDI review passed" plus any `consider` or `noted` findings |
+| Any `act` finding with evidence verified in the diff | **fail** | "ASDI review failed" plus the findings |
+| Reviewer unavailable, refusal (after the server-side fallback), truncated or unparseable output, diff over 200,000 characters, or a diff GitHub won't render | **fail** (blocked) | "ASDI review blocked" plus the reason |
+| A newer commit landed while this run was queued | fail; the newer run decides | none |
+| PR #1 or #2, or opened before 2026-11-18T08:38:16Z | pass, not reviewed | none (owner direction: existing PRs stay untouched) |
+| Draft PR | job skipped | none; it runs on `ready_for_review` |
 
-## Tests
+A new push cancels the run in progress for that PR (`concurrency`), because a new head invalidates the old verdict (Guide §9.4).
 
-`tests/test_pr_reviewer.py`: 34 tests. They use a fake GitHub client and a fake model, and cover:
+## Safety of running on GitHub
 
-- dedup and supersede;
-- one handling per subject, and lease expiry leading to failed;
-- evidence-checked `act` demotion and strike rules;
-- fail-closed `blocked` paths: unavailable model, unparseable output, oversized or unrenderable diff, no model;
-- a nonce-delimited block that implementer text cannot close;
-- the head moving during a review, dry run and identity rights;
-- a GitHub outage, poller staleness, and the model adapter's HTTP request shape.
+- **The PR cannot weaken its own gate.** `pull_request_target` runs the workflow file from the default branch, and the job checks out the PR's **base** commit, so the reviewer code also comes from the base. This is the same rule as Guide §9.3, where `verify/` is read from the base branch. `.github/**`, `archon/**` and `config/review.json` are now judgment-class paths in `config/classes.yaml`.
+- **PR code never runs.** The PR head is never checked out. The diff, title, body and commit messages are read through the API and reach the model as nonce-delimited data. The model gets no tools.
+- **Least privilege.** `contents: read`, and `pull-requests: write` for the one comment. The checkout keeps no credentials. `ANTHROPIC_API_KEY` is a repository secret, visible only to this step.
+- **Fork PRs** are reviewed the same way. Their code is never executed, so exposing the secret to the job does not expose it to the PR.
 
-Full suite: the same 3 failures, 8 errors and 2 skips as before this change. All of them are existing Docker and proxy tests that cannot run in the cloud container.
+## Turning it on
 
-## Not done here (remaining Phase 4 work)
+1. Add the repository secret `ANTHROPIC_API_KEY` (Settings → Secrets and variables → Actions).
+2. Merge `.github/workflows/asdi-review.yml`, together with `archon/`, `events/`, `config/review.json` and `schemas/pass.schema.json`, into the default branch (`main`). `pull_request_target` only runs workflows that are on the default branch, and the job runs the reviewer code from the PR's base.
+3. In the ruleset for `main`, require the status check **`asdi/review`**. ADR-0004 records that you had declined GitHub-native enforcement; a merge gate needs it.
+4. Open a test PR. Expect one run, a job summary, and one comment that is updated on each push.
 
-- `ci`, `asdi/verify`, the class check, `asdi/policy`, packet assembly, the merge-bot dry run and the post-merge check (Guide §13.3 Phase 4).
-- An Archon container definition in `compose.yaml`, and egress-proxy routing for `api.github.com`.
-- A live run against vllm-mlx on the Studio, and spike S-4 (status identity pinning, App vs token, 60 s rate budget).
-- Phase order: AGENTS.md puts Phase 4 after Phases 1 and 3, which are on hold under `LOOP_A_ESCALATION.md`. This slice is independent of the launcher and touches none of the held work. It was built on explicit owner direction and is recorded as out-of-order in `STATUS.md`.
+## Running it locally (REV K fallback)
+
+```bash
+python3 archon/pr_review.py run              # 60 s poller, dry run
+```
+
+```bash
+python3 archon/pr_review.py run --post       # posts asdi/review commit statuses
+```
+
+```bash
+python3 archon/pr_review.py gate --pr 3 --sha <head-sha>   # what the workflow runs
+```
+
+## Evidence (2026-11-18)
+
+- **Tests:** `tests/test_pr_reviewer.py` has 43 tests. 40 run without the SDK; the 3 Anthropic-adapter tests also pass under `anthropic==2.10.0`. They cover:
+  - gate pass, fail and blocked, the single sticky comment, a stale head, and excluded PRs;
+  - workflow safety properties: base checkout, `pull_request_target`, no write to contents, cancel-in-progress;
+  - the adapter: structured output, `fallbacks: "default"`, no tools, refusal leads to blocked, truncation leads to blocked;
+  - plus all of the earlier poller, inbox and review-pass tests.
+- **Full suite:** the same 3 failures and 8 errors as before. All are existing Docker and proxy tests that cannot run in this container.
+- **Live wiring:**
+  - `gate --pr 2` exits 0 as excluded.
+  - `gate --pr 1` (exclusion lifted in a scratch config) exits 1, blocked: its diff exceeds 200,000 characters, so no model call was made.
+  - No model call has been made yet. One needs the secret.
+
+## Not done here
+
+- The rest of Phase 4: `ci`, `asdi/verify`, the class check, `asdi/policy`, packet assembly and the post-merge check.
+- An end-to-end run with a real key on a real PR.
+- Phase order: Phases 1 and 3 remain on hold under `LOOP_A_ESCALATION.md`. This work is independent of them.

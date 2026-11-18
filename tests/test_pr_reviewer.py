@@ -92,6 +92,13 @@ class FakeGitHub:
     def post_status(self, sha: str, **kwargs: Any) -> None:
         self.statuses.append({"sha": sha, **kwargs})
 
+    comments: dict[int, str]
+
+    def upsert_comment(self, number: int, marker: str, body: str) -> None:
+        self.comments = getattr(self, "comments", {})
+        assert marker in body
+        self.comments[number] = body  # one comment per PR, replaced in place
+
 
 def finding(**kw: Any) -> dict[str, Any]:
     base = {"concern": "correctness", "bucket": "act", "file": "app/export.py", "line": 13,
@@ -341,6 +348,56 @@ class PipelineTests(unittest.TestCase):
         self.assertEqual(len(self.config.notifications_log.read_text().splitlines()), 1)
 
 
+class GateTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.tmp = tempfile.TemporaryDirectory()
+        base = Path(self.tmp.name)
+        self.config = dataclasses.replace(load_reviewer_config(), evidence_root=base / "evidence")
+        self.summary = base / "summary.md"
+        self.gh = FakeGitHub()
+        self.gh.add(10, "s1")
+        self.out: list[str] = []
+
+    def tearDown(self) -> None:
+        self.tmp.cleanup()
+
+    def gate(self, model: Any, number: int = 10, sha: str = "s1") -> int:
+        return pr_review.gate(self.config, self.gh, model, number=number, sha=sha, comment=True,
+                              summary_path=str(self.summary), out=self.out.append)
+
+    def test_passing_review_opens_the_gate_and_comments(self) -> None:
+        self.assertEqual(self.gate(FakeModel(reply())), 0)
+        self.assertIn("ASDI review passed", self.gh.comments[10])
+        self.assertIn("## Review", self.summary.read_text())
+
+    def test_act_finding_closes_the_gate(self) -> None:
+        self.assertEqual(self.gate(FakeModel(reply(finding()))), 1)
+        self.assertIn("ASDI review failed", self.gh.comments[10])
+
+    def test_blocked_review_closes_the_gate(self) -> None:
+        self.assertEqual(self.gate(FakeModel(ModelUnavailable("no key"))), 1)
+        self.assertIn("blocked", self.gh.comments[10])
+
+    def test_rerun_on_a_new_head_replaces_the_single_comment(self) -> None:
+        self.gate(FakeModel(reply(finding())))
+        self.gh.pulls[10]["head"]["sha"] = "s2"
+        self.assertEqual(self.gate(FakeModel(reply()), sha="s2"), 0)
+        self.assertEqual(len(self.gh.comments), 1)
+        self.assertIn("passed", self.gh.comments[10])
+
+    def test_stale_run_for_an_old_head_fails_without_reviewing(self) -> None:
+        model = FakeModel(reply())
+        self.assertEqual(self.gate(model, sha="old"), 1)
+        self.assertEqual(model.calls, [])
+
+    def test_excluded_prs_are_not_gated(self) -> None:
+        self.gh.add(2, "x")
+        model = FakeModel(reply(finding()))
+        self.assertEqual(self.gate(model, number=2, sha="x"), 0)
+        self.assertEqual(model.calls, [])
+        self.assertFalse(hasattr(self.gh, "comments"))
+
+
 class ModelAdapterTests(unittest.TestCase):
     def test_openai_compatible_request_has_no_tools_and_no_key(self) -> None:
         import io
@@ -387,9 +444,78 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(identities["allowed_comment_resumers"], ["simbiclaw"])
         self.assertFalse(identities["identities"]["agents"]["may_post_status"])
 
-    def test_no_actions_or_webhooks_are_introduced(self) -> None:
-        self.assertFalse((ROOT / ".github" / "workflows").exists())
+    def test_gate_workflow_runs_base_branch_code_and_never_the_pr_head(self) -> None:
+        workflow = (ROOT / ".github" / "workflows" / "asdi-review.yml").read_text()
+        self.assertIn("pull_request_target:", workflow)
+        self.assertIn("ref: ${{ github.event.pull_request.base.sha }}", workflow)
+        self.assertIn("persist-credentials: false", workflow)
+        self.assertNotIn("head.ref", workflow)
+        self.assertIn("name: asdi/review", workflow)
+        self.assertIn("cancel-in-progress: true", workflow)
+        self.assertNotIn("contents: write", workflow)
+        self.assertEqual(sorted(p.name for p in (ROOT / ".github" / "workflows").iterdir()), ["asdi-review.yml"])
 
 
 if __name__ == "__main__":
     unittest.main()
+
+
+try:
+    import anthropic  # noqa: F401
+    HAVE_SDK = True
+except ImportError:
+    HAVE_SDK = False
+
+
+@unittest.skipUnless(HAVE_SDK, "anthropic SDK not installed (installed in the GitHub workflow)")
+class AnthropicAdapterTests(unittest.TestCase):
+    def fake_client(self, message: Any, seen: dict[str, Any]) -> Any:
+        class Stream:
+            def __enter__(self) -> "Stream":
+                return self
+
+            def __exit__(self, *_: Any) -> None:
+                return None
+
+            def get_final_message(self) -> Any:
+                return message
+
+        class Messages:
+            def stream(self, **kwargs: Any) -> Stream:
+                seen.update(kwargs)
+                return Stream()
+
+        class Client:
+            beta = type("Beta", (), {"messages": Messages()})()
+
+        return Client()
+
+    def message(self, stop: str, text: str = '{"findings": []}') -> Any:
+        from types import SimpleNamespace as NS
+        return NS(stop_reason=stop, stop_details=NS(category="cyber") if stop == "refusal" else None,
+                  content=[NS(type="text", text=text)])
+
+    def test_request_uses_structured_output_fallbacks_and_no_tools(self) -> None:
+        from archon.models import AnthropicModel
+        seen: dict[str, Any] = {}
+        model = AnthropicModel("claude-opus-5-5", client=self.fake_client(self.message("end_turn"), seen))
+        self.assertEqual(json.loads(model.complete("sys", "user")), {"findings": []})
+        self.assertEqual(seen["model"], "claude-opus-5-5")
+        self.assertEqual(seen["fallbacks"], "default")
+        self.assertIn("server-side-fallback-2026-07-01", seen["betas"])
+        self.assertEqual(seen["output_config"]["format"]["type"], "json_schema")
+        self.assertEqual(seen["output_config"]["effort"], "high")
+        self.assertNotIn("tools", seen)
+
+    def test_refusal_blocks(self) -> None:
+        from archon.models import AnthropicModel
+        model = AnthropicModel("claude-opus-5-5", client=self.fake_client(self.message("refusal"), {}))
+        with self.assertRaises(ModelUnavailable):
+            model.complete("s", "u")
+        result = run_review(pr_input(), model, builder_families=["anthropic"], max_diff_chars=10_000)
+        self.assertEqual((result["status"], result["independent_family"]), ("blocked", "false"))
+
+    def test_truncated_output_is_not_trusted(self) -> None:
+        from archon.models import AnthropicModel
+        model = AnthropicModel("claude-opus-5-5", client=self.fake_client(self.message("max_tokens", "{"), {}))
+        self.assertEqual(run_review(pr_input(), model, builder_families=[], max_diff_chars=10_000)["status"], "blocked")

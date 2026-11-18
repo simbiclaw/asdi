@@ -80,6 +80,8 @@ class ReviewerConfig:
     poll_interval_seconds: int
     stale_after_seconds: int
     may_post_status: bool
+    gate_model: dict[str, Any] | None = None
+    gate_comment: bool = False
 
 
 def load_reviewer_config(path: str | Path | None = None) -> ReviewerConfig:
@@ -113,4 +115,6 @@ def load_reviewer_config(path: str | Path | None = None) -> ReviewerConfig:
         poll_interval_seconds=int(defaults["poller_interval_seconds"]),
         stale_after_seconds=int(defaults["poller_stale_after_seconds"]),
         may_post_status=rights.get("may_post_status") is True and rights.get("may_merge") is False,
+        gate_model=review.get("github_gate", {}).get("model"),
+        gate_comment=bool(review.get("github_gate", {}).get("comment", False)),
     )
