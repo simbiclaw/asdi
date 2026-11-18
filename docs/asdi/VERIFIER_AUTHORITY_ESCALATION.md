@@ -44,6 +44,12 @@ Builder-side tooling is now available at [`tools/readonly_audit.py`](../../tools
 
 This tooling is implemented and unit-tested, but it does not itself select or run a verifier model. The owner must invoke it with an approved auditor command. Until that happens, independent acceptance remains blocked.
 
-## Decision required
+## Current owner decision required
 
-Select one option and provide the exact command/runtime or authorize the owner-run interim process. Do not resume independent acceptance until that decision is recorded.
+The enforcement wrapper is implemented, but an auditor command/model is still required. Select one:
+
+1. **Approve an auditor image and command** for execution through [`tools/readonly_audit.py`](../../tools/readonly_audit.py).
+2. **Run the owner-invoked audit yourself** from a read-only checkout and return findings.
+3. **Select another enforced runtime** and provide its exact invocation.
+
+Do not resume independent acceptance until one decision is recorded.
