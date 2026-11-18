@@ -1,7 +1,7 @@
 # Remediation and specification-escalation workflow evidence
 
-**Date:** 2026-11-17
-**Result:** **Initial audit failed; remediation cycle 1 implemented and locally verified**
+**Date:** 2026-11-18
+**Result:** **Initial audit failed; cycle 2 verifier unavailable; guardrail completion in progress**
 
 ## Implemented behavior
 
@@ -120,3 +120,42 @@ Docker 29.6.1 interpreted the `:ro` suffix as part of the `--mount` destination,
 A regression test records Docker arguments through a fake CLI and rejects the invalid `destination=/opt/base:ro` form. After the correction, a fresh live fixture run returned `status=succeeded`; `static:compile` and `verify:base-harness` both returned `pass`; evidence manifest `m-095e4dff7674109d1db08001` validated against fixture commit `726950b7ea027f0914b59d7b97b12bb37544cc9c`; runtime evidence recorded `socket_mounted=false` and `secrets_mounted=false`.
 
 The independent specification hold remains active. This correction is implementation evidence only and does not authorize a synchronized four-document acceptance claim.
+
+## Cycle 2 verifier status and continued guardrail evidence
+
+The fresh cycle-2 verifier was launched for candidate `19e6e2d`, but stopped before auditing because the model provider returned a five-hour usage-limit error. No implementation verdict was produced. This is `verification_blocked`, not `pass` or `fail`; the candidate remains unaccepted.
+
+After that failed-closed verifier start, additional Phase 1 guardrail regressions were added without changing the launcher algorithm:
+
+- structured runtime token usage above the contract limit kills the container;
+- structured runtime spend above the contract limit kills the container;
+- external wall-clock enforcement kills a hanging container;
+- the verifier command is scanned and contains no `API_KEY` or token-like variable.
+
+Focused execution:
+
+```sh
+PYTHONPATH=src:. python3 -m unittest tests.test_revk_guardrails -v
+```
+
+Observed:
+
+```text
+Ran 6 tests in 1.034s
+OK
+```
+
+Current full execution:
+
+```sh
+PYTHONPATH=.:src python3 -m unittest discover -s tests -v
+```
+
+Observed:
+
+```text
+Ran 93 tests in 12.231s
+OK (skipped=3)
+```
+
+These additions are post-cycle-2 candidate work. They do not satisfy Loop A acceptance until a fresh independent verifier audits the resulting exact revision.

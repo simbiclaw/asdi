@@ -2,7 +2,7 @@
 
 **Revision set:** REV K
 **Current pass:** Pass 1
-**Current phase:** Phase 1 — launcher and verifier (remediation cycle 1)
+**Current phase:** Phase 1 — launcher and verifier (cycle 2 verifier blocked; guardrail completion)
 
 ## Completed
 
@@ -56,9 +56,11 @@ See [`docs/asdi/REMEDIATION_WORKFLOW_EVIDENCE.md`](docs/asdi/REMEDIATION_WORKFLO
 
 The independent initial audit found the long-known revision-metadata conflict: Design REV K calls the Trust Handbook `rev 2` / frozen, while the Handbook and Build Guide identify it as REV K / synchronized. This is recorded in [`docs/asdi/SPEC_FEEDBACK_HANDBOOK_SYNC.md`](docs/asdi/SPEC_FEEDBACK_HANDBOOK_SYNC.md). No specification text may be changed or reinterpreted, and no four-document synchronized acceptance claim may be made, until the owner selects a disposition. Independent implementation repair continues under the allowed parallel-progress rule.
 
+The fresh cycle-2 verifier for candidate `19e6e2d` was stopped by the model provider's usage limit before producing a verdict. Its status is `verification_blocked`; no acceptance is claimed.
+
 ## Next
 
-Run a fresh independent conformance audit of remediation cycle 1 and the verifier-mount correction. Continue Phase 1 Docker/local-model integration evidence only if that audit has no affected-work hold. Do not begin Phase 3 while the specification-sync acceptance claim remains held.
+Retry a fresh independent conformance audit after provider quota resets. Continue only independent Phase 1 evidence until then. Do not begin Phase 3 while the specification-sync acceptance claim remains held.
 
 ## Boundaries
 
