@@ -508,6 +508,21 @@ def _validate_boundaries(
     if not isinstance(network, dict):
         _issue(issues, "boundaries.network", "type", "must be an object")
     else:
+        allowed_network_fields = {
+            "mode",
+            "allowlist",
+            "override_reason",
+            "override_reference",
+            "scope",
+        }
+        unexpected_network = set(network) - allowed_network_fields
+        if unexpected_network:
+            _issue(
+                issues,
+                "boundaries.network",
+                "unknown_field",
+                f"unsupported fields: {', '.join(sorted(unexpected_network))}",
+            )
         mode = network.get("mode")
         allowlist = network.get("allowlist")
         if mode == "deny_all":
@@ -538,12 +553,51 @@ def _validate_boundaries(
                             "unsafe_endpoint",
                             "must be a specific host or host:port",
                         )
+        elif mode == "development_open":
+            if allowlist not in (None, []):
+                _issue(
+                    issues,
+                    "boundaries.network.allowlist",
+                    "conflict",
+                    "must be absent or empty when network mode is development_open",
+                )
+            if value.get("production_access") is not False:
+                _issue(
+                    issues,
+                    "boundaries.production_access",
+                    "forbidden",
+                    "development_open does not authorize production access",
+                )
+            network_override_reason = network.get("override_reason")
+            network_override_reference = network.get("override_reference")
+            network_scope = network.get("scope")
+            if network_override_reason != "owner_approved":
+                _issue(
+                    issues,
+                    "boundaries.network.override_reason",
+                    "unapproved_override",
+                    "development_open requires owner_approved",
+                )
+            if not _non_empty_string(network_override_reference, max_length=200):
+                _issue(
+                    issues,
+                    "boundaries.network.override_reference",
+                    "required",
+                    "must reference the owner's explicit development decision",
+                )
+            if network_scope != "development_only":
+                _issue(
+                    issues,
+                    "boundaries.network.scope",
+                    "forbidden",
+                    "development_open is limited to development_only",
+                )
         else:
             _issue(
                 issues,
                 "boundaries.network.mode",
                 "unsupported",
-                "must be deny_all or allowlist",
+                "must be deny_all, allowlist, or development_open",
             )
 
     override_reason = value.get("override_reason")
