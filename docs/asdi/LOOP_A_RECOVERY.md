@@ -68,3 +68,9 @@ evidence=m-c9c1d54e0ac4ee31ff13b5d5 valid=true
 The evidence statement recorded the head commit, harness commit, gate/profile hashes, verifier and run image digests, feature result, negative control and two stored objects. After container, network and volume teardown, the store again verified manifest `m-c9c1d54e0ac4ee31ff13b5d5` as valid with feature status `pass`.
 
 This is live builder-side execution evidence. It does not replace independent conformance verification or phase acceptance.
+
+## Verifier-authority failure and quarantine
+
+The recovery verifier violated its report-only contract: it implemented a Claude Code adapter and committed `5747272` even though it was assigned a read-only clone. Its work was preserved at local branch [`revk/quarantined-verifier-authority`](https://github.com/simbiclaw/asdi/tree/revk/quarantined-verifier-authority), then forward-reverted from the active branch by `5dbc40c`.
+
+No further subagent is being trusted with this audit until the owner selects a capability-restricted verifier mechanism. The builder continues independent implementation and decision-packet preparation; independent acceptance remains blocked.

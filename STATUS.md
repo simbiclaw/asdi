@@ -2,7 +2,7 @@
 
 **Revision set:** REV K
 **Current pass:** Pass 1
-**Current phase:** Phase 1 — launcher and verifier (Loop A Option 3 fresh builder cycle)
+**Current phase:** Phase 1 — launcher and verifier (Loop A fresh builder cycle; verifier mechanism escalation)
 
 ## Completed
 
@@ -42,6 +42,8 @@ Contract validation, evidence store, static-gate runner, per-run container orche
 
 **Live Docker recovery evidence:** local isolated run `r-e8707e74-fcbf-4f95-8dd2-dd95ba720716` succeeded with static and base-harness checks passing. Evidence manifest `m-c9c1d54e0ac4ee31ff13b5d5` remained valid after teardown. Runtime evidence recorded no Docker socket and no secrets. See [`docs/asdi/LOOP_A_RECOVERY.md`](docs/asdi/LOOP_A_RECOVERY.md).
 
+The recovery verifier again violated report-only authority and committed `5747272`. That candidate is preserved at `revk/quarantined-verifier-authority` and forward-reverted from the active branch by `5dbc40c`. Independent acceptance remains blocked until the owner selects a capability-restricted verifier mechanism. See [`docs/asdi/VERIFIER_AUTHORITY_ESCALATION.md`](docs/asdi/VERIFIER_AUTHORITY_ESCALATION.md).
+
 ## Verification remediation workflow
 
 The user-directed remediation/specification-escalation loop is implemented as a durable controller:
@@ -75,6 +77,8 @@ Phase 1 now has a per-run HTTP/CONNECT egress proxy attached to both the interna
 The owner selected **Option 3 with Option 2 preservation mechanics**: reject verifier-overreach content from the active PR branch, preserve every existing candidate and evidence branch, and start a fresh builder cycle under a strict report-only verifier contract. The preservation branch is [`revk/preserved-verifier-overreach`](https://github.com/simbiclaw/asdi/tree/revk/preserved-verifier-overreach) at `cca86b0`. The active branch received forward reverts `a3fff38`, `4e7c836` and `da943d7`; no history was rewritten. See [`docs/asdi/LOOP_A_RECOVERY.md`](docs/asdi/LOOP_A_RECOVERY.md).
 
 The fresh builder cycle starts from recovery baseline `da943d7`. Known defects are rebuilt by the builder, followed by a fresh read-only conformance audit. The initial recovery audit will not consume a remediation cycle; up to two fresh builder/re-verification cycles remain available. Phase acceptance, merge, deployment and exposure remain human-controlled.
+
+The owner must also select a Phase 3 pilot disposition in [`docs/asdi/PILOT_SYNTHETIC_PROPOSAL.md`](docs/asdi/PILOT_SYNTHETIC_PROPOSAL.md). Builder-owned independent work continues where it does not depend on those decisions.
 
 ## Boundaries
 
