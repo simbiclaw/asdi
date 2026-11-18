@@ -63,6 +63,23 @@ class FakeRuntime(DockerRuntime):
     def stop_proxy(self, name: str) -> None:
         self.stopped_proxy = name
 
+    def teardown_run_resources(
+        self,
+        *,
+        network: str,
+        evidence_volume: str,
+        workspace_volume: str,
+        base_volume: str,
+    ) -> None:
+        self.removed_network = True
+        self.removed_volume = True
+        self.removed_resources = {
+            "network": network,
+            "evidence_volume": evidence_volume,
+            "workspace_volume": workspace_volume,
+            "base_volume": base_volume,
+        }
+
     def inspect_image(self, image: str) -> str:
         return f"sha256:{image}"
 

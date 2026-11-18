@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import io
 import subprocess
 import tempfile
 import unittest
@@ -64,6 +65,21 @@ class KillTrackingRuntime(DockerRuntime):
 
     def stop_proxy(self, name: str) -> None:
         self.stopped_proxy = name
+
+    def teardown_run_resources(
+        self,
+        *,
+        network: str,
+        evidence_volume: str,
+        workspace_volume: str,
+        base_volume: str,
+    ) -> None:
+        self.removed_resources = {
+            "network": network,
+            "evidence_volume": evidence_volume,
+            "workspace_volume": workspace_volume,
+            "base_volume": base_volume,
+        }
 
     def start(self, **kwargs):
         self.kwargs = kwargs
@@ -135,6 +151,12 @@ class RevKGuardrailTests(unittest.TestCase):
                 launcher.run(path)
             self.assertIn("asdi-run-", runtime.kwargs["network"])
             self.assertNotIn("/var/run/docker.sock", str(runtime.kwargs["binds"]))
+            self.assertTrue(runtime.removed_resources)
+            states = list(launcher.runs_root.glob("r-*/launcher-state.json"))
+            self.assertEqual(len(states), 1)
+            state = json.loads(states[0].read_text())
+            self.assertEqual(state["status"], "failed")
+            self.assertEqual(state["failure"]["message"], "turn guardrail exceeded")
 
     def test_spend_guardrail_blocks_launch(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -150,6 +172,48 @@ class RevKGuardrailTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "spend guardrail"):
                 launcher.run(path)
             self.assertFalse(runtime.started)
+
+    def test_post_run_spend_guardrail_is_terminal_and_cleans_resources(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            product = self.make_product(root / "product")
+
+            class CompleteUsageRuntime(KillTrackingRuntime):
+                def start(self, **kwargs):
+                    self.started = True
+                    self.kwargs = kwargs
+                    self.evidence.mkdir(parents=True, exist_ok=True)
+                    (self.evidence / "result.json").write_text(json.dumps({"schema": 2}))
+                    return CompleteUsageProcess()
+
+                def remove_container(self, name: str) -> None:
+                    self.removed_container = True
+
+            class CompleteUsageProcess:
+                returncode = 0
+                stdout = io.StringIO('{"event":"usage","tokens":1,"usd":0.5}\n')
+
+                def poll(self) -> int:
+                    return 0
+
+                def communicate(self, timeout: float | None = None) -> tuple[str, str]:
+                    return self.stdout.read(), ""
+
+            runtime = CompleteUsageRuntime()
+            runtime.evidence = root / "volume-evidence"
+            launcher = self.make_launcher(root, product, runtime)
+            launcher.agent_default_cost_usd = 2.0
+            path = self.write_contract(
+                root,
+                {"minutes": 90, "spend_usd": 2.0, "tokens": 100, "turns": 2},
+            )
+            with self.assertRaisesRegex(RuntimeError, "spend guardrail"):
+                launcher.run(path)
+            states = list(launcher.runs_root.glob("r-*/launcher-state.json"))
+            state = json.loads(states[0].read_text())
+            self.assertTrue(runtime.removed_resources)
+            self.assertEqual(state["status"], "failed")
+            self.assertEqual(state["failure"]["message"], "spend guardrail exceeded")
 
     def test_runtime_token_guardrail_kills_agent(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

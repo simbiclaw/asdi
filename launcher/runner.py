@@ -194,6 +194,19 @@ class DockerRuntime:
     def remove_volume(self, name: str) -> None:
         self._run(["volume", "rm", name], timeout=10)
 
+    def teardown_run_resources(
+        self,
+        *,
+        network: str,
+        evidence_volume: str,
+        workspace_volume: str,
+        base_volume: str,
+    ) -> None:
+        self.remove_network(network)
+        self.remove_volume(evidence_volume)
+        self.remove_volume(workspace_volume)
+        self.remove_volume(base_volume)
+
     def stop_proxy(self, name: str) -> None:
         self.kill(name)
         self.remove_container(name)
@@ -331,6 +344,7 @@ class REVKLauncher:
         workspace = run_root / "workspace"
         evidence_stage = run_root / "evidence"
         evidence_stage.mkdir(parents=True, exist_ok=True)
+        pid = os.getpid()
         self._save_state(
             run_root,
             {
@@ -339,9 +353,22 @@ class REVKLauncher:
                 "contract_path": str(Path(contract_path).resolve()),
                 "container": container,
                 "network": network,
+                "pid": pid,
+                "evidence_volume": volume,
+                "workspace_volume": workspace_volume,
+                "base_volume": base_volume,
+                "egress_container": proxy,
                 "started_at": time.time(),
             },
         )
+
+        spend_limit = contract["guardrails"].get("spend_usd")
+        if spend_limit is not None and self.agent_default_cost_usd > float(spend_limit):
+            self._record_failure(
+                run_root,
+                RuntimeError("spend guardrail exceeded before launch"),
+            )
+            raise RuntimeError("spend guardrail exceeded before launch")
 
         self._fresh_export(workspace)
         base_export = run_root / "base"
@@ -355,33 +382,44 @@ class REVKLauncher:
         self.runtime.populate_volume(base_volume, base_export, destination="/opt/base")
         self.runtime.chown_volume(workspace_volume, "/workspace", "1001:1001")
         self.runtime.chown_volume(volume, "/evidence", "1001:1001")
-        model_key = os.environ.get(self.model_key_env)
-        proxy_environment = {
-            "ASDI_MODEL_HOST": self.model_host,
-            "ASDI_MODEL_PORT": str(self.model_port),
-            "ASDI_EGRESS_ALLOWLIST": ",".join(
-                [
-                    "github.com:443",
-                    "api.github.com:443",
-                    "objects.githubusercontent.com:443",
-                    "codeload.github.com:443",
-                    "pypi.org:443",
-                    "files.pythonhosted.org:443",
-                    "registry.npmjs.org:443",
-                    "registry.npmmirror.com:443",
-                ]
-            ),
-        }
-        if model_key:
-            proxy_environment["ASDI_MODEL_API_KEY"] = model_key
-        self.runtime.start_proxy(
-            name=proxy,
-            egress_network=self.egress_network,
-            script=self.egress_script,
-            image=self.proxy_image,
-            environment=proxy_environment,
-        )
-        self.runtime.connect_network(proxy, network)
+        try:
+            model_key = os.environ.get(self.model_key_env)
+            proxy_environment = {
+                "ASDI_MODEL_HOST": self.model_host,
+                "ASDI_MODEL_PORT": str(self.model_port),
+                "ASDI_EGRESS_ALLOWLIST": ",".join(
+                    [
+                        "github.com:443",
+                        "api.github.com:443",
+                        "objects.githubusercontent.com:443",
+                        "codeload.github.com:443",
+                        "pypi.org:443",
+                        "files.pythonhosted.org:443",
+                        "registry.npmjs.org:443",
+                        "registry.npmmirror.com:443",
+                    ]
+                ),
+            }
+            if model_key:
+                proxy_environment["ASDI_MODEL_API_KEY"] = model_key
+            self.runtime.start_proxy(
+                name=proxy,
+                egress_network=self.egress_network,
+                script=self.egress_script,
+                image=self.proxy_image,
+                environment=proxy_environment,
+            )
+            self.runtime.connect_network(proxy, network)
+        except Exception as error:
+            self.runtime.stop_proxy(proxy)
+            self.runtime.teardown_run_resources(
+                network=network,
+                evidence_volume=volume,
+                workspace_volume=workspace_volume,
+                base_volume=base_volume,
+            )
+            self._record_failure(run_root, error)
+            raise
 
         environment = {
             "ASDI_RUN_ID": run_id,
@@ -393,9 +431,6 @@ class REVKLauncher:
             "HTTPS_PROXY": f"http://{proxy}:8081",
             "NO_PROXY": "localhost,127.0.0.1",
         }
-        spend_limit = contract["guardrails"].get("spend_usd")
-        if spend_limit is not None and self.agent_default_cost_usd > float(spend_limit):
-            raise RuntimeError("spend guardrail exceeded before launch")
         command = [
             "/usr/bin/python3",
             "/opt/asdi/fixture_agent.py",
@@ -485,9 +520,16 @@ class REVKLauncher:
             (run_root / "agent.stderr.log").write_text(stderr or "")
             if not os.environ.get("ASDI_KEEP_CONTAINER"):
                 self.runtime.remove_container(container)
-        except Exception:
+        except Exception as error:
             self.runtime.kill(container)
             self.runtime.stop_proxy(proxy)
+            self.runtime.teardown_run_resources(
+                network=network,
+                evidence_volume=volume,
+                workspace_volume=workspace_volume,
+                base_volume=base_volume,
+            )
+            self._record_failure(run_root, error)
             raise
 
         self.runtime.stop_proxy(proxy)
@@ -496,104 +538,129 @@ class REVKLauncher:
         spend_used += self.agent_default_cost_usd
         if spend_limit is not None and spend_used > float(spend_limit):
             self.runtime.kill(container)
-            raise RuntimeError("spend guardrail exceeded")
-
-        self.runtime.copy_volume(volume, evidence_stage, self.verifier_image)
-
-        verifier_result: dict[str, Any] = {}
-        checks = self._verify_head(
-            run_id=run_id,
-            workspace=workspace,
-            base_volume=base_volume,
-            verifier_result=verifier_result,
-        )
-        passed = agent_exit == 0 and all(check["status"] == "pass" for check in checks)
-        status = "succeeded" if passed else "failed"
-        result_path = evidence_stage / "result.json"
-        result_path.write_text(
-            json.dumps(
-                {
-                    "schema": 2,
-                    "run_id": run_id,
-                    "commit": self._head(),
-                    "features": verifier_result.get(
-                        "features",
-                        [
-                            {
-                                "id": "lifecycle-smoke",
-                                "status": "pass" if passed else "fail",
-                                "control": "caught",
-                                "evidence": ["agent.stdout.log", "static-gates.json"],
-                                "limits": ["Pass 1 fixture checks only"],
-                            }
-                        ],
-                    ),
-                },
-                indent=2,
-                sort_keys=True,
+            self.runtime.stop_proxy(proxy)
+            self.runtime.teardown_run_resources(
+                network=network,
+                evidence_volume=volume,
+                workspace_volume=workspace_volume,
+                base_volume=base_volume,
             )
-            + "\n"
-        )
-        gates_path = base_export / ".asdi" / "static-gates.yaml"
-        profile_path = base_export / ".asdi" / "product.yaml"
-        evidence_metadata = {
-            "source": "run",
-            "producer": {
-                "kind": "verifier",
-                "image_digest": self.runtime.inspect_image(self.verifier_image),
-            },
-            "environment": {
-                "run_image_digest": self.runtime.inspect_image(self.agent_image),
-                "tool_versions": {"python": "container-image"},
-            },
-            "inputs": {
-                "harness_commit": self._revision(self.base_branch),
-                "static_gates": self._file_digest(gates_path),
-                "product_profile": self._file_digest(profile_path),
-            },
-        }
-        evidence = EvidenceStore(self.root / "evidence").put(
-            evidence_stage,
-            json.loads(result_path.read_text()),
-            metadata=evidence_metadata,
-        )
-        runtime_evidence = {
-            "network": network,
-            "container": container,
-            "evidence_volume": volume,
-            "workspace_volume": workspace_volume,
-            "egress_container": proxy,
-            "egress_mode": "allowlist_proxy",
-            "egress_allowlist": proxy_environment["ASDI_EGRESS_ALLOWLIST"].split(","),
-            "socket_mounted": False,
-            "secrets_mounted": False,
-            "usage": {"turns": turns, "tokens": tokens, "spend_usd": spend_used},
-        }
-        self._save_state(
-            run_root,
-            {
-                "run_id": run_id,
-                "status": status,
-                "agent_exit_code": agent_exit,
-                "checks": checks,
-                "evidence": evidence,
-                "runtime": runtime_evidence,
-                "started_at": self._saved_started_at(run_root),
-                "finished_at": time.time(),
-            },
-        )
-        self.runtime.remove_network(network)
-        self.runtime.remove_volume(volume)
-        self.runtime.remove_volume(workspace_volume)
-        self.runtime.remove_volume(base_volume)
-        return RunResult(
-            run_id=run_id,
-            status=status,
-            agent_exit_code=agent_exit,
-            checks=checks,
-            evidence=evidence,
-            runtime=runtime_evidence,
-        )
+            error = RuntimeError("spend guardrail exceeded")
+            self._record_failure(run_root, error)
+            raise error
+
+        try:
+            self.runtime.copy_volume(volume, evidence_stage, self.verifier_image)
+
+            verifier_result: dict[str, Any] = {}
+            checks = self._verify_head(
+                run_id=run_id,
+                workspace=workspace,
+                base_volume=base_volume,
+                evidence_stage=evidence_stage,
+                verifier_result=verifier_result,
+            )
+            passed = agent_exit == 0 and all(
+                check["status"] == "pass" for check in checks if check.get("blocking", True)
+            )
+            status = "succeeded" if passed else "failed"
+            result_path = evidence_stage / "result.json"
+            result_path.write_text(
+                json.dumps(
+                    {
+                        "schema": 2,
+                        "run_id": run_id,
+                        "commit": self._head(),
+                        "features": verifier_result.get(
+                            "features",
+                            [
+                                {
+                                    "id": "lifecycle-smoke",
+                                    "status": "pass" if passed else "fail",
+                                    "control": "caught",
+                                    "evidence": [],
+                                    "limits": ["Pass 1 fixture checks only"],
+                                }
+                            ],
+                        ),
+                    },
+                    indent=2,
+                    sort_keys=True,
+                )
+                + "\n"
+            )
+            gates_path = base_export / ".asdi" / "static-gates.yaml"
+            profile_path = base_export / ".asdi" / "product.yaml"
+            evidence_metadata = {
+                "source": "run",
+                "producer": {
+                    "kind": "verifier",
+                    "image_digest": self.runtime.inspect_image(self.verifier_image),
+                },
+                "environment": {
+                    "run_image_digest": self.runtime.inspect_image(self.agent_image),
+                    "tool_versions": {"python": "container-image"},
+                },
+                "inputs": {
+                    "harness_commit": self._revision(self.base_branch),
+                    "static_gates": self._file_digest(gates_path),
+                    "product_profile": self._file_digest(profile_path),
+                },
+            }
+            evidence = EvidenceStore(self.root / "evidence").put(
+                evidence_stage,
+                json.loads(result_path.read_text()),
+                metadata=evidence_metadata,
+            )
+            runtime_evidence = {
+                "network": network,
+                "container": container,
+                "evidence_volume": volume,
+                "workspace_volume": workspace_volume,
+                "egress_container": proxy,
+                "egress_mode": "allowlist_proxy",
+                "egress_allowlist": proxy_environment["ASDI_EGRESS_ALLOWLIST"].split(","),
+                "socket_mounted": False,
+                "secrets_mounted": False,
+                "usage": {"turns": turns, "tokens": tokens, "spend_usd": spend_used},
+            }
+            self._save_state(
+                run_root,
+                {
+                    "run_id": run_id,
+                    "status": status,
+                    "pid": pid,
+                    "agent_exit_code": agent_exit,
+                    "checks": checks,
+                    "evidence": evidence,
+                    "runtime": runtime_evidence,
+                    "started_at": self._saved_started_at(run_root),
+                    "finished_at": time.time(),
+                },
+            )
+            self.runtime.teardown_run_resources(
+                network=network,
+                evidence_volume=volume,
+                workspace_volume=workspace_volume,
+                base_volume=base_volume,
+            )
+            return RunResult(
+                run_id=run_id,
+                status=status,
+                agent_exit_code=agent_exit,
+                checks=checks,
+                evidence=evidence,
+                runtime=runtime_evidence,
+            )
+        except Exception as error:
+            self.runtime.teardown_run_resources(
+                network=network,
+                evidence_volume=volume,
+                workspace_volume=workspace_volume,
+                base_volume=base_volume,
+            )
+            self._record_failure(run_root, error)
+            raise
 
     def _save_state(self, run_root: Path, state: dict[str, Any]) -> None:
         atomic_json(run_root / "launcher-state.json", state)
@@ -606,12 +673,31 @@ class REVKLauncher:
         except (FileNotFoundError, KeyError, ValueError, json.JSONDecodeError):
             return time.time()
 
+    def _record_failure(self, run_root: Path, error: Exception) -> None:
+        try:
+            state = json.loads((run_root / "launcher-state.json").read_text())
+        except (FileNotFoundError, json.JSONDecodeError):
+            state = {"run_id": run_root.name, "status": "running"}
+        state.update(
+            {
+                "status": "failed",
+                "failure": {
+                    "type": type(error).__name__,
+                    "message": str(error),
+                    "at": time.time(),
+                },
+                "finished_at": time.time(),
+            }
+        )
+        atomic_json(run_root / "launcher-state.json", state)
+
     def _verify_head(
         self,
         *,
         run_id: str,
         workspace: Path,
         base_volume: str,
+        evidence_stage: Path,
         verifier_result: dict[str, Any],
     ) -> list[dict[str, Any]]:
         with tempfile.TemporaryDirectory() as temporary:
@@ -632,7 +718,7 @@ class REVKLauncher:
                 commit=self._head(),
                 mounts=[
                     f"type=volume,source={workspace_volume},destination=/workspace",
-                    f"type=volume,source={base_volume},destination=/opt/base:ro",
+                    f"type=volume,source={base_volume},destination=/opt/base,readonly",
                 ],
             )
             verify_check = self._run_base_verify(
@@ -641,6 +727,12 @@ class REVKLauncher:
                 base_volume=base_volume,
             )
             checks.append(verify_check)
+            (workspace / ".asdi-evidence" / "static-gates.json").parent.mkdir(
+                parents=True, exist_ok=True
+            )
+            (workspace / ".asdi-evidence" / "static-gates.json").write_text(
+                json.dumps({"run_id": run_id, "checks": checks}, indent=2, sort_keys=True) + "\n"
+            )
             self.runtime.copy_volume(workspace_volume, workspace, self.verifier_image)
             self._collect_verify_result(
                 workspace=workspace,
@@ -649,12 +741,11 @@ class REVKLauncher:
                 verify_check=verify_check,
                 verifier_result=verifier_result,
             )
-            (workspace / ".asdi-evidence" / "static-gates.json").parent.mkdir(
-                parents=True, exist_ok=True
-            )
-            (workspace / ".asdi-evidence" / "static-gates.json").write_text(
-                json.dumps({"run_id": run_id, "checks": checks}, indent=2, sort_keys=True) + "\n"
-            )
+            workspace_evidence = workspace / ".asdi-evidence"
+            if workspace_evidence.is_dir():
+                for evidence_file in sorted(workspace_evidence.glob("*")):
+                    if evidence_file.is_file() and evidence_file.name != "result.json":
+                        shutil.copy2(evidence_file, evidence_stage / evidence_file.name)
             return checks
 
     @staticmethod
@@ -737,7 +828,7 @@ class REVKLauncher:
             "--mount",
             f"type=volume,source=asdi-workspace-{short},destination=/workspace",
             "--mount",
-            f"type=volume,source={base_volume},destination=/opt/base:ro",
+            f"type=volume,source={base_volume},destination=/opt/base,readonly",
             "--workdir",
             "/workspace",
             "--env",

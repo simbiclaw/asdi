@@ -1,7 +1,7 @@
-# Loop A process escalation — owner decision required
+# Loop A process escalation — owner decision recorded
 
 **Date:** 2026-11-18
-**Status:** **Human hold; both remediation cycles exhausted without clean independent acceptance**
+**Status:** **Superseded by owner decision — Option 3, using Option 2 preservation mechanics**
 
 ## Question
 
@@ -62,4 +62,6 @@ Allowed only after owner direction:
 
 ## Required decision
 
-Select alternative 1, 2, 3 or 4, and state whether the selected verifier may only report findings or may perform any Git/write operation. Do not resume Phase 1 acceptance, Phase 3, merge, deployment or exposure until that explicit owner decision is recorded.
+**Decision recorded on 2026-11-18:** Option 3, using Option 2 preservation mechanics. Reject verifier-overreach content from the active PR workstream; preserve all existing commits, branches, candidates and evidence; perform a fresh builder cycle and fresh independent read-only audit. The selected verifier may only report findings; it may not mutate code, tests, specifications or Git state.
+
+Execution is recorded in [`LOOP_A_RECOVERY.md`](LOOP_A_RECOVERY.md). Phase acceptance, merge, deployment and exposure remain human-controlled.

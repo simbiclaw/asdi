@@ -51,7 +51,8 @@ class VerifierAuthorityTests(unittest.TestCase):
             verify_dir = base_export / "verify" / "bin"
             verify_dir.mkdir(parents=True)
             fake_docker = root / "fake-docker"
-            fake_docker.write_text("#!/bin/sh\nexit 0\n")
+            docker_log = root / "docker-arguments.log"
+            fake_docker.write_text(f"#!/bin/sh\nprintf '%s\\n' \"$@\" >> {docker_log}\nexit 0\n")
             fake_docker.chmod(0o755)
             runtime = FakeRuntime(root / "workspace", root / "evidence")
             runtime.docker = str(fake_docker)
@@ -79,9 +80,19 @@ class VerifierAuthorityTests(unittest.TestCase):
             )
             self.assertEqual(check["status"], "pass")
             self.assertEqual(check["exit_code"], 0)
-            docker_invocations = fake_log.read_text().splitlines()
-            self.assertTrue(docker_invocations)
-            self.assertIn(f"ASDI_COMMIT={launcher._head()}", docker_invocations)
+            invocations = docker_log.read_text().splitlines()
+            self.assertTrue(invocations)
+            self.assertIn(f"ASDI_COMMIT={launcher._head()}", invocations)
+            self.assertFalse(
+                any("destination=/opt/base:ro" in line for line in invocations)
+            )
+            self.assertTrue(
+                all(
+                    "destination=/opt/base,readonly" in line
+                    for line in invocations
+                    if "asdi-base-fixture" in line
+                )
+            )
 
     def test_green_verify_exit_requires_bound_caught_feature_result(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

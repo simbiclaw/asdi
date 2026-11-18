@@ -23,6 +23,7 @@ def run_checks(
     checks: list[dict[str, Any]] = []
     for check in manifest.get("checks", []):
         started = time.time()
+        blocking = bool(check.get("blocking", True))
         try:
             completed = subprocess.run(
                 [
@@ -60,7 +61,7 @@ def run_checks(
             exit_code = completed.returncode
             stdout = completed.stdout
             stderr = completed.stderr
-            status = "pass" if exit_code == 0 and check.get("blocking", True) else "fail"
+            status = "pass" if exit_code == 0 else "fail"
         except subprocess.TimeoutExpired as error:
             exit_code = None
             stdout = error.stdout.decode() if isinstance(error.stdout, bytes) else str(error.stdout or "")
@@ -75,6 +76,7 @@ def run_checks(
             {
                 "id": f"static:{check['id']}",
                 "status": status,
+                "blocking": blocking,
                 "exit_code": exit_code,
                 "duration_seconds": round(time.time() - started, 3),
                 "stdout": stdout[-4000:],
@@ -85,4 +87,11 @@ def run_checks(
 
 
 def gate_passes(checks: list[dict[str, Any]]) -> bool:
-    return bool(checks) and all(item["status"] == "pass" for item in checks)
+    blocking = [item for item in checks if item.get("blocking", True)]
+    blocking_passes = bool(blocking) and all(item["status"] == "pass" for item in blocking)
+    advisory_has_error = any(
+        item.get("blocking", True) is False
+        and item.get("status") in {"error", "blocked"}
+        for item in checks
+    )
+    return blocking_passes and not advisory_has_error

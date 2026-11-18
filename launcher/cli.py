@@ -109,6 +109,20 @@ def main(argv: list[str] | None = None) -> int:
         container = state.get("container")
         if container:
             runtime.kill(container)
+        egress_container = state.get("egress_container")
+        if egress_container:
+            runtime.stop_proxy(egress_container)
+        for name in (
+            state.get("network"),
+            state.get("evidence_volume"),
+            state.get("workspace_volume"),
+            state.get("base_volume"),
+        ):
+            if name:
+                if name == state.get("network"):
+                    runtime.remove_network(name)
+                else:
+                    runtime.remove_volume(name)
         state["status"] = "killed"
         state["killed_at"] = __import__("time").time()
         from launcher.state import atomic_json

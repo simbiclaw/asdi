@@ -76,8 +76,10 @@ Added the user-directed verification remediation and specification-escalation co
 ## Independent audit response — 2026-11-17
 
 The initial audit failed candidate `df21e4e` without consuming a remediation cycle. Cycle 1 repairs the cited verifier base-volume/verify execution path, evidence provenance, external usage guardrails, CLI override validation, remediation ceiling, specification mutation boundary and subprocess timeout. Focused and full suites pass. A fresh independent audit is required before acceptance.
-<<<<<<< HEAD
 ## Loop A recovery — 2026-11-18
 
-The owner selected Option 3 with Option 2 preservation mechanics. All verifier-overreach candidates are preserved; active PR implementation is being restored to a builder-owned baseline through forward reverts before fresh builder work.
 The owner selected Option 3 with Option 2 preservation mechanics. The verifier-authored live coding-CLI slice and hardening are rejected from the active branch and retained on the preservation branch. Fresh builder work must reconstruct required functionality under the revised role boundary.
+
+## Fresh builder slice — 2026-11-18
+
+Rebuilt builder-owned fixes for valid read-only base mounting, stronger evidence integrity checks, blocking/advisory static-gate semantics, terminal durable failures and complete resource cleanup. Full suite: **100 tests, OK, 4 expected skips**. Independent read-only audit remains required.

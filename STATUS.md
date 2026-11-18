@@ -2,7 +2,7 @@
 
 **Revision set:** REV K
 **Current pass:** Pass 1
-**Current phase:** Phase 1 — launcher and verifier (Loop A human hold)
+**Current phase:** Phase 1 — launcher and verifier (Loop A Option 3 fresh builder cycle)
 
 ## Completed
 
@@ -38,6 +38,8 @@ Contract validation, evidence store, static-gate runner, per-run container orche
 
 **Update:** per-run network, workspace/evidence volumes, non-root container execution, static verifier, evidence persistence, turn-kill test, red-verifier override test, base-harness tamper-ignoration test, spend preflight, and durable status/kill CLI now pass.
 
+**Fresh builder recovery update:** the base harness uses valid Docker read-only mount syntax; evidence verification checks statement/result agreement, revision binding, safe paths, hashes, sizes, object inventory and feature evidence references; static gates distinguish blocking from advisory checks; failed and guardrail-killed runs persist terminal failure details and clean up all per-run resources; and `launcher kill` removes the persisted container, proxy, network and volume inventory. Full suite: **100 tests, OK, 4 expected skips**. This is builder-side verification only.
+
 ## Verification remediation workflow
 
 The user-directed remediation/specification-escalation loop is implemented as a durable controller:
@@ -56,7 +58,7 @@ See [`docs/asdi/REMEDIATION_WORKFLOW_EVIDENCE.md`](docs/asdi/REMEDIATION_WORKFLO
 
 The former Handbook synchronization hold is **resolved by owner-approved specification reconciliation on 2026-11-18**. The Design introduction now names Trust Handbook REV K; its rev-2/frozen revision-log sentence is explicitly historical; Handbook §13 records that Build Guide V4 has already been synchronized at REV K. The current four-document hashes are pinned in [`reference/AUTHORITY.md`](reference/AUTHORITY.md), and the original finding remains auditable in [`docs/asdi/SPEC_FEEDBACK_HANDBOOK_SYNC.md`](docs/asdi/SPEC_FEEDBACK_HANDBOOK_SYNC.md).
 
-This resolves the metadata synchronization blocker only. It does not independently accept implementation work or override the Loop A process hold.
+This resolves the metadata synchronization blocker only. It does not independently accept implementation work.
 
 The fresh cycle-2 verifier for candidate `19e6e2d` was stopped by the model provider's usage limit before producing a verdict. Its status is `verification_blocked`; no acceptance is claimed.
 
@@ -65,7 +67,12 @@ Strict verifier hardening now requires a launcher-collected `result.json` bound 
 Phase 1 now has a per-run HTTP/CONNECT egress proxy attached to both the internal run network and `asdi-egress`. The agent receives only proxy URLs; the proxy performs destination authorization and injects the local model key. A live Docker run and separate proxy proof passed. The verifier-authored live coding-CLI slice is rejected from the active branch and preserved for reference; a fresh builder-owned implementation is still required.
 
 ## Next
-Executing the owner's Option 3 decision with Option 2 preservation mechanics. All overreach candidates are retained at [`revk/preserved-verifier-overreach`](https://github.com/simbiclaw/asdi/tree/revk/preserved-verifier-overreach); the active PR branch is receiving non-destructive forward reverts before a fresh builder cycle and read-only audit.
+
+## Loop A recovery
+
+The owner selected **Option 3 with Option 2 preservation mechanics**: reject verifier-overreach content from the active PR branch, preserve every existing candidate and evidence branch, and start a fresh builder cycle under a strict report-only verifier contract. The preservation branch is [`revk/preserved-verifier-overreach`](https://github.com/simbiclaw/asdi/tree/revk/preserved-verifier-overreach) at `cca86b0`. The active branch received forward reverts `a3fff38`, `4e7c836` and `da943d7`; no history was rewritten. See [`docs/asdi/LOOP_A_RECOVERY.md`](docs/asdi/LOOP_A_RECOVERY.md).
+
+The fresh builder cycle starts from recovery baseline `da943d7`. Known defects are rebuilt by the builder, followed by a fresh read-only conformance audit. The initial recovery audit will not consume a remediation cycle; up to two fresh builder/re-verification cycles remain available. Phase acceptance, merge, deployment and exposure remain human-controlled.
 
 ## Boundaries
 
