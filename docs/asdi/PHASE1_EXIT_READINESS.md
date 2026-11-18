@@ -1,6 +1,6 @@
 # REV K Phase 1 exit readiness
 
-**Candidate:** `5fd292e`  
+**Candidate:** `90aa7c0`
 **Status:** **Builder-tested / independently unverified / not accepted**
 
 ## Exit-criterion map
@@ -25,7 +25,7 @@
 PYTHONPATH=.:src python3 -m unittest discover -s tests -v
 ```
 
-Latest observed result at this candidate: **103 tests, OK, 4 expected AF_UNIX/socket-binding skips**.
+Latest observed result through the full suite at `f2942aa`: **106 tests, OK, no unexpected failures**. Documentation-only commits through `90aa7c0` do not alter that implementation evidence.
 
 ## Decision boundary
 
