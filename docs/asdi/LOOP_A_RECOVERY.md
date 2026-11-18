@@ -50,3 +50,21 @@ The first builder-owned cycle rebuilt the safety-critical behavior previously di
 - full resource cleanup for `launcher kill`.
 
 Focused suites passed for the launcher, guardrails, evidence, verifier authority, static gates and CLI. The complete suite after this slice ran **100 tests, OK, 4 expected AF_UNIX/socket-binding skips**, and `git diff --check` was clean. This remains builder-side local verification, not independent acceptance.
+
+## Live Docker recovery evidence
+
+Local-only isolated run `r-e8707e74-fcbf-4f95-8dd2-dd95ba720716`:
+
+```text
+status=succeeded
+static:compile=pass blocking=true
+verify:base-harness=pass
+socket_mounted=false
+secrets_mounted=false
+egress_mode=allowlist_proxy
+evidence=m-c9c1d54e0ac4ee31ff13b5d5 valid=true
+```
+
+The evidence statement recorded the head commit, harness commit, gate/profile hashes, verifier and run image digests, feature result, negative control and two stored objects. After container, network and volume teardown, the store again verified manifest `m-c9c1d54e0ac4ee31ff13b5d5` as valid with feature status `pass`.
+
+This is live builder-side execution evidence. It does not replace independent conformance verification or phase acceptance.
