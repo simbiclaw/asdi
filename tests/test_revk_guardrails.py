@@ -47,11 +47,23 @@ class KillTrackingRuntime(DockerRuntime):
     def create_volume(self, name: str) -> None:
         pass
 
+    def ensure_bridge_network(self, name: str) -> None:
+        pass
+
     def populate_volume(self, volume: str, source: Path, *, destination: str = "/workspace") -> None:
         pass
 
     def chown_volume(self, volume: str, destination: str, ownership: str) -> None:
         pass
+
+    def start_proxy(self, **kwargs) -> None:
+        self.proxy_kwargs = kwargs
+
+    def connect_network(self, container: str, network: str) -> None:
+        self.proxy_network = (container, network)
+
+    def stop_proxy(self, name: str) -> None:
+        self.stopped_proxy = name
 
     def start(self, **kwargs):
         self.kwargs = kwargs

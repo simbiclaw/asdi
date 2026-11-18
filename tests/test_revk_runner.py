@@ -4,6 +4,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 
 from launcher.runner import DockerRuntime, REVKLauncher
@@ -32,12 +33,16 @@ class FakeRuntime(DockerRuntime):
         self.populated_volumes: list[str] = []
         self.populated_sources: dict[str, Path] = {}
         self.workspace_volume: str | None = None
+        self.proxies: list[dict] = []
 
     def create_network(self, name: str) -> None:
         self.network = name
 
     def create_volume(self, name: str) -> None:
         self.volume = name
+
+    def ensure_bridge_network(self, name: str) -> None:
+        self.egress_network = name
 
     def populate_volume(self, volume: str, source: Path, *, destination: str = "/workspace") -> None:
         self.populated = (volume, source, destination)
@@ -48,6 +53,15 @@ class FakeRuntime(DockerRuntime):
 
     def chown_volume(self, volume: str, destination: str, ownership: str) -> None:
         self.ownership = (volume, destination, ownership)
+
+    def start_proxy(self, **kwargs) -> None:
+        self.proxies.append(kwargs)
+
+    def connect_network(self, container: str, network: str) -> None:
+        self.proxy_network = (container, network)
+
+    def stop_proxy(self, name: str) -> None:
+        self.stopped_proxy = name
 
     def inspect_image(self, image: str) -> str:
         return f"sha256:{image}"
@@ -151,12 +165,29 @@ class REVKRunnerTests(unittest.TestCase):
             launcher._verify_head = lambda **kwargs: [
                 {"id": "static:compile", "status": "pass", "exit_code": 0}
             ]
-            result = launcher.run(ROOT / "schemas/examples/run-contract.valid.json")
+            with patch.dict(
+                "os.environ",
+                {"LITELLM_MASTER_KEY": "proxy-only-test-key"},
+            ):
+                result = launcher.run(ROOT / "schemas/examples/run-contract.valid.json")
             self.assertEqual(result.status, "succeeded")
             self.assertTrue(runtime.started)
             self.assertTrue(runtime.removed_network)
             self.assertTrue(runtime.removed_volume)
             self.assertFalse(runtime.kwargs["environment"].get("LITELLM_API_KEY"))
+            self.assertEqual(
+                runtime.kwargs["environment"]["HTTP_PROXY"],
+                f"http://{runtime.proxies[0]['name']}:8081",
+            )
+            self.assertNotIn("LITELLM_MASTER_KEY", runtime.kwargs["environment"])
+            self.assertTrue(runtime.proxies[0]["environment"].get("ASDI_MODEL_API_KEY"))
+            self.assertEqual(
+                runtime.proxies[0]["image"],
+                "safeclaw-us-egress:cc-2.1.283",
+            )
+            self.assertNotIn("LITELLM_MASTER_KEY", str(runtime.proxies[0]["environment"]))
+            self.assertEqual(runtime.proxy_network, (runtime.proxies[0]["name"], runtime.network))
+            self.assertEqual(runtime.stopped_proxy, runtime.proxies[0]["name"])
             self.assertNotIn("/var/run/docker.sock", str(runtime.kwargs["binds"]))
             self.assertTrue(result.evidence["valid"])
             self.assertEqual(runtime.populated[0], runtime.volume)

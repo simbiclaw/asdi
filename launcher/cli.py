@@ -28,6 +28,13 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--model", default="qwen3.6-35b-dspark-local")
     parser.add_argument("--codex-path", default=None)
     parser.add_argument("--proxy", default="http://127.0.0.1:7890")
+    parser.add_argument("--proxy-image", default="safeclaw-us-egress:cc-2.1.283")
+    parser.add_argument("--egress-network", default="asdi-egress")
+    parser.add_argument(
+        "--model-endpoint",
+        default="http://host.docker.internal:4000/v1",
+    )
+    parser.add_argument("--model-key-env", default="LITELLM_MASTER_KEY")
     commands = parser.add_subparsers(dest="command", required=True)
     run = commands.add_parser("run", help="Run a REV K contract")
     run.add_argument("--contract", required=True)
@@ -72,6 +79,10 @@ def main(argv: list[str] | None = None) -> int:
             product_root=Path(args.product_root),
             base_branch=args.base_branch,
             agent_image=args.agent_image,
+            proxy_image=args.proxy_image,
+            egress_network=args.egress_network,
+            model_endpoint=args.model_endpoint,
+            model_key_env=args.model_key_env,
             runtime=runtime,
             agent_script=args.agent_script,
             agent_default_cost_usd=args.agent_cost_usd,

@@ -60,9 +60,11 @@ The fresh cycle-2 verifier for candidate `19e6e2d` was stopped by the model prov
 
 Strict verifier hardening now requires a launcher-collected `result.json` bound to the run and commit, with every feature passing and its negative control caught. Live Docker negative and positive runs both produced valid content-addressed evidence; the malformed verifier stayed red and the corrected fixture succeeded.
 
+Phase 1 now has a per-run HTTP/CONNECT egress proxy attached to both the internal run network and `asdi-egress`. The agent receives only proxy URLs; the proxy performs destination authorization and injects the local model key. A live Docker run and separate proxy proof passed. A live coding CLI exercising Git/package/model traffic through this proxy is still required.
+
 ## Next
 
-Retry a fresh independent conformance audit after provider quota resets. Continue only independent Phase 1 evidence until then. Do not begin Phase 3 while the specification-sync acceptance claim remains held. The REV K egress proxy/model-key injection boundary remains an explicit residual Phase 1 requirement.
+Retry a fresh independent conformance audit after provider quota resets. Continue only independent Phase 1 evidence until then. Do not begin Phase 3 while the specification-sync acceptance claim remains held. The remaining Phase 1 gap is a real coding CLI run through the egress proxy, plus its no-credential and stop-hook evidence.
 
 ## Boundaries
 

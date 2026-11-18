@@ -195,3 +195,36 @@ evidence=m-e4e4479b58045d884320029b valid=true
 ```
 
 Both manifests were reloaded after teardown and passed SHA-256 verification. Usage was externally recorded as one turn, one token, and `$0.00` local spend.
+
+## Per-run egress proxy and key injection
+
+Implemented a simple IP-network proxy boundary, replacing the rejected host Unix-socket transport:
+
+- the launcher ensures `asdi-egress` exists, starts one proxy container on it, and attaches that proxy to the run's internal network;
+- the agent receives only `HTTP_PROXY`/`HTTPS_PROXY` URLs, no LiteLLM key;
+- the proxy authorizes an explicit CONNECT allowlist and rejects private, loopback, link-local, reserved and unresolved destinations;
+- only the configured local model endpoint can receive the model key, injected inside the proxy process;
+- the proxy uses no Docker socket, no host port, and drops all Linux capabilities;
+- the proxy is stopped and removed with the run.
+
+The proxy image is the already-local `safeclaw-us-egress:cc-2.1.283`, used only as a Python-capable container base with its vendor entrypoint overridden. It was not treated as a trust authority; enforcement is the launcher-supplied Python proxy.
+
+Live isolated launcher run `r-85e11bdb-59ee-4014-85e5-9a6aa124e5bd`:
+
+```text
+status=succeeded
+egress_mode=allowlist_proxy
+socket_mounted=false
+secrets_mounted=false
+evidence=m-6a964b9f57d0d3d771c40d0a valid=true
+```
+
+Afterwards, no agent, proxy, run network, or volumes with that run ID remained.
+
+Separate local Docker proxy proof returned:
+
+```json
+{"authorization": "Bearer proxy-injected-test-key"}
+```
+
+The same authority denied an unlisted destination without forwarding it. This demonstrates the proxy/key boundary, but does not yet exercise a live coding CLI's Git, package and model traffic through it.

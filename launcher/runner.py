@@ -13,6 +13,7 @@ import tempfile
 import threading
 import time
 import uuid
+import urllib.parse
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -52,6 +53,14 @@ class DockerRuntime:
         result = self._run(["network", "create", "--internal", name])
         if result.returncode != 0 and "already exists" not in result.stderr:
             raise RuntimeError(f"cannot create run network: {result.stderr}")
+
+    def ensure_bridge_network(self, name: str) -> None:
+        result = self._run(["network", "inspect", name], timeout=10)
+        if result.returncode == 0:
+            return
+        result = self._run(["network", "create", name], timeout=10)
+        if result.returncode != 0 and "already exists" not in result.stderr:
+            raise RuntimeError(f"cannot create egress network: {result.stderr}")
 
     def create_volume(self, name: str) -> None:
         result = self._run(["volume", "create", name])
@@ -185,6 +194,10 @@ class DockerRuntime:
     def remove_volume(self, name: str) -> None:
         self._run(["volume", "rm", name], timeout=10)
 
+    def stop_proxy(self, name: str) -> None:
+        self.kill(name)
+        self.remove_container(name)
+
     def copy_volume(self, volume: str, destination: Path, image: str) -> None:
         destination.mkdir(parents=True, exist_ok=True)
         self._run(
@@ -213,6 +226,51 @@ class DockerRuntime:
             raise RuntimeError(f"cannot inspect run image: {result.stderr}")
         return result.stdout.strip()
 
+    def start_proxy(
+        self,
+        *,
+        name: str,
+        egress_network: str,
+        script: Path,
+        image: str,
+        environment: dict[str, str],
+    ) -> None:
+        arguments = [
+            "run",
+            "-d",
+            "--name",
+            name,
+            "--network",
+            egress_network,
+            "--init",
+            "--cap-drop",
+            "ALL",
+            "--security-opt",
+            "no-new-privileges",
+            "--read-only",
+            "--tmpfs",
+            "/tmp:rw,noexec,nosuid,nodev,size=16m",
+            "--user",
+            "1001:1001",
+            "--entrypoint",
+            "/usr/bin/python3",
+            "--mount",
+            f"type=bind,source={script},destination=/opt/asdi/egress_proxy.py,ro",
+        ]
+        for key, value in environment.items():
+            arguments.extend(("--env", f"{key}={value}"))
+        arguments.extend((image, "/opt/asdi/egress_proxy.py"))
+        started = self._run(arguments, timeout=30)
+        if started.returncode != 0:
+            raise RuntimeError(f"cannot start egress proxy: {started.stderr}")
+
+    def connect_network(self, container: str, network: str) -> None:
+        result = self._run(["network", "connect", network, container], timeout=10)
+        if result.returncode != 0 and "already exists" not in result.stderr:
+            raise RuntimeError(
+                f"cannot attach egress proxy to run network: {result.stderr}"
+            )
+
 
 class REVKLauncher:
     """Pass 1 launcher using one isolated Docker run and one verifier."""
@@ -225,6 +283,11 @@ class REVKLauncher:
         base_branch: str = "main",
         agent_image: str = "safeclaw:cc-2.1.283",
         verifier_image: str | None = None,
+        proxy_image: str = "safeclaw-us-egress:cc-2.1.283",
+        egress_network: str = "asdi-egress",
+        egress_script: str | Path | None = None,
+        model_endpoint: str = "http://host.docker.internal:4000/v1",
+        model_key_env: str = "LITELLM_MASTER_KEY",
         runtime: DockerRuntime | None = None,
         agent_script: str | Path | None = None,
         agent_default_cost_usd: float = 0.0,
@@ -235,6 +298,18 @@ class REVKLauncher:
         self.base_branch = base_branch
         self.agent_image = agent_image
         self.verifier_image = verifier_image or agent_image
+        self.proxy_image = proxy_image
+        self.egress_network = egress_network
+        self.egress_script = Path(
+            egress_script or Path(__file__).resolve().parent / "egress_proxy.py"
+        ).resolve()
+        parsed_model = urllib.parse.urlsplit(model_endpoint)
+        self.model_base_url = model_endpoint
+        self.model_host = parsed_model.hostname or "host.docker.internal"
+        self.model_port = parsed_model.port or (
+            443 if parsed_model.scheme == "https" else 80
+        )
+        self.model_key_env = model_key_env
         self.runtime = runtime or DockerRuntime()
         self.agent_script = Path(
             agent_script or Path(__file__).resolve().parent / "agents" / "fixture_agent.py"
@@ -251,6 +326,7 @@ class REVKLauncher:
         workspace_volume = f"asdi-workspace-{short}"
         base_volume = f"asdi-base-{short}"
         container = f"asdi-agent-{short}"
+        proxy = f"asdi-egress-{short}"
         run_root = self.runs_root / run_id
         workspace = run_root / "workspace"
         evidence_stage = run_root / "evidence"
@@ -274,16 +350,48 @@ class REVKLauncher:
         self.runtime.create_volume(volume)
         self.runtime.create_volume(workspace_volume)
         self.runtime.create_volume(base_volume)
+        self.runtime.ensure_bridge_network(self.egress_network)
         self.runtime.populate_volume(workspace_volume, workspace)
         self.runtime.populate_volume(base_volume, base_export, destination="/opt/base")
         self.runtime.chown_volume(workspace_volume, "/workspace", "1001:1001")
         self.runtime.chown_volume(volume, "/evidence", "1001:1001")
+        model_key = os.environ.get(self.model_key_env)
+        proxy_environment = {
+            "ASDI_MODEL_HOST": self.model_host,
+            "ASDI_MODEL_PORT": str(self.model_port),
+            "ASDI_EGRESS_ALLOWLIST": ",".join(
+                [
+                    "github.com:443",
+                    "api.github.com:443",
+                    "objects.githubusercontent.com:443",
+                    "codeload.github.com:443",
+                    "pypi.org:443",
+                    "files.pythonhosted.org:443",
+                    "registry.npmjs.org:443",
+                    "registry.npmmirror.com:443",
+                ]
+            ),
+        }
+        if model_key:
+            proxy_environment["ASDI_MODEL_API_KEY"] = model_key
+        self.runtime.start_proxy(
+            name=proxy,
+            egress_network=self.egress_network,
+            script=self.egress_script,
+            image=self.proxy_image,
+            environment=proxy_environment,
+        )
+        self.runtime.connect_network(proxy, network)
 
         environment = {
             "ASDI_RUN_ID": run_id,
             "ASDI_EVIDENCE_DIR": "/evidence",
+            "ASDI_MODEL_BASE_URL": self.model_base_url,
             "HOME": "/tmp",
             "PATH": "/usr/local/bin:/usr/bin:/bin",
+            "HTTP_PROXY": f"http://{proxy}:8081",
+            "HTTPS_PROXY": f"http://{proxy}:8081",
+            "NO_PROXY": "localhost,127.0.0.1",
         }
         spend_limit = contract["guardrails"].get("spend_usd")
         if spend_limit is not None and self.agent_default_cost_usd > float(spend_limit):
@@ -379,7 +487,10 @@ class REVKLauncher:
                 self.runtime.remove_container(container)
         except Exception:
             self.runtime.kill(container)
+            self.runtime.stop_proxy(proxy)
             raise
+
+        self.runtime.stop_proxy(proxy)
 
         spend_limit = contract["guardrails"].get("spend_usd")
         spend_used += self.agent_default_cost_usd
@@ -451,6 +562,9 @@ class REVKLauncher:
             "container": container,
             "evidence_volume": volume,
             "workspace_volume": workspace_volume,
+            "egress_container": proxy,
+            "egress_mode": "allowlist_proxy",
+            "egress_allowlist": proxy_environment["ASDI_EGRESS_ALLOWLIST"].split(","),
             "socket_mounted": False,
             "secrets_mounted": False,
             "usage": {"turns": turns, "tokens": tokens, "spend_usd": spend_used},
