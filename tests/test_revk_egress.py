@@ -12,8 +12,10 @@ from launcher.egress_proxy import EgressAuthority, EgressHandler
 
 class ModelHandler(BaseHTTPRequestHandler):
     last_authorization: str | None = None
+    last_path: str | None = None
 
     def do_GET(self) -> None:
+        ModelHandler.last_path = self.path
         ModelHandler.last_authorization = self.headers.get("Authorization")
         payload = json.dumps({"ok": True}).encode()
         self.send_response(200)
@@ -74,6 +76,7 @@ class RevKEgressTests(unittest.TestCase):
                 ModelHandler.last_authorization,  # type: ignore[attr-defined]
                 "Bearer proxy-only-key",
             )
+            self.assertEqual(ModelHandler.last_path, "/v1/models")  # type: ignore[attr-defined]
 
             with self.assertRaisesRegex(urllib.error.HTTPError, "403"):
                 opener.open("http://example.com/forbidden", timeout=5)

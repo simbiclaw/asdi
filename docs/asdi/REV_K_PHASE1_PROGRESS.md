@@ -76,3 +76,7 @@ Added the user-directed verification remediation and specification-escalation co
 ## Independent audit response — 2026-11-17
 
 The initial audit failed candidate `df21e4e` without consuming a remediation cycle. Cycle 1 repairs the cited verifier base-volume/verify execution path, evidence provenance, external usage guardrails, CLI override validation, remediation ceiling, specification mutation boundary and subprocess timeout. Focused and full suites pass. A fresh independent audit is required before acceptance.
+
+## Update — live coding-CLI egress transport
+
+Added a live Claude Code proxy adapter, durable proxy-log capture, and a reproducible verifier fixture. The live isolated run exercised Git, npm and local-model traffic through the per-run allowlist proxy. The base verifier independently checked the generated probe and its negative control; the Stop hook recorded completion and absent credential-like environment names. Evidence manifest `m-14f6e99b3711391703429abc` remained valid after teardown. This closes the former Phase 1 live-transport gap, not Phase 1 acceptance.

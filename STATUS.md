@@ -2,7 +2,7 @@
 
 **Revision set:** REV K
 **Current pass:** Pass 1
-**Current phase:** Phase 1 — launcher and verifier (cycle 2 verifier blocked; guardrail completion)
+**Current phase:** Phase 1 — launcher and verifier (live coding-CLI egress probe complete; independent audit pending)
 
 ## Completed
 
@@ -60,11 +60,13 @@ The fresh cycle-2 verifier for candidate `19e6e2d` was stopped by the model prov
 
 Strict verifier hardening now requires a launcher-collected `result.json` bound to the run and commit, with every feature passing and its negative control caught. Live Docker negative and positive runs both produced valid content-addressed evidence; the malformed verifier stayed red and the corrected fixture succeeded.
 
-Phase 1 now has a per-run HTTP/CONNECT egress proxy attached to both the internal run network and `asdi-egress`. The agent receives only proxy URLs; the proxy performs destination authorization and injects the local model key. A live Docker run and separate proxy proof passed. A live coding CLI exercising Git/package/model traffic through this proxy is still required.
+Phase 1 now has a per-run HTTP/CONNECT egress proxy attached to both the internal run network and `asdi-egress`. The agent receives only proxy URLs; the proxy performs destination authorization and injects the local model key. A live Docker run and separate proxy proof passed.
+
+The remaining live coding-CLI gap is now closed with Claude Code `2.1.283`: run `r-b73ef259-c3e7-44ff-9d5f-1aa8d9dd77cb` used the proxy for Git, npm and local-model traffic; npm pinned `is-odd@3.0.1`; the proxy logged authorized `github.com:443` and `registry.npmjs.org:443` CONNECTs; the agent had no credential-like environment names; and the Claude Stop hook passed. The independent base-branch verifier re-ran the generated probe and caught its negative control. Evidence manifest `m-14f6e99b3711391703429abc` validated after teardown. See [`docs/asdi/REV_K_LIVE_EGRESS_CLI_EVIDENCE.md`](docs/asdi/REV_K_LIVE_EGRESS_CLI_EVIDENCE.md).
 
 ## Next
 
-Retry a fresh independent conformance audit after provider quota resets. Continue only independent Phase 1 evidence until then. Do not begin Phase 3 while the specification-sync acceptance claim remains held. The remaining Phase 1 gap is a real coding CLI run through the egress proxy, plus its no-credential and stop-hook evidence.
+Retry a fresh independent conformance audit after provider quota resets. Continue only independent Phase 1 evidence until then. Do not begin Phase 3 while the specification-sync acceptance claim remains held. The live coding-CLI proxy/no-credential/Stop-hook gap is closed by ASDI-run evidence, but Phase 1 remains unaccepted pending that independent audit.
 
 ## Boundaries
 
