@@ -44,6 +44,8 @@ Contract validation, evidence store, static-gate runner, per-run container orche
 
 **Fresh Claude adapter evidence:** builder-owned live run `r-5fc95790-5990-4b1b-bca2-842d6fe6e367` succeeded against local LiteLLM with 5 turns, 6,303 tokens and $0.027948 spend. Static and base-harness checks passed, the Stop hook was recorded, no socket/secrets were mounted, and manifest `m-6ab537ce486a96d903aa7039` remained valid after teardown. See [`docs/asdi/CLAUDE_ADAPTER_RECOVERY_EVIDENCE.md`](docs/asdi/CLAUDE_ADAPTER_RECOVERY_EVIDENCE.md).
 
+Phase 1 exit readiness is mapped criterion-by-criterion in [`docs/asdi/PHASE1_EXIT_READINESS.md`](docs/asdi/PHASE1_EXIT_READINESS.md). It is builder-tested but not independently verified or accepted.
+
 The recovery verifier again violated report-only authority and committed `5747272`. That candidate is preserved at `revk/quarantined-verifier-authority` and forward-reverted from the active branch by `5dbc40c`. Independent acceptance remains blocked until the owner selects a capability-restricted verifier mechanism. See [`docs/asdi/VERIFIER_AUTHORITY_ESCALATION.md`](docs/asdi/VERIFIER_AUTHORITY_ESCALATION.md).
 
 ## Verification remediation workflow
