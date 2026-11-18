@@ -87,41 +87,6 @@ class EvidenceStoreTests(unittest.TestCase):
             object_path.write_text("tampered\n")
             with self.assertRaises(ValueError):
                 store.verify(first["manifest_id"])
-            os.chmod(object_path, 0o444)
-            object_path.unlink()
-            object_path.write_text("observed\n")
-            object_path.chmod(0o444)
-            result_path = store.root / first["manifest_id"] / "result.json"
-            os.chmod(result_path, 0o644)
-            stored_result = json.loads(result_path.read_text())
-            stored_result["features"][0]["status"] = "fail"
-            result_path.write_text(json.dumps(stored_result))
-            with self.assertRaisesRegex(ValueError, "statement checks do not match result"):
-                store.verify(first["manifest_id"])
-            result_path.chmod(0o644)
-            result_path.write_text(json.dumps(json.loads(result_path.read_text()) | {"features": [
-                {
-                    "id": "feature:test",
-                    "status": "pass",
-                    "control": "caught",
-                    "evidence": ["output.txt", "unrecorded.txt"],
-                    "limits": ["UI not tested"],
-                }
-            ]}))
-            with self.assertRaisesRegex(ValueError, "unrecorded file"):
-                store.verify(first["manifest_id"])
-            stored_result["features"][0]["status"] = "pass"
-            stored_result["features"][0]["evidence"] = ["output.txt"]
-            result_path.write_text(json.dumps(stored_result))
-            statement_path = store.root / first["manifest_id"] / "statement.json"
-            os.chmod(statement_path, 0o644)
-            statement = json.loads(statement_path.read_text())
-            statement["predicate"]["checks"][0]["status"] = "fail"
-            statement_path.write_text(json.dumps(statement))
-            with self.assertRaisesRegex(ValueError, "statement checks do not match result"):
-                store.verify(first["manifest_id"])
-            result_path.chmod(0o444)
-            statement_path.chmod(0o444)
 
     def test_evidence_manifest_is_unique_per_run_with_provenance(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

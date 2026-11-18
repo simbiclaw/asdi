@@ -60,7 +60,7 @@ def run_checks(
             exit_code = completed.returncode
             stdout = completed.stdout
             stderr = completed.stderr
-            status = "pass" if exit_code == 0 else "fail"
+            status = "pass" if exit_code == 0 and check.get("blocking", True) else "fail"
         except subprocess.TimeoutExpired as error:
             exit_code = None
             stdout = error.stdout.decode() if isinstance(error.stdout, bytes) else str(error.stdout or "")
@@ -74,7 +74,6 @@ def run_checks(
         checks.append(
             {
                 "id": f"static:{check['id']}",
-                "blocking": bool(check.get("blocking", True)),
                 "status": status,
                 "exit_code": exit_code,
                 "duration_seconds": round(time.time() - started, 3),
@@ -86,8 +85,4 @@ def run_checks(
 
 
 def gate_passes(checks: list[dict[str, Any]]) -> bool:
-    return all(
-        item["status"] == "pass"
-        for item in checks
-        if item.get("blocking", True)
-    )
+    return bool(checks) and all(item["status"] == "pass" for item in checks)

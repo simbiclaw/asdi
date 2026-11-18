@@ -27,17 +27,7 @@ class FakeLauncher:
         run_id = "r-clitest"
         run_root = self.root / "runs" / run_id
         run_root.mkdir(parents=True, exist_ok=True)
-        state = {
-            "run_id": run_id,
-            "status": "succeeded",
-            "pid": 123456,
-            "container": "fake",
-            "network": "asdi-run-test",
-            "evidence_volume": "asdi-evidence-test",
-            "workspace_volume": "asdi-workspace-test",
-            "base_volume": "asdi-base-test",
-            "egress_container": "asdi-egress-test",
-        }
+        state = {"run_id": run_id, "status": "succeeded", "pid": 123456, "container": "fake"}
         (run_root / "launcher-state.json").write_text(json.dumps(state))
         return RunResult(
             run_id=run_id,
@@ -50,33 +40,11 @@ class FakeLauncher:
 
 
 class FakeDocker:
-    instances: list = []
-
     def __init__(self, docker: str) -> None:
         self.killed = []
-        self.stopped_proxies = []
-        self.removed_networks = []
-        self.removed_volumes = []
-        FakeDocker.instances.append(self)
 
     def kill(self, name: str) -> None:
         self.killed.append(name)
-
-    def stop_proxy(self, name: str) -> None:
-        self.stopped_proxies.append(name)
-
-    def teardown_run_resources(
-        self,
-        *,
-        network: str,
-        evidence_volume: str,
-        workspace_volume: str,
-        base_volume: str,
-    ) -> None:
-        self.removed_networks.append(network)
-        self.removed_volumes.extend(
-            [evidence_volume, workspace_volume, base_volume]
-        )
 
 
 class LauncherCliTests(unittest.TestCase):
@@ -85,7 +53,6 @@ class LauncherCliTests(unittest.TestCase):
         self.root = Path(self._temporary.name)
         self.output = __import__("io").StringIO()
         FakeLauncher.instances = []
-        FakeDocker.instances = []
 
     def tearDown(self) -> None:
         self._temporary.cleanup()
@@ -139,10 +106,3 @@ class LauncherCliTests(unittest.TestCase):
                 (self.root / "runs" / "r-clitest" / "launcher-state.json").read_text()
             )
             self.assertEqual(state["status"], "killed")
-            runtime = FakeDocker.instances[-1]
-            self.assertEqual(runtime.stopped_proxies, ["asdi-egress-test"])
-            self.assertEqual(runtime.removed_networks, ["asdi-run-test"])
-            self.assertEqual(
-                runtime.removed_volumes,
-                ["asdi-evidence-test", "asdi-workspace-test", "asdi-base-test"],
-            )

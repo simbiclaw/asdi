@@ -80,7 +80,7 @@ class FakeRuntime(DockerRuntime):
                 {
                     "schema": 2,
                     "run_id": kwargs["environment"]["ASDI_RUN_ID"],
-                    "commit": kwargs["command"][-1],
+                    "commit": "fixture",
                     "features": [
                         {
                             "id": "generated-module",

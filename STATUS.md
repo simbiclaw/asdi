@@ -68,15 +68,8 @@ Phase 1 now has a per-run HTTP/CONNECT egress proxy attached to both the interna
 
 The remaining live coding-CLI gap is now closed with Claude Code `2.1.283`: run `r-b73ef259-c3e7-44ff-9d5f-1aa8d9dd77cb` used the proxy for Git, npm and local-model traffic; npm pinned `is-odd@3.0.1`; the proxy logged authorized `github.com:443` and `registry.npmjs.org:443` CONNECTs; the agent had no credential-like environment names; and the Claude Stop hook passed. The independent base-branch verifier re-ran the generated probe and caught its negative control. Evidence manifest `m-14f6e99b3711391703429abc` validated after teardown. See [`docs/asdi/REV_K_LIVE_EGRESS_CLI_EVIDENCE.md`](docs/asdi/REV_K_LIVE_EGRESS_CLI_EVIDENCE.md).
 
-**Builder hardening update (2026-11-17):** the REV K launcher now records a terminal `failed` or `guardrail_exceeded` state for launch, agent, verifier and evidence failures; persists the launcher PID and complete run-resource inventory; and tears down the agent/proxy/network/volumes on normal, failed and killed paths. `launcher kill` now cleans all persisted run resources. Static-gate results preserve `blocking`, only blocking checks authorize green, and timeout remains `error`. The evidence verifier now rejects schema/result mismatch, statement/result disagreement, unsafe or unrecorded object paths, altered hashes or sizes, missing environment/tool bindings, and feature evidence without a matching stored object. The egress proxy connects to the address validated during destination authorization, closing a hostname re-resolution/DNS-rebinding window.
-
-## Loop A human hold
-
-Both remediation cycles are exhausted. Two verifier agents crossed their read-only authority and implemented work instead of returning only findings; the latest verifier-overreach commit is local-only `b5c187d`. Root independently validated 100/100 tests with four expected skips, but this is not independent acceptance. Phase 1 acceptance, Phase 3, merge, deployment and exposure are held pending owner direction. See [`docs/asdi/LOOP_A_ESCALATION.md`](docs/asdi/LOOP_A_ESCALATION.md).
-
 ## Next
-
-Wait for explicit owner direction on [`docs/asdi/LOOP_A_ESCALATION.md`](docs/asdi/LOOP_A_ESCALATION.md). No further affected implementation, verifier retry, merge, deployment or exposure may proceed until then. The former specification-sync hold is resolved, but Phase 1 remains unaccepted. The latest hardening slice has local evidence only: 100 tests passed and four host-sensitive socket-binding tests were skipped; this is not an independent audit or phase-acceptance claim.
+Executing the owner's Option 3 decision with Option 2 preservation mechanics. All overreach candidates are retained at [`revk/preserved-verifier-overreach`](https://github.com/simbiclaw/asdi/tree/revk/preserved-verifier-overreach); the active PR branch is receiving non-destructive forward reverts before a fresh builder cycle and read-only audit.
 
 ## Boundaries
 

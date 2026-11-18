@@ -70,12 +70,12 @@ class EgressHandler(BaseHTTPRequestHandler):
 
     def do_CONNECT(self) -> None:
         host, port = self._split_authority(self.path, 443)
-        allowed, reason, addresses = self.authority.decide(host, port)
+        allowed, reason, _addresses = self.authority.decide(host, port)
         if not allowed:
             self.send_error(403, reason)
             return
         try:
-            remote = socket.create_connection((addresses[0], port), timeout=15)
+            remote = socket.create_connection((host, port), timeout=15)
         except OSError:
             self.send_error(502, "connect_failed")
             return
@@ -108,7 +108,7 @@ class EgressHandler(BaseHTTPRequestHandler):
             return
         host = parsed.hostname.lower()
         port = parsed.port or 80
-        allowed, reason, addresses = self.authority.decide(host, port)
+        allowed, reason, _addresses = self.authority.decide(host, port)
         if not allowed:
             self.send_error(403, reason)
             return
@@ -124,7 +124,7 @@ class EgressHandler(BaseHTTPRequestHandler):
         if host == self.authority.model_host and self.authority.model_key:
             headers["Authorization"] = f"Bearer {self.authority.model_key}"
         try:
-            connection = http.client.HTTPConnection(addresses[0], port, timeout=30)
+            connection = http.client.HTTPConnection(host, port, timeout=30)
             origin_path = parsed.path or "/"
             if parsed.query:
                 origin_path += "?" + parsed.query

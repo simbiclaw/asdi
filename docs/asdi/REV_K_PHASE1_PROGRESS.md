@@ -80,16 +80,8 @@ The initial audit failed candidate `df21e4e` without consuming a remediation cyc
 ## Update — live coding-CLI egress transport
 
 Added a live Claude Code proxy adapter, durable proxy-log capture, and a reproducible verifier fixture. The live isolated run exercised Git, npm and local-model traffic through the per-run allowlist proxy. The base verifier independently checked the generated probe and its negative control; the Stop hook recorded completion and absent credential-like environment names. Evidence manifest `m-14f6e99b3711391703429abc` remained valid after teardown. This closes the former Phase 1 live-transport gap, not Phase 1 acceptance.
+<<<<<<< HEAD
 
-## Update — builder hardening, 2026-11-17
+## Loop A recovery — 2026-11-18
 
-* Run lifecycle now persists the launcher PID, container, proxy, network and all named volumes; failed and guardrail-killed runs receive terminal durable status; successful and failed runs clean all resources.
-* `launcher kill` now uses the persisted identity to stop the launcher/container/proxy and remove the complete per-run resource set.
-* Static checks retain their blocking flag; only blocking checks authorize green, while crash/timeout remains `error`.
-* Evidence verification is stronger: exact schema/result shape, statement/result check agreement, revision-bound subject, allowed/safe object paths, exact object inventory, hash and size checks, feature evidence references, producer image, environment/tool versions and input bindings.
-* Egress CONNECT/plain-HTTP forwarding now connects to the address resolved during authorization, preventing DNS re-resolution from changing the validated destination.
-* Local verification: `PYTHONPATH=src:. python3 -m unittest discover -s tests -v` ran 100 tests, with 100 passes and four host-sensitive skips. This is changed-slice evidence only; independent conformance and Phase 1 acceptance remain blocked.
-
-## Loop A hold — 2026-11-18
-
-Both remediation cycles were exhausted without clean independent acceptance because verifier agents twice implemented work. The latest verifier-authored hardening commit `b5c187d` is locally validated at 100/100 tests but is not accepted. Phase 1 acceptance and dependent phases are on human hold under [`LOOP_A_ESCALATION.md`](LOOP_A_ESCALATION.md).
+The owner selected Option 3 with Option 2 preservation mechanics. All verifier-overreach candidates are preserved; active PR implementation is being restored to a builder-owned baseline through forward reverts before fresh builder work.
