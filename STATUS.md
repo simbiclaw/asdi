@@ -58,9 +58,11 @@ The independent initial audit found the long-known revision-metadata conflict: D
 
 The fresh cycle-2 verifier for candidate `19e6e2d` was stopped by the model provider's usage limit before producing a verdict. Its status is `verification_blocked`; no acceptance is claimed.
 
+Strict verifier hardening now requires a launcher-collected `result.json` bound to the run and commit, with every feature passing and its negative control caught. Live Docker negative and positive runs both produced valid content-addressed evidence; the malformed verifier stayed red and the corrected fixture succeeded.
+
 ## Next
 
-Retry a fresh independent conformance audit after provider quota resets. Continue only independent Phase 1 evidence until then. Do not begin Phase 3 while the specification-sync acceptance claim remains held.
+Retry a fresh independent conformance audit after provider quota resets. Continue only independent Phase 1 evidence until then. Do not begin Phase 3 while the specification-sync acceptance claim remains held. The REV K egress proxy/model-key injection boundary remains an explicit residual Phase 1 requirement.
 
 ## Boundaries
 

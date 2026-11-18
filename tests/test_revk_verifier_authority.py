@@ -82,10 +82,65 @@ class VerifierAuthorityTests(unittest.TestCase):
             self.assertEqual(check["exit_code"], 0)
             docker_invocations = fake_log.read_text().splitlines()
             self.assertTrue(docker_invocations)
+            self.assertIn(f"ASDI_COMMIT={launcher._head()}", docker_invocations)
             self.assertTrue(
-                all("destination=/opt/base,readonly" in line for line in docker_invocations if "asdi-base-fixture" in line)
+                all(
+                    "destination=/opt/base,readonly" in line
+                    for line in docker_invocations
+                    if "asdi-base-fixture" in line
+                )
             )
-            self.assertFalse(any("destination=/opt/base:ro" in line for line in docker_invocations))
+            self.assertFalse(
+                any("destination=/opt/base:ro" in line for line in docker_invocations)
+            )
+
+    def test_green_verify_exit_requires_bound_caught_feature_result(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            workspace = Path(temporary)
+            evidence = workspace / ".asdi-evidence"
+            evidence.mkdir()
+            result_path = evidence / "result.json"
+            expected = [
+                ("missing", None, "error", "result.json"),
+                ("wrong_run", {"schema": 2, "run_id": "r-other", "commit": "c" * 40, "features": []}, "fail", "run_id mismatch"),
+                (
+                    "valid",
+                    {
+                        "schema": 2,
+                        "run_id": "r-fixture",
+                        "commit": "c" * 40,
+                        "features": [
+                            {
+                                "id": "feature:test",
+                                "status": "pass",
+                                "control": "caught",
+                                "evidence": ["output.txt"],
+                                "limits": ["fixture"],
+                            }
+                        ],
+                    },
+                    "pass",
+                    None,
+                ),
+            ]
+            for _name, value, expected_status, expected_error in expected:
+                if value is None:
+                    result_path.unlink(missing_ok=True)
+                else:
+                    result_path.write_text(json.dumps(value))
+                verify_check = {"id": "verify:base-harness", "status": "pass"}
+                verifier_result = {}
+                REVKLauncher._collect_verify_result(
+                    workspace=workspace,
+                    run_id="r-fixture",
+                    commit="c" * 40,
+                    verify_check=verify_check,
+                    verifier_result=verifier_result,
+                )
+                self.assertEqual(verify_check["status"], expected_status)
+                if expected_error:
+                    self.assertIn(expected_error, verify_check["stderr"])
+            self.assertEqual(verifier_result["features"][0]["id"], "feature:test")
 
     def test_successful_agent_cannot_overturn_red_verifier(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

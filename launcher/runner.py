@@ -389,10 +389,12 @@ class REVKLauncher:
 
         self.runtime.copy_volume(volume, evidence_stage, self.verifier_image)
 
+        verifier_result: dict[str, Any] = {}
         checks = self._verify_head(
             run_id=run_id,
             workspace=workspace,
             base_volume=base_volume,
+            verifier_result=verifier_result,
         )
         passed = agent_exit == 0 and all(check["status"] == "pass" for check in checks)
         status = "succeeded" if passed else "failed"
@@ -403,15 +405,18 @@ class REVKLauncher:
                     "schema": 2,
                     "run_id": run_id,
                     "commit": self._head(),
-                    "features": [
-                        {
-                            "id": "lifecycle-smoke",
-                            "status": "pass" if passed else "fail",
-                            "control": "caught",
-                            "evidence": ["agent.stdout.log", "static-gates.json"],
-                            "limits": ["Pass 1 fixture checks only"],
-                        }
-                    ],
+                    "features": verifier_result.get(
+                        "features",
+                        [
+                            {
+                                "id": "lifecycle-smoke",
+                                "status": "pass" if passed else "fail",
+                                "control": "caught",
+                                "evidence": ["agent.stdout.log", "static-gates.json"],
+                                "limits": ["Pass 1 fixture checks only"],
+                            }
+                        ],
+                    ),
                 },
                 indent=2,
                 sort_keys=True,
@@ -493,6 +498,7 @@ class REVKLauncher:
         run_id: str,
         workspace: Path,
         base_volume: str,
+        verifier_result: dict[str, Any],
     ) -> list[dict[str, Any]]:
         with tempfile.TemporaryDirectory() as temporary:
             base = Path(temporary) / "base"
@@ -502,6 +508,8 @@ class REVKLauncher:
             if not gates_path.is_file():
                 raise RuntimeError("base branch is missing static-gates manifest")
             manifest = _minimal_yaml(gates_path.read_text())
+            short = run_id.removeprefix("r-").replace("-", "")[:16]
+            workspace_volume = f"asdi-workspace-{short}"
             checks = run_container_checks(
                 docker=self.runtime.docker,
                 image=self.verifier_image,
@@ -509,7 +517,7 @@ class REVKLauncher:
                 run_id=run_id,
                 commit=self._head(),
                 mounts=[
-                    f"type=volume,source=asdi-workspace-{run_id.removeprefix('r-').replace('-', '')[:16]},destination=/workspace",
+                    f"type=volume,source={workspace_volume},destination=/workspace",
                     f"type=volume,source={base_volume},destination=/opt/base,readonly",
                 ],
             )
@@ -519,6 +527,14 @@ class REVKLauncher:
                 base_volume=base_volume,
             )
             checks.append(verify_check)
+            self.runtime.copy_volume(workspace_volume, workspace, self.verifier_image)
+            self._collect_verify_result(
+                workspace=workspace,
+                run_id=run_id,
+                commit=self._head(),
+                verify_check=verify_check,
+                verifier_result=verifier_result,
+            )
             (workspace / ".asdi-evidence" / "static-gates.json").parent.mkdir(
                 parents=True, exist_ok=True
             )
@@ -526,6 +542,49 @@ class REVKLauncher:
                 json.dumps({"run_id": run_id, "checks": checks}, indent=2, sort_keys=True) + "\n"
             )
             return checks
+
+    @staticmethod
+    def _collect_verify_result(
+        *,
+        workspace: Path,
+        run_id: str,
+        commit: str,
+        verify_check: dict[str, Any],
+        verifier_result: dict[str, Any],
+    ) -> None:
+        result_path = workspace / ".asdi-evidence" / "result.json"
+        if verify_check.get("status") != "pass":
+            return
+        try:
+            observed = json.loads(result_path.read_text())
+        except (FileNotFoundError, json.JSONDecodeError) as error:
+            verify_check["status"] = "error"
+            verify_check["stderr"] = (
+                f"base verifier did not produce valid result.json: {error}"
+            )
+            return
+        failures: list[str] = []
+        if observed.get("schema") != 2:
+            failures.append("schema must be 2")
+        if observed.get("run_id") != run_id:
+            failures.append("run_id mismatch")
+        if observed.get("commit") != commit:
+            failures.append("commit mismatch")
+        features = observed.get("features")
+        if not isinstance(features, list) or not features:
+            failures.append("features must be a non-empty array")
+        for feature in features or []:
+            if feature.get("status") != "pass":
+                failures.append(f"feature {feature.get('id')} is not pass")
+            if feature.get("control") != "caught":
+                failures.append(f"feature {feature.get('id')} control was not caught")
+            if not feature.get("limits"):
+                failures.append(f"feature {feature.get('id')} has no limits")
+        if failures:
+            verify_check["status"] = "fail"
+            verify_check["stderr"] = "; ".join(failures)
+            return
+        verifier_result.update(observed)
 
     def _run_base_verify(
         self,
@@ -569,6 +628,8 @@ class REVKLauncher:
             "/workspace",
             "--env",
             f"ASDI_RUN_ID={run_id}",
+            "--env",
+            f"ASDI_COMMIT={self._head()}",
             "--env",
             "ASDI_HEAD=/workspace",
             "--env",

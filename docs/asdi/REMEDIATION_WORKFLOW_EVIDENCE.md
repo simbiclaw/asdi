@@ -1,7 +1,7 @@
 # Remediation and specification-escalation workflow evidence
 
 **Date:** 2026-11-18
-**Result:** **Initial audit failed; cycle 2 verifier unavailable; guardrail completion in progress**
+**Result:** **Initial audit failed; cycle 2 verifier unavailable; Phase 1 hardening continuing**
 
 ## Implemented behavior
 
@@ -159,3 +159,39 @@ OK (skipped=3)
 ```
 
 These additions are post-cycle-2 candidate work. They do not satisfy Loop A acceptance until a fresh independent verifier audits the resulting exact revision.
+
+## Strict structured verifier evidence
+
+After the guardrail additions, the base verifier was tightened further:
+
+- the launcher copies back the head workspace volume;
+- a zero-exit verifier without valid `result.json` becomes `error`;
+- result `run_id` and commit must exactly match the launcher run;
+- feature controls must be `pass` and `caught`, with non-empty limits;
+- launcher-stored evidence uses the verifier-collected features rather than a generic success claim;
+- the verifier receives the exact head commit through `ASDI_COMMIT`.
+
+Two live Docker executions used the actual CLI path, `safeclaw:cc-2.1.283`, one internal run network, workspace/evidence volumes, non-root execution, and no Docker socket or mounted secrets.
+
+Negative live run `r-3fc589fe-74b0-497f-9300-1ee2daaa19ec`:
+
+```text
+static:compile=pass
+verify:base-harness=fail
+status=failed
+evidence=m-26fb9dc672a6f941160b4910 valid=true
+```
+
+The first fixture verifier incorrectly treated the exported head as a Git repository. The launcher correctly kept the run red and stored a valid fail statement.
+
+Positive live run `r-49d8a0a6-5bc4-4981-a558-cf61d8375cee`:
+
+```text
+static:compile=pass
+verify:base-harness=pass
+feature=generated-module control=caught
+status=succeeded
+evidence=m-e4e4479b58045d884320029b valid=true
+```
+
+Both manifests were reloaded after teardown and passed SHA-256 verification. Usage was externally recorded as one turn, one token, and `$0.00` local spend.
