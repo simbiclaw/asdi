@@ -135,6 +135,7 @@ class RevKGuardrailTests(unittest.TestCase):
                 launcher.run(path)
             self.assertIn("asdi-run-", runtime.kwargs["network"])
             self.assertNotIn("/var/run/docker.sock", str(runtime.kwargs["binds"]))
+            self.assertEqual(self.one_state(root)["status"], "guardrail_exceeded")
 
     def test_spend_guardrail_blocks_launch(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -165,6 +166,7 @@ class RevKGuardrailTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "token guardrail"):
                 launcher.run(path)
             self.assertTrue(runtime.killed)
+            self.assertEqual(self.one_state(root)["status"], "guardrail_exceeded")
 
     def test_runtime_spend_guardrail_kills_agent(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -180,6 +182,7 @@ class RevKGuardrailTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "spend guardrail"):
                 launcher.run(path)
             self.assertTrue(runtime.killed)
+            self.assertEqual(self.one_state(root)["status"], "guardrail_exceeded")
 
     def test_wall_clock_guardrail_kills_hanging_agent(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -202,6 +205,7 @@ class RevKGuardrailTests(unittest.TestCase):
                 with self.assertRaisesRegex(RuntimeError, "wall-clock guardrail"):
                     launcher.run(path)
             self.assertTrue(runtime.killed)
+            self.assertEqual(self.one_state(root)["status"], "guardrail_exceeded")
 
     def test_verifier_command_has_no_model_credentials(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -229,3 +233,9 @@ class RevKGuardrailTests(unittest.TestCase):
             arguments = recorded.read_text()
             self.assertNotIn("API_KEY", arguments.upper())
             self.assertNotIn("TOKEN", arguments.upper())
+
+    @staticmethod
+    def one_state(root: Path) -> dict:
+        paths = list((root / "asdi" / "runs").glob("*/launcher-state.json"))
+        assert len(paths) == 1
+        return json.loads(paths[0].read_text())

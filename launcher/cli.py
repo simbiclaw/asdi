@@ -109,6 +109,25 @@ def main(argv: list[str] | None = None) -> int:
         container = state.get("container")
         if container:
             runtime.kill(container)
+        proxy = state.get("egress_container")
+        if proxy and hasattr(runtime, "stop_proxy"):
+            runtime.stop_proxy(proxy)
+        network = state.get("network")
+        evidence_volume = state.get("evidence_volume")
+        workspace_volume = state.get("workspace_volume")
+        base_volume = state.get("base_volume")
+        if all(isinstance(item, str) and item for item in (
+            network,
+            evidence_volume,
+            workspace_volume,
+            base_volume,
+        )) and hasattr(runtime, "teardown_run_resources"):
+            runtime.teardown_run_resources(
+                network=network,
+                evidence_volume=evidence_volume,
+                workspace_volume=workspace_volume,
+                base_volume=base_volume,
+            )
         state["status"] = "killed"
         state["killed_at"] = __import__("time").time()
         from launcher.state import atomic_json

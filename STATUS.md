@@ -64,9 +64,11 @@ Phase 1 now has a per-run HTTP/CONNECT egress proxy attached to both the interna
 
 The remaining live coding-CLI gap is now closed with Claude Code `2.1.283`: run `r-b73ef259-c3e7-44ff-9d5f-1aa8d9dd77cb` used the proxy for Git, npm and local-model traffic; npm pinned `is-odd@3.0.1`; the proxy logged authorized `github.com:443` and `registry.npmjs.org:443` CONNECTs; the agent had no credential-like environment names; and the Claude Stop hook passed. The independent base-branch verifier re-ran the generated probe and caught its negative control. Evidence manifest `m-14f6e99b3711391703429abc` validated after teardown. See [`docs/asdi/REV_K_LIVE_EGRESS_CLI_EVIDENCE.md`](docs/asdi/REV_K_LIVE_EGRESS_CLI_EVIDENCE.md).
 
+**Builder hardening update (2026-11-17):** the REV K launcher now records a terminal `failed` or `guardrail_exceeded` state for launch, agent, verifier and evidence failures; persists the launcher PID and complete run-resource inventory; and tears down the agent/proxy/network/volumes on normal, failed and killed paths. `launcher kill` now cleans all persisted run resources. Static-gate results preserve `blocking`, only blocking checks authorize green, and timeout remains `error`. The evidence verifier now rejects schema/result mismatch, statement/result disagreement, unsafe or unrecorded object paths, altered hashes or sizes, missing environment/tool bindings, and feature evidence without a matching stored object. The egress proxy connects to the address validated during destination authorization, closing a hostname re-resolution/DNS-rebinding window.
+
 ## Next
 
-Retry a fresh independent conformance audit after provider quota resets. Continue only independent Phase 1 evidence until then. Do not begin Phase 3 while the specification-sync acceptance claim remains held. The live coding-CLI proxy/no-credential/Stop-hook gap is closed by ASDI-run evidence, but Phase 1 remains unaccepted pending that independent audit.
+Retry a fresh independent conformance audit after provider quota resets. Continue only independent Phase 1 evidence until then. Do not begin Phase 3 while the specification-sync acceptance claim remains held. The live coding-CLI proxy/no-credential/Stop-hook gap is closed by ASDI-run evidence, but Phase 1 remains unaccepted pending that independent audit. The 2026-11-17 hardening slice has local evidence only: 100 unittests passed and four host-sensitive socket-binding tests were skipped; this is not an independent audit or phase-acceptance claim.
 
 ## Boundaries
 
