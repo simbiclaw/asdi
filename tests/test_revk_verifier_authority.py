@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import subprocess
+from unittest import mock
 import tempfile
 import unittest
 from pathlib import Path
@@ -217,9 +218,47 @@ class VerifierAuthorityTests(unittest.TestCase):
                 runtime=runtime,
                 agent_script=AGENT,
             )
-            launcher._verify_head = lambda **kwargs: []
+            launcher._verify_head = lambda **kwargs: [
+                {"id": "static:adapter-red", "status": "fail", "exit_code": 1}
+            ]
             launcher.run(CONTRACT)
             environment = runtime.kwargs["environment"]
             for key in environment:
                 self.assertNotIn("API_KEY", key.upper())
                 self.assertNotIn("TOKEN", key.upper())
+
+    def test_claude_agent_launch_keeps_real_model_key_outside_sandbox(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            product = self.make_product(Path(temporary) / "product")
+            runtime = FakeRuntime(Path(temporary) / "workspace", Path(temporary) / "evidence")
+            launcher = REVKLauncher(
+                root=Path(temporary) / "asdi",
+                product_root=Path(temporary) / "product",
+                runtime=runtime,
+                agent_script=ROOT / "launcher/agents/fixture_agent.py",
+                agent_adapter="claude",
+            )
+            launcher._verify_head = lambda **kwargs: [
+                {"id": "static:claude-red", "status": "fail", "exit_code": 1}
+            ]
+            with mock.patch.dict(
+                "os.environ", {"LITELLM_MASTER_KEY": "proxy-only-key"}
+            ):
+                result = launcher.run(CONTRACT)
+            self.assertEqual(result.status, "failed")
+            command = runtime.kwargs["command"]
+            self.assertTrue(any("claude_adapter.py" in item for item in command))
+            self.assertIn("--model", command)
+            environment = runtime.kwargs["environment"]
+            self.assertNotIn("LITELLM_MASTER_KEY", environment)
+            self.assertNotIn("ANTHROPIC_API_KEY", environment)
+            self.assertEqual(
+                environment["ANTHROPIC_BASE_URL"], "http://host.docker.internal:4000"
+            )
+            self.assertNotIn("proxy-only-key", str(runtime.kwargs["binds"]))
+            self.assertNotIn("proxy-only-key", str(runtime.kwargs["environment"]))
+            self.assertEqual(
+                runtime.kwargs["command"][runtime.kwargs["command"].index("--model") + 1],
+                "claude-3-7-sonnet-latest",
+            )
+            self.assertEqual(runtime.proxies[0]["environment"]["ASDI_MODEL_LOCAL_NAME"], "qwen3.6-35b-dspark-local")

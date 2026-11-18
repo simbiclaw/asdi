@@ -26,6 +26,7 @@ class EgressAuthority:
     model_host: str
     model_port: int
     model_key: str | None
+    model_local_name: str | None = None
 
     @staticmethod
     def _addresses(host: str) -> tuple[str, ...]:
@@ -60,6 +61,40 @@ class EgressAuthority:
 
 class EgressHandler(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
+
+    @staticmethod
+    def forwardable_headers(headers) -> dict[str, str]:
+        excluded = {
+            "host",
+            "connection",
+            "proxy-connection",
+            "authorization",
+            "proxy-authorization",
+            "x-api-key",
+        }
+        return {
+            key: value
+            for key, value in headers.items()
+            if key.lower() not in excluded
+        }
+
+    @staticmethod
+    def rewrite_model_request(body: bytes, local_model: str | None) -> bytes:
+        if not body or not local_model:
+            return body
+        try:
+            payload = json.loads(body)
+            if isinstance(payload, dict) and "model" in payload:
+                payload["model"] = local_model
+                return json.dumps(payload, separators=(",", ":")).encode()
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            pass
+        return body
+
+    @staticmethod
+    def origin_path(parsed: urllib.parse.SplitResult) -> str:
+        path = parsed.path or "/"
+        return f"{path}?{parsed.query}" if parsed.query else path
 
     @property
     def authority(self) -> EgressAuthority:
@@ -113,18 +148,21 @@ class EgressHandler(BaseHTTPRequestHandler):
             return
         length = int(self.headers.get("Content-Length", "0"))
         body = self.rfile.read(length) if length else None
-        headers = {
-            key: value
-            for key, value in self.headers.items()
-            if key.lower()
-            not in {"host", "connection", "proxy-connection", "authorization", "proxy-authorization"}
-        }
-        headers["Host"] = self.headers.get("Host", parsed.netloc)
+        headers = self.forwardable_headers(self.headers)
+        headers["Host"] = parsed.netloc
         if host == self.authority.model_host and self.authority.model_key:
             headers["Authorization"] = f"Bearer {self.authority.model_key}"
+        if host == self.authority.model_host:
+            body = self.rewrite_model_request(body, self.authority.model_local_name)
+            if body:
+                headers["Content-Length"] = str(len(body))
+            else:
+                headers.pop("Content-Length", None)
         try:
             connection = http.client.HTTPConnection(host, port, timeout=30)
-            connection.request(method, self.path, body=body, headers=headers)
+            connection.request(
+                method, self.origin_path(parsed), body=body, headers=headers
+            )
             response = connection.getresponse()
             payload = response.read()
         except OSError as error:
@@ -195,6 +233,7 @@ def main() -> int:
         model_host=os.environ.get("ASDI_MODEL_HOST", "host.docker.internal"),
         model_port=int(os.environ.get("ASDI_MODEL_PORT", "4000")),
         model_key=os.environ.get("ASDI_MODEL_API_KEY"),
+        model_local_name=os.environ.get("ASDI_MODEL_LOCAL_NAME"),
     )
     server = ThreadingHTTPServer(("0.0.0.0", 8081), EgressHandler)
     server.asdi_authority = authority  # type: ignore[attr-defined]

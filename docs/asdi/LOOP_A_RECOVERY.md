@@ -68,3 +68,9 @@ evidence=m-c9c1d54e0ac4ee31ff13b5d5 valid=true
 The evidence statement recorded the head commit, harness commit, gate/profile hashes, verifier and run image digests, feature result, negative control and two stored objects. After container, network and volume teardown, the store again verified manifest `m-c9c1d54e0ac4ee31ff13b5d5` as valid with feature status `pass`.
 
 This is live builder-side execution evidence. It does not replace independent conformance verification or phase acceptance.
+
+## Builder-owned Claude adapter
+
+The next builder slice added isolated fixture and Claude adapter entries rather than restoring the rejected verifier-authored implementation. Pinned Claude Code 2.1.283 runs headlessly with stream events and a contract done-check stop hook; its safe proxy-routing variables survive the adapter exec, while credentials remain only in the egress proxy. The proxy now strips agent credential headers, unwraps proxy URIs to origin paths, rewrites the recognized wire alias to the configured local model and updates request length.
+
+Live isolated run `r-26fac407-98a1-41bc-ad5b-e61913487347` succeeded under external guardrails with static and base-harness verification passing. Manifest `m-a9ad5f546c34b29f80a16f8d` remained valid after teardown. The complete local suite ran 110 tests with four expected skips. This remains builder-side evidence; independent read-only audit remains required.
