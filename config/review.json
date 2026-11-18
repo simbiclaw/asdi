@@ -31,13 +31,7 @@
   "ignore_prs_created_before": "2026-11-18T08:38:16Z",
   "lease_seconds": 900,
   "max_attempts": 3,
-  "github_gate": {
-    "model": {
-      "kind": "anthropic",
-      "name": "claude-opus-5-5",
-      "family": "anthropic",
-      "effort": "high"
-    },
-    "comment": true
-  }
+  "trusted_reviewers": [
+    "simbiclaw"
+  ]
 }

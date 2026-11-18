@@ -1,56 +1,50 @@
-# ASDI review merge gate.
+# ASDI review merge gate. No stored secrets.
 #
-# OWNER OVERRIDE (DD-48, 2026-11-18): REV K C-1 and D-8 keep GitHub passive,
-# with no Actions. The owner directed that GitHub run the review as a merge
-# gate on every new PR head. This workflow is that exception. It is recorded
-# in DECISIONS.md, and the REV K documents themselves are unchanged.
+# OWNER OVERRIDE (DD-48, 2026-11-18): REV K C-1 and D-8 keep GitHub passive.
+# The owner directed a merge gate on new PRs, with the review done by Claude
+# and no API key stored in the repository. So:
+#   - the review is done by Claude in the owner's Claude Code session, which
+#     posts one verdict comment per PR, tied to the head commit;
+#   - this workflow only reads that verdict and sets the commit status
+#     "asdi/review" (pending / success / failure). It runs no model and uses
+#     only the built-in, per-run GITHUB_TOKEN.
+# Require the status check "asdi/review" in the ruleset for main.
 #
-# Safety:
-# - pull_request_target runs this workflow and the reviewer code from the BASE
-#   branch, so a PR cannot weaken its own gate (the same rule as Guide 9.3,
-#   where verify/ is read from the base branch).
-# - PR code is never checked out or executed. The diff is read through the API
-#   and reaches the model only as delimited data. The model has no tools.
-# - Make "asdi/review" a required status check in the branch ruleset for main.
+# Safety: pull_request_target and issue_comment both run this file from the
+# default branch, and the job checks out the default branch. PR code is never
+# checked out or executed, so a PR cannot change how its own gate is decided.
 name: asdi-review
 
 on:
   pull_request_target:
-    types: [opened, synchronize, reopened, ready_for_review]
+    types: [opened, synchronize, reopened, ready_for_review, converted_to_draft]
+  issue_comment:
+    types: [created, edited, deleted]
 
 permissions:
   contents: read
-  pull-requests: write # one sticky review comment; nothing else is written
+  pull-requests: read
+  statuses: write
 
 concurrency:
-  # A new head supersedes the review of the old one (Guide 9.4).
-  group: asdi-review-${{ github.event.pull_request.number }}
-  cancel-in-progress: true
+  group: asdi-review-${{ github.event.pull_request.number || github.event.issue.number }}
+  cancel-in-progress: false
 
 jobs:
-  review:
-    name: asdi/review
-    if: ${{ !github.event.pull_request.draft }}
+  status:
+    name: evaluate asdi/review
+    if: ${{ github.event_name == 'pull_request_target' || github.event.issue.pull_request }}
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 5
     steps:
-      - name: Check out the base branch (never the PR head)
+      - name: Check out the default branch (never the PR head)
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.base.sha }}
+          ref: ${{ github.event.repository.default_branch }}
           persist-credentials: false
 
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.13"
-
-      - name: Install the Anthropic SDK
-        run: python3 -m pip install --disable-pip-version-check anthropic==2.10.0
-
-      - name: Review the PR head
+      - name: Set the asdi/review status from the trusted verdict
         env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          ASDI_ARCHON_GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
-          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-        run: python3 archon/pr_review.py gate --pr "$PR_NUMBER" --sha "$PR_HEAD_SHA"
+          GITHUB_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number || github.event.issue.number }}
+        run: python3 archon/gate_status.py --pr "$PR_NUMBER"
