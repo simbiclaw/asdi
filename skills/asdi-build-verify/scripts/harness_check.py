@@ -8,6 +8,8 @@ verify launch / doctor / drive / control / cleanup yourself in a scratch copy.
 """
 import sys
 sys.dont_write_bytecode = True  # keep the skill folder unchanged
+import os as _os
+sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
 import argparse, json, os, re
 
 ap = argparse.ArgumentParser()

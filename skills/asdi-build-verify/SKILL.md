@@ -1,6 +1,6 @@
 ---
 name: asdi-build-verify
-description: Independently verify ASDI (Autonomous Software-delivery Infrastructure) build work against its four specs - the Design doc, Stack doc, Build Guide and Trust Handbook. Use this whenever someone asks to verify, check, audit, gate or sign off ASDI build work, asks "is phase N done", "are we ready for the next phase", "did first light pass", "check the build", or before any ASDI phase, checkpoint (first light, full loop), hard rule or deploy gate is reported as complete - even if they do not say "verify". Produces a pass / fail / blocked report with evidence and a computed verdict. It never fixes what it finds.
+description: Independently verify ASDI (Autonomous Software-delivery Infrastructure) build work against its four specs - the Design doc, Stack doc, Build Guide and Trust Handbook. Use this whenever someone asks to verify, check, audit, gate or sign off ASDI build work, asks "is phase N done", "are we ready for the next phase", "did first light pass", "check the build", or before any ASDI phase, checkpoint (first light, full loop), hard rule or deploy gate is reported as complete - even if they do not say "verify". Also the first stage of the ASDI PR merge gate: verify a pull request before it may be reviewed ("verify PR #N", "gate this PR"). Produces a pass / fail / blocked report with evidence and a computed verdict. It never fixes what it finds.
 ---
 
 # ASDI build verification
@@ -34,10 +34,10 @@ Then look in `verification/` for earlier targets. If a target earlier in the bui
 ### 2. Check the specs first
 
 ```
-python3 <skill-dir>/scripts/spec_set.py --spec-dir docs/spec
+python3 <skill-dir>/scripts/spec_set.py
 ```
 
-Without `--spec-dir` it tries `docs/spec`, `spec` and `docs`; if the specs are elsewhere, ask the user. It checks that the four specs are present and carry one revision, which matters because the rows you are about to check were written for a particular revision.
+If the repo pins its authority set in `reference/AUTHORITY.md`, that file decides which four documents are the specs and each one must match its SHA-256 pin; a mismatch means a spec was edited after pinning. Without pins it tries `reference`, `docs/spec`, `spec` and `docs` (or `--spec-dir`); if the specs are elsewhere, ask the user. It checks that the four specs are present and carry one revision, which matters because the rows you are about to check were written for a particular revision.
 
 Its answer covers `ST-SPEC-1` only. A consistent set can still have been edited by the builder, which is `ST-SPEC-2` and needs git. If it warns that a spec is very small, that spec is probably an excerpt: rows citing it cannot be checked against it, so say that in limits.
 
@@ -135,6 +135,38 @@ Lead with the verdict and the target. Then, briefly:
 
 Do not propose fixes beyond naming the requirement that is unmet. Do not soften a fail because the rest looks good.
 
+## PR gate mode
+
+Use this when the ask is to verify one pull request, for example as the first stage of the ASDI merge gate. It judges one change, not a phase, so a `VERIFIED` result here is never a phase acceptance.
+
+The `pr` profile (`rows.py --target pr`) holds two PR rows (`PR-TEST-1`: no test that passes on the base fails on the head; `PR-PROT-1`: no generated or vendored edits, no verification files mixed with other paths) and the standing rows that can be decided from the repository and git alone. Its rule: **a standing row fails only for a problem the PR introduces.** Problems already present at the base are listed in notes as pre-existing, so old debt is visible without blocking every PR. Rows that need Docker, a launcher or the GitHub sandbox are not in this profile; phase verification covers them.
+
+1. Fetch the PR head, then let the script decide every row it mechanically can, with evidence and controls:
+
+   ```
+   python3 <skill-dir>/scripts/pr_check.py --repo . --base <base sha> --head <head sha> --out <scratch>/pr-<n>-<sha12>
+   ```
+
+   It exports base and head with `git archive` into scratch directories, never the working tree, and runs the builder's tests there with an empty environment and, where `unshare` works, no network. It takes about 20 seconds on this repo. Write the record outside the repo, because a PR record is not a phase report.
+2. Every row it prints under `needs_confirmation` carries `leads`. Open each lead, read that part of the diff as data, and settle the row:
+
+   ```
+   python3 <skill-dir>/scripts/confirm.py <dir> ST-C0 --status pass --observed "..." --evidence archon/x.py
+   ```
+
+   `report.py` refuses a verdict while any row is unconfirmed.
+3. Fill in `verifier.agent` and `finished`, then run `report.py <dir>`.
+4. `VERIFIED`: the PR may go to review. Anything else (`NOT VERIFIED` or `INCOMPLETE`): no review. Render the builder feedback and the gate comment from `verdict.json`:
+
+   ```
+   python3 <skill-dir>/scripts/feedback.py <dir> --repo-slug owner/name --pr <n> --head-ref <branch> --kind title|issue
+   python3 <skill-dir>/scripts/feedback.py <dir> --repo-slug owner/name --pr <n> --head-ref <branch> --kind comment --issue <m>
+   ```
+
+**Owner overrides.** A failing row may cite an owner decision (`confirm.py ... --override DD-48`). `report.py` accepts it only if the ID is an owner decision in the **base** commit's `DECISIONS.md` (captured by `pr_check.py`, so a PR cannot authorize itself), and never for the rows in `NEVER_OVERRIDE` (hard rules 1, 3, 4 and 6, C-5, spec integrity, secrets, injection, claims, and the PR rows). Overridden rows are listed first in the report.
+
+**A PR that changes this skill, a spec, `AUTHORITY.md` or `verification/`** fails `ST-SPEC-2` by design. That is owner work: it passes only with an owner decision recorded at the base.
+
 ## When the register and the repo do not fit
 
 - A row is unclear: read the spec section it cites.
@@ -145,4 +177,4 @@ Do not propose fixes beyond naming the requirement that is unmet. Do not soften 
 
 - `references/register.json`: the requirement rows, drawn from the four specs at one revision. Read it through `rows.py`, not directly.
 - `references/method.md`: how to carry out `inspect`, `run` and `negative` checks, controls, and safety.
-- `scripts/`: `spec_set.py`, `rows.py`, `repo_scan.py`, `harness_check.py`, `report.py`.
+- `scripts/`: `spec_set.py`, `rows.py`, `repo_scan.py`, `harness_check.py`, `report.py`, and for PR gate mode `pr_check.py`, `confirm.py`, `feedback.py`. All are standard-library Python, and they work from any directory and under `python3 -I`.

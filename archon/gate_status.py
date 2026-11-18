@@ -28,7 +28,7 @@ if str(ROOT) not in sys.path:
 from archon.config import load_reviewer_config  # noqa: E402
 from events.poller.github import GitHubClient  # noqa: E402
 
-MARKER = re.compile(r"<!-- asdi-review sha=([0-9a-f]{7,40}) verdict=(pass|fail|blocked) -->")
+MARKER = re.compile(r"<!-- asdi-review sha=([0-9a-f]{7,40}) verdict=(pass|fail|blocked)(?: stage=[a-z]+)? -->")
 CONTEXT = "asdi/review"
 
 

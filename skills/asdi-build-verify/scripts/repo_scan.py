@@ -1,19 +1,24 @@
 #!/usr/bin/env python3
 """Static scan of an ASDI repo. Produces LEADS for the standing rows, not verdicts.
 
-  repo_scan.py --repo . --target phase-1 [--spec-dir docs/spec]
+  repo_scan.py --repo . --target phase-1 [--spec-dir DIR]
+
+The spec directory defaults to the one reference/AUTHORITY.md pins (else reference/,
+docs/spec, spec, docs). It is not scanned: specs describe forbidden things by name,
+which would only produce noise leads.
 
 Every lead names the row it bears on and a place to look. Open that place and
 confirm before recording a status: a pattern match is not evidence on its own,
 and a clean scan does not prove a row passes.
 """
-import sys
+import sys, os
 sys.dont_write_bytecode = True  # keep the skill folder unchanged
-import argparse, fnmatch, json, os, re, subprocess
-from common import load_register, normalise_target
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import argparse, json, re, subprocess
+from common import find_spec_dir, is_text, load_register, normalise_target, owner_overrides
 
-SKIP_DIRS = {".git", "node_modules", "__pycache__", ".venv", "venv", "verification"}
-TEXT_EXT = (".py", ".sh", ".md", ".yaml", ".yml", ".json", ".toml", ".ts", ".js", ".env", ".txt", ".cfg", ".ini", "")
+SKIP_DIRS = {".git", "node_modules", "__pycache__", ".venv", "venv", "verification", ".asdi-state"}
+SKIP_PATHS = ("skills/asdi-build-verify", "reference/archive")
 EARLY_SERVICES = ["signer", "package-proxy", "probe-runner", "growthbook"]
 EARLY_PATHS = ["infra/package-proxy", "probes", "evidence/attest", "config/waivers.yaml", "config/seeds.yaml"]
 EARLY_WORDS = [("seed-suite", r"seed[-_ ]suite"), ("skill-eval", r"skill[-_ ]eval"), ("drift sweep", r"drift[-_ ]sweep"),
@@ -34,8 +39,9 @@ LAYOUT = [("phase-0", ["compose.yaml", "config", "schemas", "AGENTS.md", "CLAUDE
 ap = argparse.ArgumentParser()
 ap.add_argument("--repo", default=".")
 ap.add_argument("--target", required=True)
-ap.add_argument("--spec-dir", default="docs/spec")
+ap.add_argument("--spec-dir")
 a = ap.parse_args()
+a.spec_dir = find_spec_dir(a.repo, a.spec_dir)
 reg = load_register()
 order = reg["build_order"]
 target = normalise_target(a.target)
@@ -52,11 +58,10 @@ def rel(p):
     return os.path.relpath(p, repo)
 
 
-skip_abs = {os.path.abspath(os.path.join(repo, a.spec_dir))}
+skip_abs = {os.path.abspath(os.path.join(repo, p)) for p in (a.spec_dir,) + SKIP_PATHS}
 files = []
 for root, dirs, names in os.walk(repo):
-    dirs[:] = [x for x in dirs if x not in SKIP_DIRS and os.path.abspath(os.path.join(root, x)) not in skip_abs
-               and not (x == "asdi-build-verify")]
+    dirs[:] = [x for x in dirs if x not in SKIP_DIRS and os.path.abspath(os.path.join(root, x)) not in skip_abs]
     for n in names:
         files.append(os.path.join(root, n))
 
@@ -90,10 +95,15 @@ for ph, parts in LAYOUT:
                 lead("ST-LAYOUT-1", "expected by %s but missing: %s" % (ph, part), part)
 
 # GitHub passive, no VMs, no Kubernetes
+overrides = owner_overrides(repo)
+c1_overrides = sorted(k for k, v in overrides.items() if "C-1" in v)
+info["owner_overrides"] = sorted(overrides)
 for f in files:
     r = rel(f)
     if "/.github/workflows/" in "/" + r:
-        lead("ST-C1", "GitHub Actions workflow present", r)
+        lead("ST-C1", "GitHub Actions workflow present" +
+             (" (owner decisions mentioning C-1: %s; confirm one covers this file)" % ", ".join(c1_overrides)
+              if c1_overrides else ""), r)
     b = os.path.basename(f).lower()
     if b == "vagrantfile" or b.endswith(".lima.yaml") or b in ("kustomization.yaml", "chart.yaml"):
         lead("ST-C3", "VM or Kubernetes config present", r)
@@ -161,7 +171,7 @@ info["full_loop_verified_report"] = full_loop
 
 for f in files:
     r = rel(f)
-    if not f.lower().endswith(TEXT_EXT):
+    if not is_text(f):
         continue
     t = read(f)
     if not t:

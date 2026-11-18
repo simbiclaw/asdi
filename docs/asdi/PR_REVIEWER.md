@@ -49,19 +49,54 @@ This overrides C-1 and D-8 (GitHub passive, local poller). It is recorded as DD-
 2. In the ruleset for `main`, require the status check **`asdi/review`**. ADR-0004 records that you had declined GitHub-native enforcement; a merge gate needs it.
 3. Nothing else: no secret to add.
 
-## Review procedure (what the session does on each wake)
+## Pipeline on each new PR head (DD-49: verify, then review)
 
-1. List open PRs. Skip #1 and #2, PRs opened before the cutoff, and drafts.
-2. For each remaining PR, read its comments. Skip it if a `simbiclaw` comment already carries the marker for the current head.
-3. `git fetch origin pull/<n>/head`, then diff the merge base against the head.
-4. Review the diff. Write `{"findings": [...]}`.
-5. Run:
+```
+new PR head ──► 1. VERIFY  skills/asdi-build-verify, `pr` profile
+                  │ VERIFIED                         │ NOT VERIFIED / INCOMPLETE
+                  ▼                                  ▼
+               2. REVIEW  (contract, correctness,   3. FEEDBACK  no review;
+                  security) → verdict comment          • issue "ASDI verify feedback: PR #n …"
+                  pass / fail / blocked                  labels asdi-verify-feedback, codex,
+                                                         machine-readable task for local Codex
+                                                       • gate comment verdict=fail stage=verify
+                  └───────────────┬─────────────────────┘
+                                  ▼
+               GitHub workflow sets the required `asdi/review` status from the latest trusted verdict
+```
 
-   ```bash
-   python3 archon/pr_review.py verdict --pr <n> --sha <head> --diff-file <diff> --findings-file <json> --out <body.md>
-   ```
+### 1. Verify
 
-6. Post `body.md` by updating the existing verdict comment, or adding one. Subscribe to the PR's activity.
+```bash
+python3 skills/asdi-build-verify/scripts/pr_check.py --repo . --base <base sha> --head <head sha> --out <scratch>/pr-<n>-<sha12>
+```
+
+- **Which rows:** the `pr` profile has 18 rows at phase 1. Two are for PRs only: PR-TEST-1 (no test that passes at the base fails at the head) and PR-PROT-1 (protected paths). The other 16 are the standing rows that can be decided from the repo and git.
+- **What fails a PR:** only a problem the PR introduces. Problems already on the base are listed as pre-existing.
+- **How the builder's code runs:** in `git archive` scratch copies, with an empty environment and no network.
+- **What it fills in:** every row it can decide, with evidence and controls. Each remaining row is marked `needs_confirmation` with its leads. The session opens those leads, settles each row with `confirm.py`, then runs `report.py`.
+- **Speed:** about 20 seconds on this repo, mostly the two test runs.
+
+### 2. Review (only after VERIFIED)
+
+```bash
+python3 archon/pr_review.py verdict --pr <n> --sha <head> --diff-file <diff> --findings-file <json> --verification-dir <record> --out <body.md>
+```
+
+`verdict` refuses to render a review unless the record is VERIFIED for this exact head. The comment states the verification result.
+
+### 3. Feedback (verification not passed)
+
+```bash
+python3 skills/asdi-build-verify/scripts/feedback.py <record> --repo-slug simbiclaw/asdi --pr <n> --head-ref <branch> --kind title|issue
+```
+
+```bash
+python3 skills/asdi-build-verify/scripts/feedback.py <record> --repo-slug simbiclaw/asdi --pr <n> --head-ref <branch> --kind comment --issue <m>
+```
+
+- **The issue:** one per PR. A later failing head updates the same issue. It carries a fenced `asdi-verify-feedback` JSON task. `AGENTS.md` tells Codex how to react, and that it must not edit specs, the skill or reports.
+- **When the PR is fixed:** once a later head passes verification, the issue is closed with a comment naming the passing head.
 
 ## Evidence (2026-11-18)
 

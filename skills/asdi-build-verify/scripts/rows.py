@@ -8,6 +8,8 @@
 """
 import sys
 sys.dont_write_bytecode = True  # keep the skill folder unchanged
+import os as _os
+sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
 import argparse, datetime, json, os, sys
 from common import load_register, normalise_target, select
 
@@ -16,19 +18,20 @@ ap.add_argument("--target")
 ap.add_argument("--json", action="store_true")
 ap.add_argument("--init", metavar="DIR")
 ap.add_argument("--list", action="store_true")
+ap.add_argument("--phase", help="target pr only: the phase the repo is in (default phase-0)")
 a = ap.parse_args()
 reg = load_register()
 
 if a.list:
     print("Build order:", " -> ".join(reg["build_order"]))
     print("Pass 2 items:", ", ".join(reg["pass2_targets"]))
-    print("Also: standing (the always-on rows only)")
+    print("Also: standing (the always-on rows only), pr (PR gate profile; see SKILL.md, PR gate mode)")
     sys.exit(0)
 if not a.target:
     ap.error("--target is required (or use --list)")
 
 target = normalise_target(a.target)
-rows = select(reg, target)
+rows = select(reg, target, normalise_target(a.phase) if a.phase else None)
 
 if a.init:
     os.makedirs(os.path.join(a.init, "evidence"), exist_ok=True)
