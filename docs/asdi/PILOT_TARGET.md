@@ -7,7 +7,7 @@
 
 ## Finding
 
-The inspected repository contained only [`ASDI_Codex_Implementation_Backlog_REV_H_G.md`](../../ASDI_Codex_Implementation_Backlog_REV_H_G.md) and the discovery artifacts added under `docs/asdi/`. It had no Git history at audit time and no deployable product, service, API, package manifest, Dockerfile, database, test suite, CI, metrics endpoint, feature-flag surface, or controlled defect path.
+The inspected repository contained only the historical REV H/G backlog, now archived at [`reference/archive/ASDI_Codex_Implementation_Backlog_REV_H_G.md`](../../reference/archive/ASDI_Codex_Implementation_Backlog_REV_H_G.md), and the discovery artifacts added under `docs/asdi/`. It had no Git history at audit time and no deployable product, service, API, package manifest, Dockerfile, database, test suite, CI, metrics endpoint, feature-flag surface, or controlled defect path.
 
 The owner designated the private repository `simbiclaw/asdi` as the ASDI repository. That repository remains the ASDI platform/control repository, not yet a selected pilot product. It still has no deployable product or service, so a synthetic reference service is **not** created because the backlog requires explicit owner approval before inventing one.
 

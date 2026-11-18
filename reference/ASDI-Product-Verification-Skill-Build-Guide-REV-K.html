@@ -1,0 +1,1270 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Implementation guide for building project-specific verification skills and harnesses consumed by ASDI's independent verifier.">
+<title>ASDI Product Verification Skill Build Guide · REV K</title>
+<style>
+:root{--bg:#f4f6f8;--paper:#fff;--ink:#17212b;--muted:#5f6c79;--line:#dce3e9;--accent:#176b63;--accent-soft:#e9f4f1;--blue:#215e93;--blue-soft:#edf4fb;--warn:#895c12;--warn-soft:#fff5df;--code:#111b25;--code-ink:#e8eef4;--shadow:0 12px 32px rgba(22,36,50,.07)}
+*{box-sizing:border-box} html{scroll-behavior:smooth} body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.68 Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+a{color:var(--blue);text-decoration:none}a:hover{text-decoration:underline}
+.hero{background:linear-gradient(120deg,#122c3a,#174c52 62%,#246c65);color:#fff;padding:54px 24px 44px}
+.hero-inner{max-width:1240px;margin:auto;display:grid;grid-template-columns:minmax(0,1fr) 310px;gap:36px;align-items:end}
+.eyebrow{text-transform:uppercase;letter-spacing:.15em;font-size:12px;font-weight:800;color:#b8d8d2}
+h1{font-size:clamp(34px,5vw,58px);line-height:1.06;letter-spacing:-.04em;margin:12px 0 18px;max-width:850px}
+.lede{font-size:19px;color:#e0eceb;max-width:850px;margin:0}
+.meta{display:flex;gap:8px;flex-wrap:wrap;margin-top:24px}
+.pill{border:1px solid rgba(255,255,255,.24);background:rgba(255,255,255,.09);border-radius:999px;padding:5px 10px;font-size:12px;color:#edf7f5}
+.hero-note{background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);border-radius:14px;padding:18px;color:#edf7f5;font-size:14px}
+.layout{max-width:1380px;margin:28px auto;padding:0 22px;display:grid;grid-template-columns:270px minmax(0,1fr);gap:26px;align-items:start}
+nav{position:sticky;top:18px;max-height:calc(100vh - 36px);overflow:auto;background:var(--paper);border:1px solid var(--line);border-radius:14px;padding:18px;box-shadow:var(--shadow)}
+nav strong{display:block;margin-bottom:10px;font-size:13px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
+nav a{display:block;font-size:13px;padding:6px 8px;border-radius:7px;color:#344455}nav a:hover{background:var(--blue-soft);text-decoration:none}
+main{min-width:0;background:var(--paper);border:1px solid var(--line);border-radius:16px;padding:clamp(22px,4vw,48px);box-shadow:var(--shadow)}
+h2{font-size:28px;line-height:1.2;letter-spacing:-.025em;margin:46px 0 16px;padding-top:6px;border-top:1px solid var(--line)}
+h2:first-of-type{margin-top:4px;border:0}
+h3{font-size:20px;line-height:1.3;margin:30px 0 10px}h4{font-size:16px;margin:22px 0 8px}
+p{margin:10px 0 16px}ul,ol{padding-left:25px}li{margin:5px 0}
+blockquote{margin:20px 0;padding:15px 18px;border-left:4px solid var(--accent);background:var(--accent-soft);border-radius:0 10px 10px 0}
+table{width:100%;border-collapse:collapse;margin:18px 0 24px;font-size:14px;display:block;overflow-x:auto}
+th,td{border:1px solid var(--line);padding:10px 12px;vertical-align:top;text-align:left;min-width:110px}
+th{background:#f0f4f6;font-weight:750}
+pre{position:relative;overflow:auto;background:var(--code);color:var(--code-ink);border-radius:12px;padding:20px;margin:18px 0 24px;font-size:13px;line-height:1.55;border:1px solid #243747}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:.92em}:not(pre)>code{background:#edf1f4;padding:2px 5px;border-radius:4px;color:#25394a}
+.copy{position:absolute;top:9px;right:9px;background:#304657;border:1px solid #577083;color:#fff;padding:5px 9px;border-radius:6px;font-size:11px;cursor:pointer}
+hr{border:0;border-top:1px solid var(--line);margin:34px 0}
+.callout{border-radius:10px;padding:14px 17px;background:var(--blue-soft);border:1px solid #d4e4f2;margin:20px 0}
+.footer{max-width:1380px;margin:0 auto 36px;padding:0 22px;color:var(--muted);font-size:12px}
+@media(max-width:950px){.hero-inner{grid-template-columns:1fr}.hero-note{max-width:720px}.layout{grid-template-columns:1fr}nav{position:relative;top:0;max-height:none}}
+@media(max-width:600px){.hero{padding:36px 18px}.layout{padding:0 12px;margin:14px auto}main{padding:20px 16px}h2{font-size:24px}}
+@media print{body{background:#fff;font-size:11pt}.hero{background:#fff;color:#111;padding:16px 0}.hero-note,.lede,.pill{color:#222}.hero-note{border:1px solid #ccc}.layout{display:block;margin:0;padding:0}nav,.copy{display:none!important}main{border:0;box-shadow:none;padding:0}h2{break-after:avoid}pre,table{break-inside:avoid}a{color:#111;text-decoration:underline}}
+</style>
+</head>
+<body>
+<header class="hero"><div class="hero-inner"><div>
+<div class="eyebrow">ASDI · Product harness implementation</div>
+<h1>Build the verification capability, not just the skill prompt.</h1>
+<p class="lede">A ground-up guide to product-specific verification skills, deterministic harnesses, negative controls and ASDI-run independent verification. Designed to complement the four REV K specifications without replacing their normative schemas or phase plan.</p>
+<div class="meta"><span class="pill">REV K companion</span><span class="pill">Claude Code + Codex</span><span class="pill">H-1 to H-4 first vertical slice</span><span class="pill">Standalone / offline</span></div>
+</div><aside class="hero-note"><strong>Document boundary</strong><p>This guide owns the practical construction method for the product harness. Build Guide V4 remains authoritative for exact layout, schema fields, commands, phase order and exit tests. ASDI-native verifier and evidence authority remain outside the product skill.</p></aside></div></header>
+<div class="layout"><nav><strong>Contents</strong><a href="#0-document-authority-and-how-to-use-this-guide">0. Document authority and how to use this guide</a><a href="#1-the-two-skills-must-remain-distinct">1. The two skills must remain distinct</a><a href="#2-architecture-and-ownership-boundary">2. Architecture and ownership boundary</a><a href="#3-start-with-product-discovery-not-skill-md">3. Start with product discovery, not `SKILL.md`</a><a href="#4-model-behavior-in-the-feature-map-h-2">4. Model behavior in the feature map (H-2)</a><a href="#behavior">Behavior</a><a href="#reach">Reach</a><a href="#drive">Drive</a><a href="#observe-and-prove">Observe and prove</a><a href="#negative-control">Negative control</a><a href="#limits">Limits</a><a href="#5-build-the-deterministic-executable-h-1-h-3-h-4">5. Build the deterministic executable (H-1, H-3, H-4)</a><a href="#6-write-the-agent-facing-verify-skill-md">6. Write the agent-facing `verify/SKILL.md`</a><a href="#1-surface">1. Surface</a><a href="#2-launch">2. Launch</a><a href="#3-doctor">3. Doctor</a><a href="#4-drive">4. Drive</a><a href="#5-observe">5. Observe</a><a href="#6-isolate">6. Isolate</a><a href="#7-evidence">7. Evidence</a><a href="#8-cleanup">8. Cleanup</a><a href="#9-limits">9. Limits</a><a href="#7-evidence-product-result-versus-asdi-evidence-statement">7. Evidence: product result versus ASDI evidence statement</a><a href="#8-how-asdi-independently-executes-the-harness">8. How ASDI independently executes the harness</a><a href="#9-negative-controls-prove-that-the-harness-can-catch-failure">9. Negative controls: prove that the harness can catch failure</a><a href="#10-worked-example-build-the-first-skill-for-the-asdi-toy-product">10. Worked example: build the first skill for the ASDI toy product</a><a href="#11-apply-the-same-method-to-asdi-itself-second-target">11. Apply the same method to ASDI itself (second target)</a><a href="#12-maintenance-and-drift">12. Maintenance and drift</a><a href="#13-implementation-sequence-and-exit-criteria">13. Implementation sequence and exit criteria</a><a href="#14-common-implementation-mistakes">14. Common implementation mistakes</a><a href="#15-agent-implementation-handoff">15. Agent implementation handoff</a><a href="#16-build-review-report-template">16. Build-review report template</a><a href="#scope">Scope</a><a href="#product-discovery">Product discovery</a><a href="#deliverables">Deliverables</a><a href="#self-test">Self-test</a><a href="#negative-control">Negative control</a><a href="#evidence-and-limitations">Evidence and limitations</a><a href="#conformance">Conformance</a><a href="#claim-boundary">Claim boundary</a><a href="#17-final-mental-model">17. Final mental model</a><a href="#references">References</a></nav><main><h1 id="asdi-product-verification-skill-build-guide">ASDI Product Verification Skill Build Guide</h1>
+<p><strong>Companion to:</strong> ASDI Design doc REV K · ASDI Stack doc REV K · ASDI Build Guide V4 REV K · ASDI Trust Handbook REV K<br />
+<strong>Scope:</strong> Build the product-specific verification capability that ASDI runs independently to verify software changes produced by its agents.<br />
+<strong>Audience:</strong> Product-repository owners, Claude Code, Codex, and engineers implementing the ASDI verifier.<br />
+<strong>Status:</strong> Implementation guide; examples are illustrative unless explicitly identified as a Design REV K contract.</p>
+<blockquote>
+<p><strong>Core principle:</strong> Do not build a prompt that says “test your work.” Build a product-specific capability that can exercise important product behavior, compare observed results with literal expectations, detect a deliberately introduced defect, and emit evidence that ASDI can independently reproduce and trust.</p>
+</blockquote>
+<hr />
+<h2 id="0-document-authority-and-how-to-use-this-guide">0. Document authority and how to use this guide</h2>
+<p>This guide explains how to construct the <strong>product side</strong> of ASDI verification. It does not redefine ASDI's launcher, verifier, schemas, phase order, topology, or gate behavior.</p>
+<p>Use the four specifications with their established ownership:</p>
+<table>
+<thead>
+<tr>
+  <th>Specification</th>
+  <th>Authority</th>
+  <th>This guide must not override</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td><strong>Design doc REV K</strong></td>
+  <td>Product intent, C-0–C-5, seven hard rules, lifecycle, change classes, TRM, verification doctrine</td>
+  <td>The rule that only ASDI-run verification counts (C-5); project harness ownership; H/N capability boundaries</td>
+</tr>
+<tr>
+  <td><strong>Stack doc REV K</strong></td>
+  <td>Component choices, local topology, runtime/network responsibilities and operational roles</td>
+  <td>Docker/Compose topology, one container/network per run, passive GitHub, local poller, Archon and launcher ownership</td>
+</tr>
+<tr>
+  <td><strong>Build Guide V4 REV K</strong></td>
+  <td>Normative implementation source for exact repository layout, schemas, launcher interfaces, evidence manifest, phase order, commands and exit tests</td>
+  <td>Any exact schema or phase command not reproduced from the local authoritative copy</td>
+</tr>
+<tr>
+  <td><strong>Trust Handbook REV K</strong></td>
+  <td>Why controls exist, native-versus-harness ownership, five trust layers, evidence adequacy and TRM rationale</td>
+  <td>Alternate schemas, another phase plan, or a second control plane</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Precedence:</strong> Build Guide V4 governs exact implementation details. Design REV K governs intent and hard rules. Stack REV K governs component/topology realization. The Handbook explains trust rationale and adequacy. When this guide gives a schematic example, replace it with the exact V4 schema if there is any difference.</p>
+<p><strong>Source availability note:</strong> The published V4 URL supplied for this work returned HTTP 404 during retrieval. The Design and Stack REV K pages and the available REV K Handbook were readable. This guide therefore preserves the known REV K harness contract and points exact field names, command syntax, layouts and phase tests back to the local authoritative Build Guide V4. Do not infer an undocumented V4 field or command from an example below.</p>
+<h2 id="1-the-two-skills-must-remain-distinct">0.1 What this guide builds</h2>
+<p>It builds the <strong>product harness</strong> consumed by ASDI's N-1 verifier:</p>
+<ul>
+<li>H-1: the product's agent-facing <code>verify/SKILL.md</code> and its single executable interface;</li>
+<li>H-2: feature map describing what behavior exists and how to prove it;</li>
+<li>H-3: negative controls demonstrating that proofs catch known faults;</li>
+<li>H-4: deterministic fixtures and drivers;</li>
+<li>the related product declarations and supporting artifacts defined by Build Guide V4.</li>
+</ul>
+<p>ASDI-native capabilities N-1, N-2, N-4, N-5, N-17 and N-19 execute, protect, store and enforce the verification result. The product harness does not implement those platform authorities.</p>
+<h2 id="2-architecture-and-ownership-boundary">0.2 What this guide does not build</h2>
+<p>It does not create:</p>
+<ul>
+<li>a replacement for <code>asdi-build-conformance</code> (which audits ASDI's own code against the four specifications);</li>
+<li>another orchestrator, agent persona, review pipeline or merge authority;</li>
+<li>a new config system or a second feature registry;</li>
+<li>a model-dependent test runner;</li>
+<li>a mechanism for the agent to certify its own success;</li>
+<li>production write probes or credentials inside a verifier/run container;</li>
+<li>a new set of services for each H/N capability.</li>
+</ul>
+<hr />
+<h2 id="3-start-with-product-discovery-not-skill-md">1. The two skills must remain distinct</h2>
+<p>There are two different verification problems in ASDI.</p>
+<table>
+<thead>
+<tr>
+  <th>Skill</th>
+  <th>Purpose</th>
+  <th>Runs against</th>
+  <th>Authority</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td><code>asdi-build-conformance</code></td>
+  <td>Audit whether ASDI implementation work conforms to the four ASDI specifications</td>
+  <td>ASDI repository</td>
+  <td>Read-only auditor; cannot make a build green</td>
+</tr>
+<tr>
+  <td>Product <code>verify/SKILL.md</code></td>
+  <td>Teach an agent how to launch, inspect, exercise and verify one product</td>
+  <td>Product repository</td>
+  <td>Procedural interface only; no authority to declare ASDI green</td>
+</tr>
+</tbody>
+</table>
+<p>The product verification skill is a <strong>capability description</strong>, not the trusted verifier. The harness executable performs deterministic operations. ASDI's clean verifier independently runs those operations and evaluates the result.</p>
+<p>Never name the product skill <code>asdi-build-conformance</code>. Never make the product skill read or judge the four ASDI architecture specifications as its normal job. Its job is to know how to verify the product it lives with.</p>
+<hr />
+<h2 id="4-model-behavior-in-the-feature-map-h-2">2. Architecture and ownership boundary</h2>
+<p>The verification chain has five distinct elements:</p>
+<pre><code class="language-text">Product behavior and feature contract
+              │
+              ▼
+Product verification harness
+  SKILL.md + feature map + fixtures + drivers
+              │
+              ▼
+ASDI launcher / clean verifier (N-1)
+  trusted base-branch verification inputs
+              │
+              ▼
+ASDI evidence store (N-2)
+  manifest + content-addressed evidence
+              │
+              ▼
+ASDI gate / policy decision
+  coverage + static gates + review + change class
+</code></pre>
+<h2 id="behavior">2.1 Ownership table</h2>
+<table>
+<thead>
+<tr>
+  <th>Concern</th>
+  <th>Owner</th>
+  <th>Why</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td>Product domain semantics and expected behavior</td>
+  <td>Product repository</td>
+  <td>Only the product can define intended behavior</td>
+</tr>
+<tr>
+  <td>Feature map and product paths</td>
+  <td>Product repository</td>
+  <td>Product-specific impact and proof mapping</td>
+</tr>
+<tr>
+  <td>CLI/HTTP/UI/job/property drivers</td>
+  <td>Product repository</td>
+  <td>Depends on actual product interfaces</td>
+</tr>
+<tr>
+  <td>Fixtures and negative-control cases</td>
+  <td>Product repository</td>
+  <td>Need domain-specific expected and faulty cases</td>
+</tr>
+<tr>
+  <td><code>verify/SKILL.md</code></td>
+  <td>Product repository</td>
+  <td>Agent-facing procedure for this product</td>
+</tr>
+<tr>
+  <td>Static gate declarations and project rules</td>
+  <td>Product repository, in V4-defined locations</td>
+  <td>Language/framework/toolchain-specific</td>
+</tr>
+<tr>
+  <td>Clean verifier, base-branch resolution, sandbox and resource boundaries</td>
+  <td>ASDI-native</td>
+  <td>Must be independent of the implementing agent</td>
+</tr>
+<tr>
+  <td>Coverage/protected-path enforcement</td>
+  <td>ASDI-native</td>
+  <td>Candidate cannot decide its own proof coverage or weaken existing controls</td>
+</tr>
+<tr>
+  <td>Evidence storage, provenance, freshness and integrity</td>
+  <td>ASDI-native</td>
+  <td>Must outlive a run and be independently trustworthy</td>
+</tr>
+<tr>
+  <td>Gate decision, merge authority and post-merge verification</td>
+  <td>ASDI-native</td>
+  <td>Cross-runtime authority; not an agent instruction</td>
+</tr>
+<tr>
+  <td>TRM, skill evaluation and drift decision state</td>
+  <td>ASDI-native</td>
+  <td>Cross-run, auditable trust decisions</td>
+</tr>
+</tbody>
+</table>
+<p><strong>ASDI-native means a logical capability, not necessarily a new service.</strong> Use the existing launcher, verifier, Archon workflows, local poller and evidence store as assigned by the Stack and Build Guide. Do not create one deployable per N-capability.</p>
+<h2 id="reach">2.2 The C-5 boundary</h2>
+<p>The Design's C-5 rule is decisive: an agent's success claim never counts. Only verification ASDI runs itself counts.</p>
+<p>Therefore:</p>
+<ul>
+<li>Agent-local tests are useful development feedback, not authoritative ASDI evidence.</li>
+<li>An agent can request or propose verification, but cannot write an authoritative verifier result.</li>
+<li>The clean verifier does not inherit the agent's conversation, working process, mutable workspace, or self-reported outcome.</li>
+<li>A passing skill invocation does not make a run green unless ASDI reruns it under the trusted verifier boundary.</li>
+</ul>
+<hr />
+<h2 id="drive">3. Start with product discovery, not <code>SKILL.md</code></h2>
+<p>Do not ask an agent to write a verification skill before it understands the product. First build a small, evidence-backed map of observable behavior.</p>
+<h2 id="observe-and-prove">3.1 Establish the product surface</h2>
+<p>Inspect the product's actual entry points and state boundaries. Typical surfaces include:</p>
+<table>
+<thead>
+<tr>
+  <th>Surface</th>
+  <th>Discover</th>
+  <th>Useful proof forms</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td>CLI</td>
+  <td>Commands, options, exit codes, stdout/stderr, files created</td>
+  <td>Exact output, exit status, file bytes, structured output comparison</td>
+</tr>
+<tr>
+  <td>HTTP/API</td>
+  <td>Routes, methods, request/response schemas, auth boundary, status codes</td>
+  <td>Exact response fields, status, persisted state, idempotency</td>
+</tr>
+<tr>
+  <td>UI</td>
+  <td>Routes/pages, controls, user journeys, loading/error/empty states</td>
+  <td>Browser interaction, visible state, screenshot where useful, backend state</td>
+</tr>
+<tr>
+  <td>Database</td>
+  <td>Entities, constraints, transactions, state transitions</td>
+  <td>Read-back query, invariant, uniqueness, rollback behavior</td>
+</tr>
+<tr>
+  <td>Background job</td>
+  <td>Trigger, schedule/event, retries, side effects</td>
+  <td>Job state, output record, retry result, idempotency key</td>
+</tr>
+<tr>
+  <td>Webhook</td>
+  <td>Signature validation, event mapping, deduplication</td>
+  <td>Accepted/rejected request, state transition, duplicate handling</td>
+</tr>
+<tr>
+  <td>Library/protocol</td>
+  <td>Public functions, types, invariants, compatibility contract</td>
+  <td>Property tests, golden vectors, type/API compatibility</td>
+</tr>
+<tr>
+  <td>Deployment/operation</td>
+  <td>Health, readiness, telemetry, release behavior</td>
+  <td>Read-only health and metric observations; no production mutation</td>
+</tr>
+</tbody>
+</table>
+<p>Do not inventory directories for their own sake. Map <strong>user-visible or operator-observable behavior</strong> to the code paths that implement it.</p>
+<h2 id="negative-control">3.2 Read before inferring</h2>
+<p>For each candidate feature, inspect:</p>
+<ol>
+<li>The real entry point and caller.</li>
+<li>The domain/state transition it invokes.</li>
+<li>The persistence or external-system boundary.</li>
+<li>Existing tests and fixtures.</li>
+<li>The observable output or state that proves behavior.</li>
+<li>Known failure modes, bugs and limitations.</li>
+</ol>
+<p>Classify statements as:</p>
+<ul>
+<li><strong>Observed:</strong> verified by reading/executing the current product;</li>
+<li><strong>Specified:</strong> required behavior from an authoritative product specification;</li>
+<li><strong>Assumed:</strong> plausible but not yet established;</li>
+<li><strong>Unknown:</strong> insufficient evidence.</li>
+</ul>
+<p>Do not turn an assumption into an expected value. Resolve it with the product owner or keep it in the feature's limits/unknowns.</p>
+<h2 id="limits">3.3 Select the first slice</h2>
+<p>For the first harness, select one thin but end-to-end feature that exercises a real product boundary. Prefer a deterministic, low-risk behavior with:</p>
+<ul>
+<li>a reachable entry point;</li>
+<li>a controlled fixture;</li>
+<li>a literal expected result;</li>
+<li>a meaningful negative control;</li>
+<li>no production credential or external side effect.</li>
+</ul>
+<p>The ASDI Design's illustrative <code>export-csv</code> feature is a suitable pattern. The first product in ASDI's lifecycle is the Guide's toy product; do not start by trying to map the entire ASDI platform.</p>
+<hr />
+<h2 id="5-build-the-deterministic-executable-h-1-h-3-h-4">4. Model behavior in the feature map (H-2)</h2>
+<p>The feature map is the central product-specific verification artifact. It has two jobs:</p>
+<ol>
+<li>Explain how to reach, drive and prove a behavior.</li>
+<li>Map source paths to the behavior(s) that must be re-verified when those paths change.</li>
+</ol>
+<p>A feature is not a source directory or a test file. It is an independently meaningful behavior with an observable contract.</p>
+<h2 id="6-write-the-agent-facing-verify-skill-md">4.1 A feature proof must define</h2>
+<table>
+<thead>
+<tr>
+  <th>Element</th>
+  <th>Question</th>
+  <th>Minimum quality bar</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td>Identity</td>
+  <td>What behavior is this?</td>
+  <td>Stable feature ID and plain-language title</td>
+</tr>
+<tr>
+  <td>Ownership paths</td>
+  <td>Which product paths can affect it?</td>
+  <td>Specific paths; no broad catch-all without rationale</td>
+</tr>
+<tr>
+  <td>Reach</td>
+  <td>How does the driver get to the behavior?</td>
+  <td>Actual CLI/API/UI/job/protocol entry point</td>
+</tr>
+<tr>
+  <td>Drive</td>
+  <td>What operation exercises it?</td>
+  <td>Reproducible, bounded steps using deterministic inputs</td>
+</tr>
+<tr>
+  <td>Observation</td>
+  <td>What does the system actually produce?</td>
+  <td>A value/state/output captured from the running product</td>
+</tr>
+<tr>
+  <td>Expected value</td>
+  <td>What should it produce?</td>
+  <td>Literal, reviewed expected value—not derived from the candidate output</td>
+</tr>
+<tr>
+  <td>Negative control</td>
+  <td>What known bad case should be caught?</td>
+  <td>A defect/input mutation that the proof must detect</td>
+</tr>
+<tr>
+  <td>Limits</td>
+  <td>What does this proof not establish?</td>
+  <td>Explicit list, even when empty</td>
+</tr>
+<tr>
+  <td>Optional production probe</td>
+  <td>What can be checked safely after deployment?</td>
+  <td>Read-only, allowlisted, no model/write credentials; Pass 2 capability</td>
+</tr>
+</tbody>
+</table>
+<p>Every proof must compare an observed value with a literal expected value. A narrative assertion such as “looks correct” is not a proof.</p>
+<h1 id="product-verification">4.2 Illustrative feature file</h1>
+<p>The following is a <strong>shape example</strong>, not a replacement for the exact frontmatter schema in Build Guide V4. Use the V4 field names, required keys and schema version when implementing.</p>
+<pre><code class="language-yaml">---
+id: export-csv
+title: Export saved reports as CSV
+paths:
+  - &quot;src/export/**&quot;
+  - &quot;cli/export.py&quot;
+drive:
+  kind: cli
+proof:
+  expected_fixture: &quot;verify/fixtures/export-csv/expected.csv&quot;
+negative_control:
+  fixture: &quot;verify/fixtures/export-csv/malformed-input.json&quot;
+  expected_outcome: fail
+limits:
+  - &quot;Spreadsheet import is not tested by this proof&quot;
+---
+
+## Behavior
+The CLI exports saved reports as CSV with the documented header and rows.
+
+## Reach
+Use the public report export CLI command.
+
+## Drive
+Create the deterministic fixture dataset, invoke the CLI, capture exit status,
+stdout/stderr and the generated file.
+
+## Observe and prove
+Compare the generated file byte-for-byte with the reviewed expected fixture.
+
+## Negative control
+Supply malformed input. The command must reject it with the specified error
+behavior; a successful export is a failure of the negative control.
+
+## Limits
+This proof does not test spreadsheet import, XLSX, streaming export or UI export.
+</code></pre>
+<h2 id="1-surface">4.3 Path coverage rules</h2>
+<ul>
+<li>Map every product source path that can affect behavior to at least one feature, or leave it explicitly uncovered.</li>
+<li>A changed path with no feature coverage is judgment-class under N-4; do not guess a feature based on a nearby filename.</li>
+<li>A feature may own multiple paths; a path may affect multiple features.</li>
+<li>Do not use <code>**/*</code> as a shortcut to make coverage look complete.</li>
+<li>Generated/vendor paths follow Design's protected-path rule; do not add them to normal product-edit coverage.</li>
+<li>Feature-map changes are themselves verification-path changes and must follow the protected-path admission rule.</li>
+</ul>
+<h2 id="2-launch">4.4 Adding a new feature</h2>
+<p>A PR may add a feature file, but it must not edit existing verification files to weaken current proofs. The candidate's newly authored feature definition must not become a self-authorizing trust root for judging the same candidate.</p>
+<p>Use the exact new-feature admission procedure in Build Guide V4. If that procedure does not make a newly added feature independently trusted for the current PR, keep the change judgment-class and require the prescribed review. Once merged and present on the trusted base branch, it can participate as an established proof in subsequent runs.</p>
+<hr />
+<h2 id="3-doctor">5. Build the deterministic executable (H-1, H-3, H-4)</h2>
+<p>Design REV K defines one executable with five commands. The executable must not require a model to run.</p>
+<pre><code class="language-text">verify launch
+verify doctor
+verify drive &lt;feature-id&gt; [&lt;feature-id&gt; ...]
+verify control &lt;feature-id&gt; [&lt;feature-id&gt; ...]
+verify cleanup
+</code></pre>
+<p>Use the exact path, argument syntax and exit-code mapping specified in Build Guide V4. The commands above express the required interface; do not infer extra flags from this document.</p>
+<h2 id="4-drive">5.1 <code>launch</code></h2>
+<p>Purpose: start the product and its required run-scoped test services using the environment/services provided by ASDI.</p>
+<p>Requirements:</p>
+<ul>
+<li>Use run-assigned ports, network, directories and service endpoints.</li>
+<li>Use only approved service images and the V4-defined service declaration mechanism.</li>
+<li>Record which processes/resources this harness starts so cleanup can be ownership-safe.</li>
+<li>Return a clear blocked/error result if prerequisites are unavailable.</li>
+<li>Never start or connect to production services.</li>
+<li>Never read production credentials or rely on a developer's logged-in browser session.</li>
+</ul>
+<h2 id="5-observe">5.2 <code>doctor</code></h2>
+<p>Purpose: establish that the verification environment is ready and belongs to this run.</p>
+<p>Requirements:</p>
+<ul>
+<li>Check application and required service readiness.</li>
+<li>Check endpoint and resource ownership.</li>
+<li>Check required binaries/tool versions and fixture availability.</li>
+<li>Be read-only: it must not mutate product state to make the environment appear healthy.</li>
+<li>Distinguish a failed health condition from an unavailable/invalid test environment.</li>
+</ul>
+<h2 id="6-isolate">5.3 <code>drive</code></h2>
+<p>Purpose: exercise the selected product feature(s) and collect observed results.</p>
+<p>For each feature:</p>
+<ol>
+<li>Load the trusted feature definition supplied to the verifier.</li>
+<li>Prepare deterministic, isolated fixtures.</li>
+<li>Reach the product using the declared interface.</li>
+<li>Exercise the behavior.</li>
+<li>Capture actual output/state, including relevant errors.</li>
+<li>Compare actual values with literal expected values.</li>
+<li>Record status, evidence references and limits.</li>
+</ol>
+<p>The harness must not decide expected values by copying the candidate's output. Expected fixtures are reviewed product contracts.</p>
+<h2 id="7-evidence">5.4 <code>control</code></h2>
+<p>Purpose: prove that the feature verification procedure detects a deliberate fault.</p>
+<p>A control is not merely a second positive run. It must challenge the specific property the proof claims to establish.</p>
+<p>Examples:</p>
+<table>
+<thead>
+<tr>
+  <th>Proof claim</th>
+  <th>Useful negative control</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td>Export includes every row</td>
+  <td>Remove or corrupt one expected row; proof detects mismatch</td>
+</tr>
+<tr>
+  <td>API rejects invalid input</td>
+  <td>Supply a malformed/unauthorized request; proof observes rejection</td>
+</tr>
+<tr>
+  <td>State transition is atomic</td>
+  <td>Inject a failure between writes; verify no partial state survives</td>
+</tr>
+<tr>
+  <td>Evidence digest detects mutation</td>
+  <td>Alter an isolated test copy; integrity check rejects it</td>
+</tr>
+<tr>
+  <td>Duplicate webhook is idempotent</td>
+  <td>Replay the same event; no duplicate side effect occurs</td>
+</tr>
+<tr>
+  <td>Run is isolated</td>
+  <td>Attempt a prohibited cross-run/production reach from the isolated test environment; connection must fail</td>
+</tr>
+</tbody>
+</table>
+<p>The control's success means <strong>the fault was caught</strong>, not that the corrupted operation itself passed. Store the injected fault identity and observed detection result.</p>
+<h2 id="8-cleanup">5.5 <code>cleanup</code></h2>
+<p>Purpose: stop only resources owned by this verification run.</p>
+<p>Requirements:</p>
+<ul>
+<li>Stop processes and services started by <code>launch</code>.</li>
+<li>Remove only run-scoped temporary state.</li>
+<li>Do not stop shared infrastructure or another run's resources.</li>
+<li>Preserve evidence in the ASDI-provided evidence location.</li>
+<li>Be safe to call after partial launch or partial test failure.</li>
+<li>Report cleanup failures; do not silently claim success.</li>
+</ul>
+<h2 id="9-limits">5.6 Status semantics</h2>
+<p>Use the exact V4 result schema. The Design's outcome vocabulary is:</p>
+<table>
+<thead>
+<tr>
+  <th>Status</th>
+  <th>Meaning</th>
+  <th>Gate effect</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td><code>pass</code></td>
+  <td>Observed value matches the literal expected value</td>
+  <td>Only status that satisfies a gate</td>
+</tr>
+<tr>
+  <td><code>fail</code></td>
+  <td>Product behavior or control assertion is wrong</td>
+  <td>Reject</td>
+</tr>
+<tr>
+  <td><code>blocked</code></td>
+  <td>Required environment or precondition unavailable</td>
+  <td>Does not satisfy; fail closed</td>
+</tr>
+<tr>
+  <td><code>error</code></td>
+  <td>Harness/tool crashed, timed out or produced invalid output</td>
+  <td>Does not satisfy; fail closed</td>
+</tr>
+<tr>
+  <td><code>not_applicable</code></td>
+  <td>Proof does not apply to this change</td>
+  <td>Not a pass; use only when policy allows it</td>
+</tr>
+</tbody>
+</table>
+<p>Do not collapse these states into a boolean. Never retry a flaky check until it happens to pass and then discard the earlier failures. Record retry policy and outcomes exactly as V4 prescribes.</p>
+<hr />
+<h2 id="7-evidence-product-result-versus-asdi-evidence-statement">6. Write the agent-facing <code>verify/SKILL.md</code></h2>
+<p>Only write the skill after the executable and at least one feature proof work. The skill explains how an agent should use the harness; it should not reimplement the harness in prose.</p>
+<p>The Design/Handbook contract calls for these nine topics:</p>
+<ol>
+<li><strong>Surface</strong> — what the product exposes and the feature map location;</li>
+<li><strong>Launch</strong> — how to start the product;</li>
+<li><strong>Doctor</strong> — how to establish readiness;</li>
+<li><strong>Drive</strong> — how to exercise feature proofs;</li>
+<li><strong>Observe</strong> — what to inspect and how actual results are judged;</li>
+<li><strong>Isolate</strong> — run ownership and prohibited resources;</li>
+<li><strong>Evidence</strong> — where and what to write;</li>
+<li><strong>Cleanup</strong> — how to safely release run-owned resources;</li>
+<li><strong>Limits</strong> — what the harness cannot prove.</li>
+</ol>
+<h2 id="8-how-asdi-independently-executes-the-harness">6.1 Ready-to-adapt skill template</h2>
+<p>Use this as a starting point. Replace placeholders with verified repository facts and the exact V4 interface. Do not leave bracketed placeholders in a merged skill.</p>
+<pre><code class="language-markdown">---
+name: product-verification
+description: &gt;-
+  Use this skill to launch, inspect, drive and verify this product through its
+  deterministic verification harness. Use when implementing, debugging or
+  reviewing product behavior. The executable harness, not the agent's judgment,
+  produces test observations.
+---
+
+# Product Verification
+
+## 1. Surface
+
+This product exposes: [CLI/API/UI/jobs/protocols].
+The feature map is in `verify/features/`.
+Select features from the changed product paths. Do not infer coverage from
+file names or from the task description alone.
+
+## 2. Launch
+
+Run the repository's verification executable using the V4-defined interface:
+
+    verify launch
+
+Use only the run-scoped services and endpoints supplied by ASDI. Do not use
+production services, production data, personal credentials or a logged-in
+browser session.
+
+## 3. Doctor
+
+Run:
+
+    verify doctor
+
+This check is read-only. Stop if the environment is blocked, misidentified or
+not owned by this run. Do not repair readiness by mutating product state.
+
+## 4. Drive
+
+Run the selected feature proofs:
+
+    verify drive &lt;feature-id&gt;
+
+Use the feature map to identify the actual user/operator entry point. Exercise
+the running product; source inspection alone is not product verification.
+
+## 5. Observe
+
+Compare observed values with the literal expected values defined by the
+trusted feature contract. Capture relevant output, state, errors, screenshots
+or traces. Do not infer a pass from plausibility or from your own code changes.
+
+## 6. Isolate
+
+Use only run-owned ports, services, directories and fixtures. Never access
+production networks/secrets, another run's mutable state, or shared user data.
+
+## 7. Evidence
+
+Write only to the evidence location supplied by ASDI. Record feature identity,
+status, observed result, evidence references and proof limitations using the
+V4 result schema. Never mark an unexecuted check as passing.
+
+## 8. Cleanup
+
+Run:
+
+    verify cleanup
+
+Stop only resources created by this run. Preserve the evidence directory.
+
+## 9. Limits
+
+Every feature proof declares what it does not cover. Do not claim that a
+passing feature proof certifies the whole product, untested paths, production
+behavior or security properties outside its defined scope.
+</code></pre>
+<h2 id="9-negative-controls-prove-that-the-harness-can-catch-failure">6.2 Skill quality rules</h2>
+<ul>
+<li>Make steps executable and concrete; avoid generic advice such as “test thoroughly.”</li>
+<li>Keep domain knowledge in feature files and deterministic drivers where possible.</li>
+<li>Do not include secrets, credentials, live user data or production URLs containing sensitive tokens.</li>
+<li>Do not ask the agent to edit expected outputs to make tests pass.</li>
+<li>Do not tell the agent to use its own test result as ASDI evidence.</li>
+<li>Keep the skill short enough to be reliably consumed; link to feature files rather than copying the entire feature map into the prompt.</li>
+<li>Treat instructions as workflow guidance, not as security enforcement.</li>
+</ul>
+<hr />
+<h2 id="10-worked-example-build-the-first-skill-for-the-asdi-toy-product">7. Evidence: product result versus ASDI evidence statement</h2>
+<p>There are two layers of record.</p>
+<h2 id="11-apply-the-same-method-to-asdi-itself-second-target">7.1 Product harness result</h2>
+<p>The product harness emits the exact V4-defined result format. At minimum, each feature result needs to distinguish:</p>
+<ul>
+<li>feature ID;</li>
+<li>status (<code>pass</code>, <code>fail</code>, <code>blocked</code>, <code>error</code>, <code>not_applicable</code>);</li>
+<li>observed result or observation references;</li>
+<li>evidence files/references;</li>
+<li>negative-control outcome where run;</li>
+<li>limits / uncovered scope.</li>
+</ul>
+<p>The agent may see and discuss this result during its run. It is not authoritative merely because it exists in the agent workspace.</p>
+<h2 id="12-maintenance-and-drift">7.2 ASDI evidence statement (N-2)</h2>
+<p>ASDI's trusted verifier stores the authoritative record, including the provenance and inputs needed to interpret it. The Design and Handbook require evidence to be:</p>
+<ul>
+<li><strong>revision-bound:</strong> the subject commit is the exact commit being judged;</li>
+<li><strong>producer-bound:</strong> Pass 1 writes through the trusted launcher/verifier path, not the agent;</li>
+<li><strong>environment-bound:</strong> verifier image digest and relevant tool versions are recorded;</li>
+<li><strong>input-bound:</strong> harness and static-gate inputs come from the pinned trusted base branch; product profile/gate hashes are recorded;</li>
+<li><strong>integrity-protected:</strong> content-addressed evidence and hashes match stored content;</li>
+<li><strong>fresh:</strong> any new PR head invalidates all earlier evidence and review verdicts for that PR in this version;</li>
+<li><strong>honest:</strong> statuses remain distinct; only <code>pass</code> satisfies a gate;</li>
+<li><strong>bounded:</strong> every proof states what it does not cover.</li>
+</ul>
+<p>Pass 1 uses a hashed evidence statement/store. Signed in-toto/DSSE attestation is Pass 2 hardening (N-18). Do not claim Pass 1 evidence is signed.</p>
+<h2 id="13-implementation-sequence-and-exit-criteria">7.3 Minimum useful evidence</h2>
+<p>Prefer evidence that allows an independent reviewer or rerun to answer:</p>
+<ul>
+<li>Which feature was exercised?</li>
+<li>Which exact commit was under test?</li>
+<li>Which trusted feature definition and harness revision were used?</li>
+<li>Which literal expected value was compared?</li>
+<li>What was actually observed?</li>
+<li>Which negative control was injected and was it caught?</li>
+<li>Which files are available and how is integrity checked?</li>
+<li>What was not tested?</li>
+</ul>
+<p>A screenshot without the route/action and expected state is weak evidence. A log line saying “tests passed” without command, revision and output is not adequate evidence.</p>
+<hr />
+<h2 id="14-common-implementation-mistakes">8. How ASDI independently executes the harness</h2>
+<p>The product skill is authored with the product, but ASDI supplies the authority boundary.</p>
+<h2 id="15-agent-implementation-handoff">8.1 Trusted input rule</h2>
+<p>For a candidate PR, the verifier must not let that candidate redefine the checks used to judge itself.</p>
+<ul>
+<li>Pin the trusted base-branch commit.</li>
+<li>Load existing <code>verify/</code> material and <code>.asdi/static-gates.yaml</code> from that base revision, as required by N-1/N-5/N-17 and Build Guide V4.</li>
+<li>Execute the candidate product code at the exact candidate head.</li>
+<li>Keep existing verification material protected.</li>
+<li>Apply the V4-defined process for adding a new feature file; do not allow a candidate-authored feature definition to self-authorize its own proof.</li>
+<li>A verification-path edit is flagged and routed according to the Design's hard rule and change-class policy.</li>
+</ul>
+<p>The verifier's trust root is outside the agent's authority. A PR that changes an existing test command to <code>echo pass</code>, weakens an expected value, removes a negative control or changes a gate threshold must still be judged using the base version.</p>
+<h2 id="16-build-review-report-template">8.2 Independent execution boundary</h2>
+<p>The Stack assigns ASDI's launcher/verifier to a clean container, one per run, with its own Docker network. The launcher is the only component allowed to call the Docker socket proxy. The agent run cannot reach production, cannot write authoritative evidence and cannot choose the verifier's trusted inputs.</p>
+<p>The verifier must not execute inside Archon or inherit the build-agent session. Archon coordinates the pipeline; it does not become the build process or verification authority.</p>
+<h1 id="product-verification-harness-build-report">8.3 PR and post-merge sequence</h1>
+<p>The REV K delivery principle is: <strong>test what is on <code>main</code>, deploy only what passed there.</strong></p>
+<p>At PR head:</p>
+<ol>
+<li>Resolve the trusted base revision.</li>
+<li>Run static gates from base-branch declarations.</li>
+<li>Determine changed product paths and select all covered features.</li>
+<li>Route uncovered paths to judgment (N-4).</li>
+<li>Run product proofs and applicable negative controls in the clean verifier.</li>
+<li>Validate the result and store evidence (N-1/N-2).</li>
+<li>Run the required review/class/policy process and post required statuses.</li>
+</ol>
+<p>After direct merge:</p>
+<ol>
+<li>Re-run static gates and the verifier on the exact commit that landed on <code>main</code> (N-19).</li>
+<li>If verification fails, open the prescribed auto-revert and stop release.</li>
+<li>Deploy only a <code>main</code> commit with a passing post-merge result.</li>
+</ol>
+<p>Do not introduce a merge queue into this flow. Do not reuse PR-head evidence to authorize a different <code>main</code> commit.</p>
+<hr />
+<h2 id="scope">9. Negative controls: prove that the harness can catch failure</h2>
+<p>A positive proof alone does not establish verifier reliability. H-3 requires a negative control, and the Design says the harness is unusable if its proof does not pass or its negative control is not caught.</p>
+<h2 id="product-discovery">9.1 Design a good negative control</h2>
+<p>A useful control has:</p>
+<ol>
+<li>A named property the proof claims to verify.</li>
+<li>A deterministic fault or faulty input that violates that property.</li>
+<li>A defined expected detection result.</li>
+<li>A record linking the fault to the proof/control.</li>
+<li>An isolated fixture/environment so the test cannot harm shared or production state.</li>
+</ol>
+<h2 id="deliverables">9.2 Avoid weak controls</h2>
+<table>
+<thead>
+<tr>
+  <th>Weak control</th>
+  <th>Why it is weak</th>
+  <th>Better approach</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td>Run the same positive test twice</td>
+  <td>Does not test defect detection</td>
+  <td>Inject a controlled violation of the claimed invariant</td>
+</tr>
+<tr>
+  <td>Assert that a command exits nonzero for any reason</td>
+  <td>Crash may be mistaken for correct rejection</td>
+  <td>Assert the intended error/status and unchanged state</td>
+</tr>
+<tr>
+  <td>Compare output with itself</td>
+  <td>Candidate output defines its own expectation</td>
+  <td>Compare with a reviewed literal fixture</td>
+</tr>
+<tr>
+  <td>Mutate production data</td>
+  <td>Unsafe and unnecessary</td>
+  <td>Mutate an isolated test fixture or disposable per-run service</td>
+</tr>
+<tr>
+  <td>Add a defect but skip the proof</td>
+  <td>No demonstration that the proof catches it</td>
+  <td>Execute the proof against the faulty case and record detection</td>
+</tr>
+</tbody>
+</table>
+<h2 id="self-test">9.3 Harness self-test</h2>
+<p>The self-test must establish:</p>
+<ul>
+<li>the product can launch;</li>
+<li><code>doctor</code> reports a healthy, owned environment;</li>
+<li>at least the designated self-test feature proof passes;</li>
+<li>its negative control is caught;</li>
+<li>results conform to the V4 schema;</li>
+<li>evidence is written to the ASDI-provided location;</li>
+<li>cleanup releases run-owned resources and preserves evidence.</li>
+</ul>
+<p>If positive proof fails, the harness is unusable. If a negative control is missed, the harness is unusable. Do not lower the expected value to obtain green.</p>
+<hr />
+<h2 id="negative-control">10. Worked example: build the first skill for the ASDI toy product</h2>
+<p>The Design's build order places the toy product and its harness in Phase 3, after the thin Phase 1 launcher/verifier/evidence capability exists. The first target is deliberately small: a product with a CLI, HTTP/API surface and a UI, plus the service dependency defined by the Build Guide.</p>
+<p>Use the illustrative export behavior from the Design run-contract example.</p>
+<h2 id="evidence-and-limitations">10.1 Define the product behavior</h2>
+<p>Outcome: the CLI exports saved reports as CSV or JSON.</p>
+<p>Constraints from the illustrative contract: no new runtime dependencies; keep report schema v2 unchanged. XLSX, streaming and UI export are out of scope.</p>
+<h2 id="conformance">10.2 Discover and map the feature</h2>
+<p>Create one feature definition for <code>export-csv</code> after inspecting the real CLI and report model. Record its owned paths, exact command, fixture inputs, literal expected CSV, negative control and limits.</p>
+<p>Do not copy the illustrative path names from this guide unless they match the actual toy-product repository.</p>
+<h2 id="claim-boundary">10.3 Implement the driver</h2>
+<p>The driver should:</p>
+<ol>
+<li>Create or load deterministic report fixtures.</li>
+<li>Invoke the actual CLI entry point.</li>
+<li>Capture process exit code, stdout and stderr.</li>
+<li>Read the generated CSV bytes.</li>
+<li>Compare against a reviewed expected fixture.</li>
+<li>Emit evidence files and a structured feature result.</li>
+</ol>
+<p>Do not test a private helper instead of the public behavior unless the feature explicitly describes a library contract.</p>
+<h2 id="17-final-mental-model">10.4 Implement the negative control</h2>
+<p>Use malformed input or a fixture that violates a defined export invariant. Assert the specified rejection behavior and ensure no misleading partial output is treated as success.</p>
+<h2 id="references">10.5 Write <code>SKILL.md</code></h2>
+<p>Use the nine-section template in §6. Replace every placeholder with the actual toy product's launch, health, drive, observation and cleanup procedures.</p>
+<h3>10.6 Self-test and integrate</h3>
+<p>Run the five-command sequence. Then ask ASDI's clean verifier to run the same proof with trusted base-branch verification material. Verify the evidence is preserved after run cleanup. Do not claim the toy product harness is complete until the prescribed Phase 3 exit tests in Build Guide V4 pass.</p>
+<hr />
+<h2>11. Apply the same method to ASDI itself (second target)</h2>
+<p>Once the toy product proves the pattern, use a separate ASDI product feature map to verify ASDI's own operator-facing behavior. Do not make the first verifier certify itself before the independent runner and trust root exist.</p>
+<p>Start with a few high-value behaviors, not every package or directory.</p>
+<table>
+<thead>
+<tr>
+  <th>Candidate feature</th>
+  <th>Observable behavior</th>
+  <th>Example negative control</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td><code>run-lifecycle</code></td>
+  <td>An admitted run follows valid lifecycle transitions and ends in the correct state</td>
+  <td>Supply an invalid transition/contract; it must not be accepted</td>
+</tr>
+<tr>
+  <td><code>c5-verification-authority</code></td>
+  <td>An agent's self-reported success cannot make a run green</td>
+  <td>Make the agent report success while the independent proof fails</td>
+</tr>
+<tr>
+  <td><code>evidence-integrity</code></td>
+  <td>Stored evidence is retrievable and its content hash matches</td>
+  <td>Alter an isolated copy; integrity check detects mismatch</td>
+</tr>
+<tr>
+  <td><code>base-branch-trust-root</code></td>
+  <td>Existing verification/gate inputs come from pinned base</td>
+  <td>Candidate weakens its own check; verifier still runs trusted base version</td>
+</tr>
+<tr>
+  <td><code>run-isolation</code></td>
+  <td>Run container/network cannot reach prohibited zones or another run</td>
+  <td>Attempt forbidden cross-zone/cross-run connection; it must fail</td>
+</tr>
+<tr>
+  <td><code>main-post-merge-verification</code></td>
+  <td>Deployment eligibility requires a passing check on the exact main commit</td>
+  <td>Make post-merge verification fail; release is stopped and auto-revert path begins</td>
+</tr>
+</tbody>
+</table>
+<p>These are candidate feature definitions, not assumptions about the current ASDI code. For each one, inspect the implemented interface and define the exact drive/observation before writing its feature file.</p>
+<h3>11.1 Keep product tests separate from platform rule tests</h3>
+<p>Some behaviors are better tested by ASDI's own native test suite rather than a product feature file:</p>
+<ul>
+<li>verifier trusts the base branch, not candidate verification files;</li>
+<li>the candidate cannot change its own static gates;</li>
+<li>only the trusted verifier can write authoritative evidence;</li>
+<li>merge authorization cannot be bypassed by an agent token;</li>
+<li>unavailable checks fail closed;</li>
+<li>no production route or secret is available to the run.</li>
+</ul>
+<p>These test N-capabilities and C-/hard-rule enforcement. The product harness feature map proves product behavior. Do not place every platform security invariant in the product's feature map or confuse H-1 with the ASDI build-conformance auditor.</p>
+<hr />
+<h2>12. Maintenance and drift</h2>
+<p>A verification harness is a maintained product asset. If product behavior, entry points or data models change, the harness must be reviewed. But maintenance must never rewrite expected behavior merely to follow a regression.</p>
+<h3>12.1 Change-triggered maintenance</h3>
+<p>When a PR changes a feature's owned paths:</p>
+<ul>
+<li>confirm the feature still reaches the correct entry point;</li>
+<li>confirm driver and fixtures still represent real user behavior;</li>
+<li>update the expected fixture only when the intended product contract changes and the change is authorized;</li>
+<li>preserve a negative control for every proof;</li>
+<li>update explicit proof limits;</li>
+<li>rerun harness self-test;</li>
+<li>treat changes to existing verification files as protected/judgment changes per the Design.</li>
+</ul>
+<h3>12.2 Drift sweep (N-13, Pass 2)</h3>
+<p>A drift sweep compares feature maps to the actual product:</p>
+<ul>
+<li>stale paths or removed routes;</li>
+<li>new uncovered product paths;</li>
+<li>dead drivers or fixtures;</li>
+<li>missing or ineffective negative controls;</li>
+<li>tests that no longer exercise the public behavior;</li>
+<li>documentation and feature contract disagreement.</li>
+</ul>
+<p>The drift process may propose a harness update. It must not silently edit expected values to make a broken product pass.</p>
+<h3>12.3 Skill evaluation (N-11, Pass 2)</h3>
+<p>Changes to the skill or persistent instructions need evaluation. Use blinded paired runs with and without the change, across supported agent CLIs. Prefer deterministic outcomes; use a rubric only for judgment that cannot be scored mechanically.</p>
+<p>An instruction change is not automatically an improvement because one agent run looked better. Keep evaluation cases stable and require the improvement/regression conditions defined by Build Guide V4.</p>
+<h3>12.4 Five-layer correction rule</h3>
+<p>When an agent needs human correction, fix the strongest layer that can reliably prevent recurrence:</p>
+<ol>
+<li>L1: change the codebase/domain structure so the bad behavior is unnatural or impossible;</li>
+<li>L2: add or strengthen a compiler/type/lint/CI invariant;</li>
+<li>L3: add a persistent project rule for a convention requiring judgment;</li>
+<li>L4: strengthen independent automated review for defects that escape earlier controls;</li>
+<li>L5: improve the procedural skill when the agent lacks a repeatable operational method.</li>
+</ol>
+<p>Do not automatically add another paragraph to <code>SKILL.md</code> when the architecture or a deterministic check can prevent the error. Skills are for procedures and judgment, not a substitute for enforcement.</p>
+<hr />
+<h2>13. Implementation sequence and exit criteria</h2>
+<p>Follow the lifecycle-first sequence in Design REV K and the exact phase commands/exit tests in Build Guide V4. The relevant order is not simply numerical.</p>
+<table>
+<thead>
+<tr>
+  <th>Sequence</th>
+  <th>ASDI phase</th>
+  <th>Product-verification work</th>
+  <th>Exit evidence</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td>1</td>
+  <td>Phase 0</td>
+  <td>Canonical repository scaffold and schemas exist; no alternate config hierarchy is introduced</td>
+  <td>V4 scaffold/schema/identity/ruleset tests pass</td>
+</tr>
+<tr>
+  <td>2</td>
+  <td>Phase 1</td>
+  <td>Launcher, per-run boundary, guardrails, verifier and evidence directory exist</td>
+  <td>Clean verifier can execute; evidence survives run cleanup; C-5 holds</td>
+</tr>
+<tr>
+  <td>3</td>
+  <td>Phase 3</td>
+  <td>Toy product and its H-1–H-4 harness are built by an agent run</td>
+  <td>Harness self-test passes; positive proof passes; negative control caught; feature map covers required paths</td>
+</tr>
+<tr>
+  <td>4</td>
+  <td>Phase 4</td>
+  <td>PR gate calls trusted verifier, checks coverage and protected paths</td>
+  <td>Candidate cannot self-weaken verification; unavailable checks fail closed</td>
+</tr>
+<tr>
+  <td>5</td>
+  <td>Phase 7</td>
+  <td>Post-merge verification/deploy path consumes main-commit result</td>
+  <td>First-light checkpoint: valid change reaches production; bad change stops/rolls back per V4</td>
+</tr>
+<tr>
+  <td>6</td>
+  <td>Later Pass 2</td>
+  <td>Skill eval, drift sweep, seed suite, signed evidence, production probes and hardening</td>
+  <td>Exact Pass 2 gates from V4</td>
+</tr>
+</tbody>
+</table>
+<p>The Design states that seven hard rules and C-5 apply from the first run. The product harness is not allowed to postpone the trust boundary until Pass 2. However, signed evidence (N-18), seeded-defect suite (N-20), skill evaluation (N-11), drift sweep (N-13), and production probes (N-14/N-15) are staged as Pass 2 hardening according to the REV K plan. Do not pull them forward or claim them complete merely because a thin stand-in exists.</p>
+<h3>13.1 Product harness completion gate</h3>
+<p>A product verification capability is ready for ASDI use only when:</p>
+<ul>
+<li>all required harness commands exist and have tested behavior;</li>
+<li>the designated self-test feature proof passes;</li>
+<li>its negative control is caught;</li>
+<li>results conform to the normative V4 schema;</li>
+<li>every proof compares actual observation against a literal expected value;</li>
+<li>all proof limits are explicit;</li>
+<li>the harness can run without a model;</li>
+<li>it operates only on run-owned resources;</li>
+<li>cleanup preserves evidence;</li>
+<li>the clean ASDI verifier can reproduce the result using trusted inputs;</li>
+<li>feature/path coverage meets the V4 threshold;</li>
+<li>existing verification files cannot be weakened by the candidate being judged.</li>
+</ul>
+<p>A harness with a missed negative control is <strong>unusable</strong>, not “partially green.” A blocked or crashed verifier is <strong>not green</strong>. A feature map that does not cover a changed path cannot silently authorize agent-mergeable treatment.</p>
+<hr />
+<h2>14. Common implementation mistakes</h2>
+<table>
+<thead>
+<tr>
+  <th>Mistake</th>
+  <th>Why it breaks trust</th>
+  <th>Correct response</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td>Write <code>SKILL.md</code> first</td>
+  <td>Produces plausible instructions without executable capability</td>
+  <td>Discover behavior and build/test harness first</td>
+</tr>
+<tr>
+  <td>Let the agent choose which features to verify</td>
+  <td>Agent can omit the behavior most likely to fail</td>
+  <td>ASDI selects features from changed paths and trusted feature map</td>
+</tr>
+<tr>
+  <td>Read feature definitions/static gates only from candidate head</td>
+  <td>Candidate can weaken its own acceptance criteria</td>
+  <td>Use pinned base-branch trust root per N-1/N-5/N-17</td>
+</tr>
+<tr>
+  <td>Treat agent's local tests as ASDI green</td>
+  <td>Violates C-5</td>
+  <td>Clean independent ASDI verification</td>
+</tr>
+<tr>
+  <td>Compare output with itself</td>
+  <td>No independent expected contract</td>
+  <td>Literal reviewed expected fixture</td>
+</tr>
+<tr>
+  <td>No negative control</td>
+  <td>Does not establish that the proof detects failure</td>
+  <td>H-3 negative control; harness self-test</td>
+</tr>
+<tr>
+  <td>One <code>pass: true</code> boolean</td>
+  <td>Hides blocked/error/not-applicable states</td>
+  <td>Preserve all V4 statuses; only <code>pass</code> satisfies gate</td>
+</tr>
+<tr>
+  <td>Overly broad feature path globs</td>
+  <td>Fake coverage and missed impact analysis</td>
+  <td>Narrow path ownership, multiple features where needed</td>
+</tr>
+<tr>
+  <td>Use production data or credentials</td>
+  <td>Crosses trust boundary and risks real side effects</td>
+  <td>Deterministic fixtures and isolated per-run services</td>
+</tr>
+<tr>
+  <td>Skill tells agent to edit verifier when it fails</td>
+  <td>Allows implementer to weaken evaluator</td>
+  <td>Fail closed; protected verification paths; human/judgment route</td>
+</tr>
+<tr>
+  <td>Add a new config file for every capability</td>
+  <td>Config sprawl and competing sources of truth</td>
+  <td>Reuse canonical V4 product-harness layout</td>
+</tr>
+<tr>
+  <td>Treat screenshot as complete proof</td>
+  <td>Image may not establish state, data or expected behavior</td>
+  <td>Pair visual evidence with deterministic state/output assertions</td>
+</tr>
+<tr>
+  <td>Claim production safety from local test</td>
+  <td>Scope exceeds evidence</td>
+  <td>Declare limits; production probes are read-only Pass 2 capability</td>
+</tr>
+<tr>
+  <td>Build all features before self-testing</td>
+  <td>Large, expensive failure surface</td>
+  <td>First vertical slice; prove harness, then expand</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2>15. Agent implementation handoff</h2>
+<p>Use this prompt after the canonical four source documents and their local paths are available in the product repository. Replace the bracketed values. This prompt asks the agent to build the product harness; it does not ask it to modify ASDI-native verification infrastructure.</p>
+<pre><code class="language-text">Build the product-specific verification capability for this repository in
+accordance with the four ASDI specifications.
+
+Inputs
+- Product repository: [repo]
+- Trusted base revision: [base]
+- Current candidate revision: [head]
+- Current ASDI phase: [phase]
+- Four spec paths: [Design REV K, Stack REV K, Build Guide V4 REV K,
+  Trust Handbook REV K]
+
+Authority
+- Design governs product intent, C-0–C-5, hard rules and verification doctrine.
+- Stack governs topology and runtime ownership.
+- Build Guide V4 governs exact layout, schemas, commands, phase order and exit tests.
+- Handbook governs trust rationale and adequacy criteria.
+- Do not invent a schema, CLI flag, service, config file or phase requirement.
+
+Task
+1. Inspect the real product before authoring SKILL.md.
+2. Inventory product surfaces and candidate user/operator behaviors.
+3. Select one deterministic first feature.
+4. Create its feature map with owned paths, reach/drive, literal proof,
+   negative control and limits, using the exact V4 schema.
+5. Implement the single deterministic verify executable with launch,
+   doctor, drive, control and cleanup.
+6. Add fixtures and drivers for the selected feature.
+7. Write the nine-section verify/SKILL.md from the working implementation.
+8. Run the complete harness self-test, including the negative control.
+9. Verify run-owned resource cleanup and evidence preservation.
+10. Prepare the harness for ASDI's independent clean verifier; do not claim
+    the agent's run is authoritative ASDI verification.
+
+Safety
+- Do not access production, production secrets, live user data or another run.
+- Do not edit existing verification files to make the current candidate pass.
+- Do not change expected fixtures merely to match observed broken output.
+- Do not weaken static gates or coverage.
+- Do not add alternate configuration hierarchy or new services without V4 authority.
+- Do not mark blocked/error/not-run as pass.
+
+Deliverables
+- Feature inventory and rationale.
+- Exact V4-conforming feature map.
+- verify executable and drivers/fixtures.
+- Nine-section verify/SKILL.md.
+- Harness self-test output and evidence references.
+- Known limits and uncovered paths.
+- Phase exit assessment with command and observed result.
+
+Stop and report a blocking ambiguity rather than inventing product behavior or
+an implementation contract. Do not modify ASDI-native components unless the
+assigned task explicitly includes them.
+</code></pre>
+<hr />
+<h2>16. Build-review report template</h2>
+<p>The implementation agent should leave a concise, auditable report. The report itself is not a gate result; ASDI's verifier produces the authoritative result.</p>
+<pre><code class="language-markdown"># Product Verification Harness Build Report
+
+## Scope
+- Product/repository:
+- Base revision:
+- Candidate revision:
+- ASDI phase:
+- Spec revisions read:
+
+## Product discovery
+- Surfaces inspected:
+- Feature selected:
+- Owned paths:
+- Expected behavior source:
+- Unknowns resolved / unresolved:
+
+## Deliverables
+- Feature map:
+- Executable:
+- Drivers/fixtures:
+- SKILL.md:
+- Product config references:
+
+## Self-test
+| Command | Observed result | Evidence | Status |
+|---|---|---|---|
+| launch | | | |
+| doctor | | | |
+| drive | | | |
+| control | | | |
+| cleanup | | | |
+
+## Negative control
+- Fault injected:
+- Detection expected:
+- Detection observed:
+- Was the control caught?
+
+## Evidence and limitations
+- Evidence location:
+- Result schema validation:
+- Cleanup preserved evidence:
+- Explicit proof limits:
+- Uncovered paths:
+
+## Conformance
+- H-1–H-4 status:
+- N-1/N-2 integration status:
+- N-4/N-5 coverage/protection status:
+- Phase exit status:
+- Blocking gaps:
+
+## Claim boundary
+State explicitly: “This report is an implementation handoff. Only the ASDI-run
+clean verifier and trusted gate evaluation can establish a green result.”
+</code></pre>
+<hr />
+<h2>17. Final mental model</h2>
+<p>A product verification capability has to satisfy three different tests:</p>
+<table>
+<thead>
+<tr>
+  <th>Property</th>
+  <th>Question</th>
+  <th>Owner</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td><strong>Capability</strong></td>
+  <td>Can the harness reach and exercise the behavior that matters?</td>
+  <td>Product harness (H-1–H-4)</td>
+</tr>
+<tr>
+  <td><strong>Reliability</strong></td>
+  <td>Does the proof detect a known violation and remain current as the product evolves?</td>
+  <td>Product negative controls/maintenance; ASDI skill evaluation and drift controls</td>
+</tr>
+<tr>
+  <td><strong>Enforcement</strong></td>
+  <td>Can the implementing agent alter the rules, forge the result or bypass delivery authority?</td>
+  <td>ASDI-native N-1/N-2/N-4/N-5/N-17/N-19 and hard rules</td>
+</tr>
+</tbody>
+</table>
+<p>These are not interchangeable. A detailed skill without a working driver is not a verification capability. A working positive test without a negative control has unproven detection power. A reliable harness without an independent trust boundary can be weakened by the agent whose work it evaluates.</p>
+<p>The end-to-end contract is:</p>
+<pre><code class="language-text">Product defines behavior
+        ↓
+Feature map declares path, drive, proof, negative control and limits
+        ↓
+Deterministic harness exercises the real product
+        ↓
+Positive proof passes AND negative control is caught
+        ↓
+ASDI reruns using trusted base-branch verification material
+        ↓
+ASDI validates evidence provenance, integrity, freshness and coverage
+        ↓
+ASDI gate decides whether the change may progress
+</code></pre>
+<p><strong>The milestone is not “the agent can explain how to test the product.” The milestone is “ASDI can independently reproduce the proof, detect a deliberate defect, preserve trustworthy evidence and refuse progression when verification is absent, invalid or inadequate.”</strong></p>
+<hr />
+<h2>References</h2>
+<ul>
+<li>ASDI Design doc REV K: <a href="https://claude.biothropic.com/ASDI/ASDI%20Design%20doc-REV%20K.html">https://claude.biothropic.com/ASDI/ASDI%20Design%20doc-REV%20K.html</a> — especially §02, §07, §12 and §13.</li>
+<li>ASDI Stack doc REV K: <a href="https://claude.biothropic.com/ASDI/ASDI%20Stack%20doc.html">https://claude.biothropic.com/ASDI/ASDI%20Stack%20doc.html</a> — especially §01–02 and §04.</li>
+<li>ASDI Build Guide V4 REV K: <a href="https://claude.biothropic.com/ASDI/ASDI-BUILD-GUIDE-V4.md">https://claude.biothropic.com/ASDI/ASDI-BUILD-GUIDE-V4.md</a> — normative exact layout, schemas, interfaces and phase exit tests. The published URL was unavailable during preparation; use the local authoritative copy.</li>
+<li>ASDI Trust Handbook REV K: <code>ASDI-TRUST-HANDBOOK-REV-K.html</code> — especially ownership, evidence semantics, acceptance criteria and crosswalk.</li>
+<li>Existing <code>asdi-build-conformance</code> skill: the separate read-only auditor for ASDI implementation conformance; not the product H-1 skill described here.</li>
+</ul>
+</main></div>
+<div class="footer">ASDI Product Verification Skill Build Guide · REV K companion · Examples are illustrative unless explicitly marked as Design REV K contracts.</div>
+<script>
+document.querySelectorAll('pre').forEach(p=>{const b=document.createElement('button');b.className='copy';b.textContent='Copy';b.addEventListener('click',async()=>{try{await navigator.clipboard.writeText(p.innerText);b.textContent='Copied';setTimeout(()=>b.textContent='Copy',1000)}catch(e){b.textContent='Select text'}});p.appendChild(b)});
+</script>
+</body></html>

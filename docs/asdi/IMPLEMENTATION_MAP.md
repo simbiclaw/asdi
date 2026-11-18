@@ -3,7 +3,7 @@
 **Audit date:** 2026-11-13
 **Audited path:** `/Users/russell/workspace/ASDI`
 **Ticket:** ASDI-000
-**Baseline document:** [`ASDI_Codex_Implementation_Backlog_REV_H_G.md`](../../ASDI_Codex_Implementation_Backlog_REV_H_G.md)
+**Historical baseline document:** [`reference/archive/ASDI_Codex_Implementation_Backlog_REV_H_G.md`](../../reference/archive/ASDI_Codex_Implementation_Backlog_REV_H_G.md). This audit is retained for provenance; the current authority is the four-document REV K set in [`reference/AUTHORITY.md`](../../reference/AUTHORITY.md).
 
 ## Repository inventory
 
@@ -11,7 +11,7 @@ The inspected working directory contained exactly one regular file:
 
 | Path | Existing capability | Evidence |
 |---|---|---|
-| [`ASDI_Codex_Implementation_Backlog_REV_H_G.md`](../../ASDI_Codex_Implementation_Backlog_REV_H_G.md) | Execution backlog for ASDI Design REV H and ASDI Stack REV G, including tickets, dependencies, seven hard rules, D-9 compatibility tests, and open decisions. | Full-file review; lines 1–900. |
+| [`reference/archive/ASDI_Codex_Implementation_Backlog_REV_H_G.md`](../../reference/archive/ASDI_Codex_Implementation_Backlog_REV_H_G.md) | Historical execution backlog for ASDI Design REV H and ASDI Stack REV G, including tickets, dependencies, seven hard rules, D-9 compatibility tests, and open decisions. | Full-file review; lines 1–900. |
 
 There was no `.git` directory when the audit was performed. Consequently, there was no Git history, branch configuration, remote, checked-in state, or protected baseline.
 
@@ -27,7 +27,7 @@ There was no `.git` directory when the audit was performed. Consequently, there 
 | Hooks or structural checks | Missing | No Git hooks, task hooks, scripts, validators, policy checks, or preflight checks. |
 | CI | Missing | No CI workflow, job definition, runner configuration, or test entry point. |
 | Tests | Missing | No test files, fixtures, runners, or expected-results directory. |
-| Documentation | Backlog only | The backlog is authoritative for execution order and acceptance criteria; no system documentation existed before this audit. |
+| Documentation | Historical backlog only | The backlog was then treated as authoritative for execution order and acceptance criteria; it is now archived and superseded by the four REV K specifications. |
 
 ## Security-sensitive surface
 

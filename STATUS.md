@@ -7,6 +7,7 @@
 ## Completed
 
 - [x] Reference set imported under `reference/`.
+- [x] REV H/G implementation backlog archived under `reference/archive/`; the four REV K specifications are recorded as the authoritative set in [`reference/AUTHORITY.md`](reference/AUTHORITY.md).
 - [x] Agent-neutral instruction files added.
 - [x] REV K zone topology added to `compose.yaml`.
 - [x] JSON Schemas added for Phase 0 artifacts.

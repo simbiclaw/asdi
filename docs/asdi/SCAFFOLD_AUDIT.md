@@ -8,7 +8,7 @@
 
 - Listed all files, including hidden entries, in the working directory.
 - Searched tracked candidate content for project files, service manifests, configuration, hooks, CI, tests, secrets, and references to ASDI or gates.
-- Reviewed the only regular file, [`ASDI_Codex_Implementation_Backlog_REV_H_G.md`](../../ASDI_Codex_Implementation_Backlog_REV_H_G.md), for requirements and existing capability.
+- Reviewed the only regular file, now archived at [`reference/archive/ASDI_Codex_Implementation_Backlog_REV_H_G.md`](../../reference/archive/ASDI_Codex_Implementation_Backlog_REV_H_G.md), for historical REV H/G requirements and existing capability.
 - Checked for `.git` and Git metadata before treating any artifact as checked in.
 
 ## Inventory
