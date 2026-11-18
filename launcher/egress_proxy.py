@@ -81,7 +81,6 @@ class EgressHandler(BaseHTTPRequestHandler):
             return
         try:
             self.connection.sendall(b"HTTP/1.1 200 Connection Established\r\n\r\n")
-            self.log_message("CONNECT %s:%s authorized reason=%s", host, port, reason)
             self._relay(remote)
         finally:
             remote.close()
@@ -125,32 +124,12 @@ class EgressHandler(BaseHTTPRequestHandler):
             headers["Authorization"] = f"Bearer {self.authority.model_key}"
         try:
             connection = http.client.HTTPConnection(host, port, timeout=30)
-            origin_path = parsed.path or "/"
-            if parsed.query:
-                origin_path += "?" + parsed.query
-            connection.request(method, origin_path, body=body, headers=headers)
+            connection.request(method, self.path, body=body, headers=headers)
             response = connection.getresponse()
             payload = response.read()
         except OSError as error:
             self.send_error(502, f"connect_failed:{error}")
             return
-        if response.status >= 400:
-            body = payload[:4000].decode("utf-8", errors="replace")
-            sys.stderr.write(
-                json.dumps(
-                    {
-                        "asdi_egress_error": {
-                            "host": host,
-                            "port": port,
-                            "path": parsed.path,
-                            "status": response.status,
-                            "body": body,
-                        }
-                    },
-                    sort_keys=True,
-                )
-                + "\n"
-            )
         try:
             self.send_response(response.status, response.reason)
             for key, value in response.getheaders():

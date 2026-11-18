@@ -8,7 +8,6 @@ from unittest.mock import patch
 from pathlib import Path
 
 from launcher.runner import DockerRuntime, REVKLauncher
-from launcher.agents.claude_proxy_agent import secret_observation
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -111,16 +110,6 @@ class FakeRuntime(DockerRuntime):
         self.killed = True
 
 
-class ProxyLogRuntime(DockerRuntime):
-    def __init__(self) -> None:
-        self.docker = "docker"
-        self.log_commands: list[list[str]] = []
-
-    def _run(self, arguments: list[str], *, timeout: float | None = None) -> subprocess.CompletedProcess[str]:
-        self.log_commands.append(arguments)
-        return subprocess.CompletedProcess(arguments, 0, "asdi-egress /v1/messages\n", "")
-
-
 import json
 
 
@@ -212,16 +201,3 @@ class REVKRunnerTests(unittest.TestCase):
                 expected_workspace.resolve(),
             )
             self.assertTrue((expected_workspace / "src" / "notes.py").is_file())
-
-    def test_proxy_log_capture_uses_docker_only_after_agent_exit(self) -> None:
-        runtime = ProxyLogRuntime()
-        self.assertEqual(runtime.proxy_logs("asdi-egress-test"), "asdi-egress /v1/messages\n")
-        self.assertEqual(runtime.log_commands, [["logs", "asdi-egress-test"]])
-        runtime.docker = None
-        self.assertEqual(runtime.proxy_logs("asdi-egress-test"), "")
-        self.assertEqual(len(runtime.log_commands), 1)
-
-    def test_claude_stop_hook_treats_any_key_name_as_forbidden(self) -> None:
-        observation = secret_observation(["ASDI_RUN_ID", "LITELLM_MASTER_KEY"])
-        self.assertEqual(observation["forbidden_names"], ["LITELLM_MASTER_KEY"])
-        self.assertIs(observation["values_recorded"], False)

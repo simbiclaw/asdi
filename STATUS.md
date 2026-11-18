@@ -64,9 +64,7 @@ The fresh cycle-2 verifier for candidate `19e6e2d` was stopped by the model prov
 
 Strict verifier hardening now requires a launcher-collected `result.json` bound to the run and commit, with every feature passing and its negative control caught. Live Docker negative and positive runs both produced valid content-addressed evidence; the malformed verifier stayed red and the corrected fixture succeeded.
 
-Phase 1 now has a per-run HTTP/CONNECT egress proxy attached to both the internal run network and `asdi-egress`. The agent receives only proxy URLs; the proxy performs destination authorization and injects the local model key. A live Docker run and separate proxy proof passed.
-
-The remaining live coding-CLI gap is now closed with Claude Code `2.1.283`: run `r-b73ef259-c3e7-44ff-9d5f-1aa8d9dd77cb` used the proxy for Git, npm and local-model traffic; npm pinned `is-odd@3.0.1`; the proxy logged authorized `github.com:443` and `registry.npmjs.org:443` CONNECTs; the agent had no credential-like environment names; and the Claude Stop hook passed. The independent base-branch verifier re-ran the generated probe and caught its negative control. Evidence manifest `m-14f6e99b3711391703429abc` validated after teardown. See [`docs/asdi/REV_K_LIVE_EGRESS_CLI_EVIDENCE.md`](docs/asdi/REV_K_LIVE_EGRESS_CLI_EVIDENCE.md).
+Phase 1 now has a per-run HTTP/CONNECT egress proxy attached to both the internal run network and `asdi-egress`. The agent receives only proxy URLs; the proxy performs destination authorization and injects the local model key. A live Docker run and separate proxy proof passed. The verifier-authored live coding-CLI slice is rejected from the active branch and preserved for reference; a fresh builder-owned implementation is still required.
 
 ## Next
 Executing the owner's Option 3 decision with Option 2 preservation mechanics. All overreach candidates are retained at [`revk/preserved-verifier-overreach`](https://github.com/simbiclaw/asdi/tree/revk/preserved-verifier-overreach); the active PR branch is receiving non-destructive forward reverts before a fresh builder cycle and read-only audit.

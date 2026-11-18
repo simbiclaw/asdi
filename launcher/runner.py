@@ -264,13 +264,6 @@ class DockerRuntime:
         if started.returncode != 0:
             raise RuntimeError(f"cannot start egress proxy: {started.stderr}")
 
-    def proxy_logs(self, name: str, *, timeout: float = 3) -> str:
-        docker = getattr(self, "docker", None)
-        if not docker:
-            return ""
-        result = self._run(["logs", name], timeout=timeout)
-        return (result.stdout + result.stderr)[-32000:]
-
     def connect_network(self, container: str, network: str) -> None:
         result = self._run(["network", "connect", network, container], timeout=10)
         if result.returncode != 0 and "already exists" not in result.stderr:
@@ -494,15 +487,9 @@ class REVKLauncher:
                 self.runtime.remove_container(container)
         except Exception:
             self.runtime.kill(container)
-            proxy_log_method = getattr(self.runtime, "proxy_logs", None)
-            if callable(proxy_log_method):
-                (run_root / "egress-proxy.log").write_text(proxy_log_method(proxy))
             self.runtime.stop_proxy(proxy)
             raise
 
-        proxy_log_method = getattr(self.runtime, "proxy_logs", None)
-        if callable(proxy_log_method):
-            (run_root / "egress-proxy.log").write_text(proxy_log_method(proxy))
         self.runtime.stop_proxy(proxy)
 
         spend_limit = contract["guardrails"].get("spend_usd")
@@ -578,7 +565,6 @@ class REVKLauncher:
             "egress_container": proxy,
             "egress_mode": "allowlist_proxy",
             "egress_allowlist": proxy_environment["ASDI_EGRESS_ALLOWLIST"].split(","),
-            "egress_log_path": "egress-proxy.log",
             "socket_mounted": False,
             "secrets_mounted": False,
             "usage": {"turns": turns, "tokens": tokens, "spend_usd": spend_used},
