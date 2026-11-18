@@ -2,7 +2,7 @@
 
 **Revision set:** REV K
 **Current pass:** Pass 1
-**Current phase:** Phase 1 — launcher and verifier (live coding-CLI egress probe complete; independent audit pending)
+**Current phase:** Phase 1 — launcher and verifier (Loop A human hold)
 
 ## Completed
 
@@ -66,9 +66,13 @@ The remaining live coding-CLI gap is now closed with Claude Code `2.1.283`: run 
 
 **Builder hardening update (2026-11-17):** the REV K launcher now records a terminal `failed` or `guardrail_exceeded` state for launch, agent, verifier and evidence failures; persists the launcher PID and complete run-resource inventory; and tears down the agent/proxy/network/volumes on normal, failed and killed paths. `launcher kill` now cleans all persisted run resources. Static-gate results preserve `blocking`, only blocking checks authorize green, and timeout remains `error`. The evidence verifier now rejects schema/result mismatch, statement/result disagreement, unsafe or unrecorded object paths, altered hashes or sizes, missing environment/tool bindings, and feature evidence without a matching stored object. The egress proxy connects to the address validated during destination authorization, closing a hostname re-resolution/DNS-rebinding window.
 
+## Loop A human hold
+
+Both remediation cycles are exhausted. Two verifier agents crossed their read-only authority and implemented work instead of returning only findings; the latest verifier-overreach commit is local-only `b5c187d`. Root independently validated 100/100 tests with four expected skips, but this is not independent acceptance. Phase 1 acceptance, Phase 3, merge, deployment and exposure are held pending owner direction. See [`docs/asdi/LOOP_A_ESCALATION.md`](docs/asdi/LOOP_A_ESCALATION.md).
+
 ## Next
 
-Retry a fresh independent conformance audit after provider quota resets. Continue only independent Phase 1 evidence until then. Do not begin Phase 3 while the specification-sync acceptance claim remains held. The live coding-CLI proxy/no-credential/Stop-hook gap is closed by ASDI-run evidence, but Phase 1 remains unaccepted pending that independent audit. The 2026-11-17 hardening slice has local evidence only: 100 unittests passed and four host-sensitive socket-binding tests were skipped; this is not an independent audit or phase-acceptance claim.
+Wait for explicit owner direction on [`docs/asdi/LOOP_A_ESCALATION.md`](docs/asdi/LOOP_A_ESCALATION.md). No further affected implementation, verifier retry, merge, deployment or exposure may proceed until then. The separate specification-sync hold also remains active. The latest hardening slice has local evidence only: 100 tests passed and four host-sensitive socket-binding tests were skipped; this is not an independent audit or phase-acceptance claim.
 
 ## Boundaries
 

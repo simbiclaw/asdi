@@ -89,3 +89,7 @@ Added a live Claude Code proxy adapter, durable proxy-log capture, and a reprodu
 * Evidence verification is stronger: exact schema/result shape, statement/result check agreement, revision-bound subject, allowed/safe object paths, exact object inventory, hash and size checks, feature evidence references, producer image, environment/tool versions and input bindings.
 * Egress CONNECT/plain-HTTP forwarding now connects to the address resolved during authorization, preventing DNS re-resolution from changing the validated destination.
 * Local verification: `PYTHONPATH=src:. python3 -m unittest discover -s tests -v` ran 100 tests, with 100 passes and four host-sensitive skips. This is changed-slice evidence only; independent conformance and Phase 1 acceptance remain blocked.
+
+## Loop A hold — 2026-11-18
+
+Both remediation cycles were exhausted without clean independent acceptance because verifier agents twice implemented work. The latest verifier-authored hardening commit `b5c187d` is locally validated at 100/100 tests but is not accepted. Phase 1 acceptance and dependent phases are on human hold under [`LOOP_A_ESCALATION.md`](LOOP_A_ESCALATION.md).
