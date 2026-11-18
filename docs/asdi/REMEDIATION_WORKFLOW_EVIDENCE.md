@@ -101,26 +101,6 @@ Ran 89 tests in 10.735s
 OK (skipped=3)
 ```
 
-The three skips are the existing expected AF_UNIX sandbox limitations, not new failures. A fresh independent verifier must audit the cycle-1 commit. Actual Docker execution of the repaired verifier path remains outstanding until that audit or a subsequent execution run provides host evidence.
-
-## Live verifier-mount correction (2026-11-17)
-
-A live Phase 1 fixture run failed closed with a valid red evidence statement. Investigation showed that the trusted base volume was populated and visible before verification, but the verifier command mounted it with:
-
-```text
---mount type=volume,source=asdi-base-...,destination=/opt/base:ro
-```
-
-Docker 29.6.1 interpreted the `:ro` suffix as part of the `--mount` destination, so `/opt/base/verify/bin/verify` did not exist. Both base mounts now use:
-
-```text
---mount type=volume,source=asdi-base-...,destination=/opt/base,readonly
-```
-
-A regression test records Docker arguments through a fake CLI and rejects the invalid `destination=/opt/base:ro` form. After the correction, a fresh live fixture run returned `status=succeeded`; `static:compile` and `verify:base-harness` both returned `pass`; evidence manifest `m-095e4dff7674109d1db08001` validated against fixture commit `726950b7ea027f0914b59d7b97b12bb37544cc9c`; runtime evidence recorded `socket_mounted=false` and `secrets_mounted=false`.
-
-The independent specification hold remains active. This correction is implementation evidence only and does not authorize a synchronized four-document acceptance claim.
-
 ## Cycle 2 verifier status and continued guardrail evidence
 
 The fresh cycle-2 verifier was launched for candidate `19e6e2d`, but stopped before auditing because the model provider returned a five-hour usage-limit error. No implementation verdict was produced. This is `verification_blocked`, not `pass` or `fail`; the candidate remains unaccepted.

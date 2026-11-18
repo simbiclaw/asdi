@@ -38,8 +38,6 @@ Contract validation, evidence store, static-gate runner, per-run container orche
 
 **Update:** per-run network, workspace/evidence volumes, non-root container execution, static verifier, evidence persistence, turn-kill test, red-verifier override test, base-harness tamper-ignoration test, spend preflight, and durable status/kill CLI now pass.
 
-**Live boundary update (2026-11-17):** the actual Docker scaffold topology probe proved that an `asdi-agent` container cannot reach a live listener on `asdi-prod` (`Network is unreachable`). A real Phase 1 fixture run initially failed closed because the verifier passed `destination=/opt/base:ro` to Docker `--mount`; Docker treated the suffix as part of the destination. The base volume was populated, but `/opt/base` was absent. Changing the mount to `destination=/opt/base,readonly` fixed the verifier. The corrected run completed with `status=succeeded`; static and base-harness checks were `pass`; the evidence manifest was valid and bound to fixture commit `726950b7ea027f0914b59d7b97b12bb37544cc9c`; and runtime evidence recorded no Docker socket and no mounted secrets. This is fixture-path boundary evidence, not toy-harness or Phase 1 completion evidence.
-
 ## Verification remediation workflow
 
 The user-directed remediation/specification-escalation loop is implemented as a durable controller:
