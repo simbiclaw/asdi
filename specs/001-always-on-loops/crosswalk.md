@@ -78,7 +78,7 @@ Each item is resolved in REV K's favour unless it says *needs owner*.
 | X-3 | Auto-mode classifiers gate risky actions | C-5; hard rules are platform-enforced (Design §02) | Advisory only, never authority (Out of Scope). **Resolved.** |
 | X-4 | An event that continues earlier work resumes the existing session | Design §01 "Fresh eyes beat re-reading … reset to brief v2 … fresh session"; Guide §11.3 "resume starts a fresh session" | Always a fresh session plus memory (FR-019). **Resolved.** |
 | X-5 | Interactive approval cards (MCP Apps) inside the session | Stack §00 Archon "never uses interactive approval nodes"; DD-37 allowlisted comments; DD-17 exposure CLI | Answers come only through allowed channels (FR-027). **Resolved.** |
-| X-6 | (Not from the article.) On 2026-11-18 a hosted, hourly Claude scheduled task was set up to review new PRs on `simbiclaw/asdi`. | Guide §3.4 excludes "Cloud agent runners or hosted automation" (C-1). It does not violate D-8, because it polls outward, but it is a loop that does not run locally. | **Needs owner.** Treat it as a stopgap outside ASDI, and retire it when Phase 4's local review pass is live. Or retire it now. It never posts `ci` or `asdi/policy`, so it cannot affect a gate. |
+| X-6 | (Not from the article.) On 2026-11-18 a hosted, hourly Claude scheduled task was set up to review new PRs on `simbiclaw/asdi`. | Guide §3.4 excludes "Cloud agent runners or hosted automation" (C-1). | **Resolved 2026-11-18.** The hosted task is deleted and replaced by the local REV K reviewer: `events/` poller, `archon/passes/review.py`, `asdi/review` status. See `docs/asdi/PR_REVIEWER.md`. |
 | X-7 | Inbox per user | One owner; parallelism is limited per subject and by the WIP limit of 3 (`config/defaults.yaml`) | Per-subject single handling (FR-004). **Resolved.** |
 | X-8 | User instructions are a memory file the agent loads every run | Instructions are `AGENTS.md` plus the run contract. Text changes need `asdi/skill-eval` (Guide §11.1 layer 4, §11.2) | Agents cannot write instructions (FR-021). **Resolved.** |
 | X-9 | (Spec addition.) FR-033 needs audit events `event.recorded`, `event.deduplicated`, `event.failed`, `timer.fired`, `handling.ended`, `decision.requested`, `decision.answered`, `notification.sent` | Guide §18 is the event list; "The handbook defines no event list of its own and defers to this one." | **Needs owner.** Adding names to Guide §18 changes an authority document. Until approved, emit them only under an `x-` prefix, or record `SPEC_CONFLICT` per `reference/AUTHORITY.md`. |
@@ -90,7 +90,7 @@ These follow Guide §4: each gets a seam and a provisional default. "Never resol
 
 | ID | Decision | Provisional default | Seam |
 |---|---|---|---|
-| DD-39 | Where events are stored, and the subject key | Table in Archon's Postgres; key = (source, source ID); subject = PR, task, defect cluster or experiment | `events/` source interface |
+| DD-39 | Where events are stored, and the subject key | **Recorded in `DECISIONS.md`:** SQLite behind `events/inbox.py` for Pass 1; Archon's Postgres is the target. Key = (source, source ID); subject = PR, task, defect cluster or experiment | `events/` source interface |
 | DD-40 | No-progress lease for a non-run handling | 15 min | `config/defaults.yaml` `handling_lease_seconds: 900` |
 | DD-41 | Attempts before an event is marked failed | 3 | `config/defaults.yaml` `event_max_attempts: 3` |
 | DD-42 | Missed occurrences of a schedule | Coalesce into one catch-up event | Sweep config |

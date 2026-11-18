@@ -1,28 +1,33 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://asdi.local/schemas/pass.schema.json",
-  "title": "ASDI review pass output",
+  "title": "ASDI review pass output (Build Guide V4 REV K section 10.2, N-6)",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schema", "pass", "reviewed_commit", "verdict", "findings", "independent_family"],
+  "required": ["schema", "pass", "model", "independent_family", "reviewed_commit", "status", "findings"],
   "properties": {
-    "schema": { "const": 1 },
-    "pass": { "const": "review" },
+    "schema": { "const": 2 },
+    "pass": { "enum": ["review", "contract", "correctness", "security", "blast-radius"] },
+    "model": { "type": "string", "minLength": 1 },
+    "independent_family": { "enum": ["true", "false", "unavailable"] },
     "reviewed_commit": { "type": "string", "minLength": 1 },
-    "verdict": { "enum": ["pass", "fail", "blocked", "error"] },
-    "independent_family": { "enum": [true, false, "unavailable"] },
+    "status": { "enum": ["pass", "fail", "blocked"] },
+    "blocked_reason": { "type": "string" },
     "findings": {
       "type": "array",
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["id", "disposition"],
+        "required": ["id", "bucket", "strike", "claim"],
         "properties": {
-          "id": { "type": "string" },
-          "severity": { "enum": ["act", "consider", "noted", "dismissed"] },
-          "disposition": { "enum": ["act", "consider", "noted", "dismissed"] },
-          "evidence": { "type": "string" },
-          "strike": { "type": "boolean" }
+          "id": { "type": "string", "pattern": "^F-[0-9]+$" },
+          "bucket": { "enum": ["act", "consider", "noted", "dismissed"] },
+          "strike": { "type": "boolean" },
+          "concern": { "enum": ["contract", "correctness", "security"] },
+          "file": { "type": "string" },
+          "line": { "type": "integer", "minimum": 1 },
+          "claim": { "type": "string", "minLength": 1 },
+          "evidence": { "type": "string" }
         }
       }
     }

@@ -57,6 +57,6 @@ Run on 2026-11-18 against `spec.md`.
 ## Needs the owner (not spec blockers)
 
 1. **X-9**: new audit event names need an addition to Guide §18, which is an authority-document change.
-2. **X-6**: the hosted hourly PR reviewer conflicts with C-1 and Guide §3.4 ("hosted automation"). Keep it as a stopgap until Phase 4, or retire it now.
+2. **X-6** (resolved 2026-11-18): the hosted reviewer was replaced by the local REV K reviewer.
 
 Ready for the plan step once the owner accepts or amends DD-39 to DD-47.

@@ -1,0 +1,28 @@
+{
+  "version": 1,
+  "repo": "simbiclaw/asdi",
+  "inbox_path": ".asdi-state/archon/inbox.sqlite3",
+  "evidence_root": ".asdi-state/evidence",
+  "notifications_log": ".asdi-state/notifications.log",
+  "status_context": "asdi/review",
+  "status_identity": "archon",
+  "token_env": "ASDI_ARCHON_GITHUB_TOKEN",
+  "evidence_base_url": null,
+  "passes": [
+    {
+      "pass": "review",
+      "model": {
+        "kind": "openai-compatible",
+        "name": "qwen-local",
+        "family": "qwen",
+        "base_url": "http://host.docker.internal:8000/v1"
+      }
+    }
+  ],
+  "builder_families": ["anthropic", "openai"],
+  "max_diff_chars": 200000,
+  "ignore_prs": [1, 2],
+  "ignore_prs_created_before": "2026-11-18T08:38:16Z",
+  "lease_seconds": 900,
+  "max_attempts": 3
+}

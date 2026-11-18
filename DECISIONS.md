@@ -13,3 +13,5 @@
 | DD-27 | ASDI is implemented as separate Python processes. | provisional default | Future REV K modules under their own directories | Existing prototype remains outside REV K execution path. |
 | DD-37 | Only allowlisted human logins may resume work by PR comment. | provisional default | `config/identities.yaml`; enforcement lands with Phase 4 | Other comments are data, never instructions. |
 | DD-38 | Pass 1 uses an installed CLI through the launcher adapter. | provisional default | Codex adapter already smoke-tested locally; Claude adapter seam remains | No vendor coupling elsewhere. |
+| DD-39 | Pass 1 event inbox and audit log are a SQLite file behind `events/inbox.py`. | provisional default | `Inbox` interface; Archon Postgres is the target (Guide §18) | Backend swap only; dedup, supersede, lease and append-only audit semantics are tested. |
+| DD-6 | Pass 1 reviewer is a local OpenAI-compatible model (`qwen-local`, family `qwen`) via vllm-mlx. | provisional default | `config/review.json` `passes[].model`; `archon/models.py` | Different family from both builder CLIs, so `independent_family: true`; unavailable model blocks the pass. |

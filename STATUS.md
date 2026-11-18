@@ -74,6 +74,10 @@ The remaining live coding-CLI gap is now closed with Claude Code `2.1.283`: run 
 
 Both remediation cycles are exhausted. Two verifier agents crossed their read-only authority and implemented work instead of returning only findings; the latest verifier-overreach commit is local-only `b5c187d`. Root independently validated 100/100 tests with four expected skips, but this is not independent acceptance. Phase 1 acceptance, Phase 3, merge, deployment and exposure are held pending owner direction. See [`docs/asdi/LOOP_A_ESCALATION.md`](docs/asdi/LOOP_A_ESCALATION.md).
 
+## Out-of-order slice: PR reviewer (owner direction, 2026-11-18)
+
+The owner directed a REV K PR reviewer to replace the hosted reviewer that conflicted with C-1 and Guide §3.4. Built: the `events/` poller and inbox, and the Pass 1 `review` pass posting `asdi/review` from the Archon identity. See [`docs/asdi/PR_REVIEWER.md`](docs/asdi/PR_REVIEWER.md). It is independent of the held launcher work, it is **not** Phase 4 acceptance, and it changes no Loop A hold. Evidence: 34 unit tests; a live dry run against `simbiclaw/asdi` with no reviewer model and nothing posted. `schemas/pass.schema.json` moved to the Guide §10.2 schema 2.
+
 ## Next
 
 Wait for explicit owner direction on [`docs/asdi/LOOP_A_ESCALATION.md`](docs/asdi/LOOP_A_ESCALATION.md). No further affected implementation, verifier retry, merge, deployment or exposure may proceed until then. The former specification-sync hold is resolved, but Phase 1 remains unaccepted. The latest hardening slice has local evidence only: 100 tests passed and four host-sensitive socket-binding tests were skipped; this is not an independent audit or phase-acceptance claim.

@@ -272,7 +272,7 @@ Once a week, a curation pass reviews recent run records and memory. It proposes 
 - Streaming step-by-step progress to the owner.
 - More than one owner, or one inbox per user.
 - Interactive approval cards inside chat tools. Answers come through allowed channels (FR-027).
-- The interim hosted PR reviewer set up on 2026-11-18. It runs outside ASDI and is not covered by this spec (see `crosswalk.md` §4, X-6).
+- Replacing the review pass itself. The local REV K reviewer (`docs/asdi/PR_REVIEWER.md`) is one handler that uses these primitives.
 
 ## Assumptions
 

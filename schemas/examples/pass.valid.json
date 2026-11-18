@@ -1,10 +1,20 @@
 {
-  "schema": 1,
+  "schema": 2,
   "pass": "review",
+  "model": "qwen-local",
+  "independent_family": "true",
   "reviewed_commit": "abc123",
-  "verdict": "pass",
-  "independent_family": false,
+  "status": "fail",
   "findings": [
-    { "id": "F-001", "disposition": "noted", "evidence": "No issue found", "strike": false }
+    {
+      "id": "F-1",
+      "bucket": "act",
+      "strike": true,
+      "concern": "correctness",
+      "file": "src/export/csv.py",
+      "line": 88,
+      "claim": "Header row omitted when the list is empty",
+      "evidence": "if not rows: return \"\""
+    }
   ]
 }
