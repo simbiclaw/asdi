@@ -18,7 +18,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from .agent_adapters import AdapterName, build_agent_launch
 from .contract import load_contract
 from .evidence import EvidenceStore
 from .static_gates import run_checks as run_container_checks
@@ -305,9 +304,6 @@ class REVKLauncher:
         runtime: DockerRuntime | None = None,
         agent_script: str | Path | None = None,
         agent_default_cost_usd: float = 0.0,
-        agent_adapter: AdapterName = "fixture",
-        model: str = "qwen3.6-35b-dspark-local",
-        model_alias: str = "claude-3-7-sonnet-latest",
     ) -> None:
         self.root = Path(root).resolve()
         self.runs_root = self.root / "runs"
@@ -332,9 +328,6 @@ class REVKLauncher:
             agent_script or Path(__file__).resolve().parent / "agents" / "fixture_agent.py"
         ).resolve()
         self.agent_default_cost_usd = agent_default_cost_usd
-        self.agent_adapter = agent_adapter
-        self.model = model
-        self.model_alias = model_alias
         self.runs_root.mkdir(parents=True, exist_ok=True)
 
     def run(self, contract_path: str | Path) -> RunResult:
@@ -394,7 +387,6 @@ class REVKLauncher:
             proxy_environment = {
                 "ASDI_MODEL_HOST": self.model_host,
                 "ASDI_MODEL_PORT": str(self.model_port),
-                "ASDI_MODEL_LOCAL_NAME": self.model,
                 "ASDI_EGRESS_ALLOWLIST": ",".join(
                     [
                         "github.com:443",
@@ -439,6 +431,16 @@ class REVKLauncher:
             "HTTPS_PROXY": f"http://{proxy}:8081",
             "NO_PROXY": "localhost,127.0.0.1",
         }
+        command = [
+            "/usr/bin/python3",
+            "/opt/asdi/fixture_agent.py",
+            "--workspace",
+            "/workspace",
+            "--run-id",
+            run_id,
+            "--commit",
+            self._head(),
+        ]
         started = time.time()
         turns = 0
         tokens = 0
@@ -469,25 +471,6 @@ class REVKLauncher:
                     continue
                 if event.get("event") == "turn":
                     turns += 1
-                if event.get("type") == "assistant":
-                    turns += 1
-                    usage = event.get("message", {}).get("usage", {})
-                    tokens += sum(
-                        value
-                        for key, value in usage.items()
-                        if key.endswith("tokens") and isinstance(value, int)
-                    )
-                if event.get("type") == "result":
-                    result_usage = event.get("usage", {})
-                    cumulative_tokens = sum(
-                        value
-                        for key, value in result_usage.items()
-                        if key.endswith("tokens") and isinstance(value, int)
-                    )
-                    tokens = max(tokens, cumulative_tokens)
-                    total_cost = event.get("total_cost_usd")
-                    if isinstance(total_cost, (int, float)):
-                        spend_used = max(spend_used, float(total_cost))
                 if event.get("event") == "usage":
                     tokens += int(event.get("tokens", 0))
                     spend_used += float(event.get("usd", 0))
@@ -506,19 +489,6 @@ class REVKLauncher:
                 raise RuntimeError("turn guardrail exceeded")
 
         try:
-            agent_launch = build_agent_launch(
-                self.agent_adapter,
-                agent_script=self.agent_script,
-                instruction_root=Path(__file__).resolve().parents[1],
-                contract_path=Path(contract_path).resolve(),
-                run_id=run_id,
-                commit=self._head(),
-                model=self.model,
-                proxy_name=proxy,
-                model_base_url=self.model_base_url,
-            model_alias=self.model_alias,
-            )
-            command = agent_launch.command
             process = self.runtime.start(
                 name=container,
                 image=self.agent_image,
@@ -526,11 +496,11 @@ class REVKLauncher:
                 command=command,
                 binds=[
                     f"type=volume,source={workspace_volume},destination=/workspace",
+                    f"type=bind,source={self.agent_script},destination=/opt/asdi/fixture_agent.py,ro",
                     f"type=volume,source={volume},destination=/evidence",
-                ]
-                + agent_launch.binds,
+                ],
                 user="1001:1001",
-                environment={**environment, **agent_launch.environment},
+                environment=environment,
             )
             limit = float(contract["guardrails"]["minutes"]) * 60
             threading.Thread(target=drain_process_output, daemon=True).start()

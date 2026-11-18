@@ -42,8 +42,6 @@ Contract validation, evidence store, static-gate runner, per-run container orche
 
 **Live Docker recovery evidence:** local isolated run `r-e8707e74-fcbf-4f95-8dd2-dd95ba720716` succeeded with static and base-harness checks passing. Evidence manifest `m-c9c1d54e0ac4ee31ff13b5d5` remained valid after teardown. Runtime evidence recorded no Docker socket and no secrets. See [`docs/asdi/LOOP_A_RECOVERY.md`](docs/asdi/LOOP_A_RECOVERY.md).
 
-**Fresh builder Claude adapter:** the active branch now has separate fixture and Claude adapter entries. Pinned Claude Code 2.1.283 runs headless with stream events, launcher-owned proxy routing, denied permission prompts, contract done-check stop hook, and no model key in the run. An isolated live run `r-26fac407-98a1-41bc-ad5b-e61913487347` succeeded; its manifest `m-a9ad5f546c34b29f80a16f8d` remained valid after teardown. Full local suite: **110 tests, OK, 4 expected skips**. This remains builder-side evidence pending independent verification. See [`docs/asdi/REV_K_CLAUDE_ADAPTER_EVIDENCE.md`](docs/asdi/REV_K_CLAUDE_ADAPTER_EVIDENCE.md).
-
 ## Verification remediation workflow
 
 The user-directed remediation/specification-escalation loop is implemented as a durable controller:

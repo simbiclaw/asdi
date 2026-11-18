@@ -24,10 +24,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--agent-image", default="safeclaw:cc-2.1.283")
     parser.add_argument("--agent-script")
     parser.add_argument("--docker", default=None)
-    parser.add_argument("--agent-adapter", choices=("fixture", "claude"), default="fixture")
     parser.add_argument("--live", action="store_true")
     parser.add_argument("--model", default="qwen3.6-35b-dspark-local")
-    parser.add_argument("--model-alias", default="claude-3-7-sonnet-latest")
     parser.add_argument("--codex-path", default=None)
     parser.add_argument("--proxy", default="http://127.0.0.1:7890")
     parser.add_argument("--proxy-image", default="safeclaw-us-egress:cc-2.1.283")
@@ -88,9 +86,6 @@ def main(argv: list[str] | None = None) -> int:
             runtime=runtime,
             agent_script=args.agent_script,
             agent_default_cost_usd=args.agent_cost_usd,
-            agent_adapter=args.agent_adapter,
-            model=args.model,
-            model_alias=args.model_alias,
         )
         result = launcher.run(temporary)
         print(json.dumps(result.__dict__, indent=2, sort_keys=True))

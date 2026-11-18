@@ -33,7 +33,6 @@ class RevKEgressTests(unittest.TestCase):
             model_host="host.docker.internal",
             model_port=4000,
             model_key="proxy-only",
-            model_local_name="local-model",
         )
         self.assertEqual(authority.decide("host.docker.internal", 4000)[0:2], (True, "local_model_proxy"))
         self.assertFalse(authority.decide("192.168.1.10", 5432)[0])
