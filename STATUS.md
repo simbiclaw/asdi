@@ -8,6 +8,7 @@
 
 - [x] Reference set imported under `reference/`.
 - [x] REV H/G implementation backlog archived under `reference/archive/`; the four REV K specifications are recorded as the authoritative set in [`reference/AUTHORITY.md`](reference/AUTHORITY.md).
+- [x] Owner-approved REV K metadata reconciliation completed: the Design and Handbook now record the four-document set as synchronized and classify rev-2/frozen language as historical.
 - [x] Agent-neutral instruction files added.
 - [x] REV K zone topology added to `compose.yaml`.
 - [x] JSON Schemas added for Phase 0 artifacts.
@@ -53,9 +54,11 @@ The user-directed remediation/specification-escalation loop is implemented as a 
 
 See [`docs/asdi/REMEDIATION_WORKFLOW_EVIDENCE.md`](docs/asdi/REMEDIATION_WORKFLOW_EVIDENCE.md).
 
-## Specification hold
+## Specification authority decision
 
-The independent initial audit found the long-known revision-metadata conflict: Design REV K calls the Trust Handbook `rev 2` / frozen, while the Handbook and Build Guide identify it as REV K / synchronized. This is recorded in [`docs/asdi/SPEC_FEEDBACK_HANDBOOK_SYNC.md`](docs/asdi/SPEC_FEEDBACK_HANDBOOK_SYNC.md). No specification text may be changed or reinterpreted, and no four-document synchronized acceptance claim may be made, until the owner selects a disposition. Independent implementation repair continues under the allowed parallel-progress rule.
+The former Handbook synchronization hold is **resolved by owner-approved specification reconciliation on 2026-11-18**. The Design introduction now names Trust Handbook REV K; its rev-2/frozen revision-log sentence is explicitly historical; Handbook §13 records that Build Guide V4 has already been synchronized at REV K. The current four-document hashes are pinned in [`reference/AUTHORITY.md`](reference/AUTHORITY.md), and the original finding remains auditable in [`docs/asdi/SPEC_FEEDBACK_HANDBOOK_SYNC.md`](docs/asdi/SPEC_FEEDBACK_HANDBOOK_SYNC.md).
+
+This resolves the metadata synchronization blocker only. It does not independently accept implementation work or override the Loop A process hold.
 
 The fresh cycle-2 verifier for candidate `19e6e2d` was stopped by the model provider's usage limit before producing a verdict. Its status is `verification_blocked`; no acceptance is claimed.
 
@@ -73,7 +76,7 @@ Both remediation cycles are exhausted. Two verifier agents crossed their read-on
 
 ## Next
 
-Wait for explicit owner direction on [`docs/asdi/LOOP_A_ESCALATION.md`](docs/asdi/LOOP_A_ESCALATION.md). No further affected implementation, verifier retry, merge, deployment or exposure may proceed until then. The separate specification-sync hold also remains active. The latest hardening slice has local evidence only: 100 tests passed and four host-sensitive socket-binding tests were skipped; this is not an independent audit or phase-acceptance claim.
+Wait for explicit owner direction on [`docs/asdi/LOOP_A_ESCALATION.md`](docs/asdi/LOOP_A_ESCALATION.md). No further affected implementation, verifier retry, merge, deployment or exposure may proceed until then. The former specification-sync hold is resolved, but Phase 1 remains unaccepted. The latest hardening slice has local evidence only: 100 tests passed and four host-sensitive socket-binding tests were skipped; this is not an independent audit or phase-acceptance claim.
 
 ## Boundaries
 

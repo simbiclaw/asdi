@@ -1,14 +1,20 @@
 # Specification Feedback Report — Handbook synchronization metadata
 
 **Date:** 2026-11-17
-**Status:** **Awaiting explicit owner direction**
+
+**Decision date:** 2026-11-18
+
+**Status:** **Resolved by owner-approved specification reconciliation**
+
 **Affected claim:** four-document REV K synchronization and full four-spec acceptance
 
 ## Requirement
 
 Build Guide V4 REV K §1 states that the Design, Stack, Trust Handbook and Guide are synchronized at REV K. The conformance skill therefore requires a synchronized four-document source set before a full conformance pass.
 
-## Actual evidence
+## Original finding and pre-amendment evidence
+
+The following line references describe the pre-amendment artifacts and are retained for provenance.
 
 - `reference/ASDI-BUILD-GUIDE.md:7` says the revision set is synchronized at REV K.
 - `reference/ASDI-BUILD-GUIDE.md:8` names “ASDI Trust Handbook — REV K”.
@@ -21,11 +27,47 @@ Build Guide V4 REV K §1 states that the Design, Stack, Trust Handbook and Guide
 
 The Design document contains stale REV K metadata that contradicts the authoritative Build Guide and the actual Handbook. This is a cross-document synchronization conflict, not an implementation defect. The verifier correctly reported `SPEC_SYNC_CONFLICT`.
 
-## Consequences
+## Owner decision
 
-- A full four-spec `PASS` cannot be claimed.
-- Affected dependent work: acceptance of the current implementation slice and any conformance claim requiring synchronized four-document sources.
-- Unrelated implementation repair and phase execution may continue, provided they do not claim four-document synchronization or modify any specification.
+On 2026-11-18 the owner approved a metadata-only reconciliation with these directives:
+
+1. Update the Design introduction to reference Trust Handbook REV K.
+2. Clarify that the old rev-2/frozen statement describes an earlier state, not current authority.
+3. Update Handbook §13 to reflect that Build Guide V4 has already been synchronized.
+4. Reconcile status and this feedback report with the new authority decision.
+
+## Resolution
+
+- [`reference/ASDI Design doc-REV K.html`](../../reference/ASDI%20Design%20doc-REV%20K.html) now names **ASDI-TRUST-HANDBOOK.html, REV K** in its introduction.
+- The Design revision-log entry that recorded rev 2/frozen now explicitly classifies that state as historical, not current authority, and points to the later synchronized Handbook.
+- [`reference/ASDI-TRUST-HANDBOOK.html`](../../reference/ASDI-TRUST-HANDBOOK.html) §13 now states that Build Guide V4 is already synchronized with the Handbook at REV K and that §19.1 treats rev-2 differences as historical.
+- Build Guide V4 already identified **ASDI Trust Handbook — REV K** and required no normative edit.
+- `skills/asdi-build-conformance` no longer treats the metadata mismatch as an open defect; it now verifies execution sources against [`reference/AUTHORITY.md`](../../reference/AUTHORITY.md).
+- The reconciled Design SHA-256 is `5b7c65a64a15a8e1784260178669901d3a5797eefdbd3e40d6f746a24c3bbe1e`; the reconciled Handbook SHA-256 is `c368904d42b54cb4df4a3c0a3c2db7b2ee30a4fc774c06383f7d5d155f95b3cd`.
+
+The authoritative four-document set is synchronized at REV K for metadata and shared facts. Build Guide V4 remains the implementation authority.
+
+## Scoped post-amendment verification
+
+Builder-run check against the reconciled sources:
+
+```text
+result: pass
+checked_sources: 4
+design: 5b7c65a64a15a8e1784260178669901d3a5797eefdbd3e40d6f746a24c3bbe1e
+stack: 0ad0db6308aab98de941c269dda5065b7158617fb65e4ca9b5d3c2fa1924bef7
+build_guide: c528326ee0a5cb6cb86f061abd747896117a308822b399d7bc471fab13057ee6
+trust_handbook: c368904d42b54cb4df4a3c0a3c2db7b2ee30a4fc774c06383f7d5d155f95b3cd
+```
+
+The check asserted the reconciled Design and Handbook statements and the synchronized Build Guide statement, then matched all four SHA-256 values to `reference/AUTHORITY.md`. This is scoped metadata verification, not independent implementation acceptance.
+
+## Consequences after resolution
+
+- The `SPEC_SYNC_CONFLICT` blocker is closed.
+- Four-document metadata synchronization may be assessed against the hashes in [`reference/AUTHORITY.md`](../../reference/AUTHORITY.md).
+- This decision does not accept implementation work, release the Loop A process hold, authorize merge or deployment, or change phase-exit criteria.
+- Any future edit to an authoritative specification requires explicit owner direction and a fresh authority-hash baseline and conformance verification.
 
 ## Alternatives
 
@@ -42,4 +84,4 @@ The Design document contains stale REV K metadata that contradicts the authorita
 
 ## Decision required
 
-Choose one disposition: confirm the original requirement, clarify the intended interpretation, approve a specification amendment, select an alternative approach, or defer/abandon the affected synchronization requirement. Do not permit specification edits or a synchronized acceptance claim until explicit direction is recorded.
+**Decision recorded:** approve the specification reconciliation described above. The original alternatives remain below for audit provenance.

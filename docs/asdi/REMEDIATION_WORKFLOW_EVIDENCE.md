@@ -61,7 +61,7 @@ Primary implementation findings repaired in cycle 1:
 5. Evidence identity collided across runs and lacked producer/environment/input metadata.
 6. Turn guardrail counted polling iterations rather than structured runtime turns, spend/token events were not enforced externally, and CLI guardrail overrides were discarded.
 
-The audit also reported `SPEC_SYNC_CONFLICT` for Design REV K versus the Handbook/Build Guide metadata. That issue is governed by [`docs/asdi/SPEC_FEEDBACK_HANDBOOK_SYNC.md`](SPEC_FEEDBACK_HANDBOOK_SYNC.md), not by implementation remediation.
+The audit also reported `SPEC_SYNC_CONFLICT` for Design REV K versus the Handbook/Build Guide metadata. That historical issue was subsequently resolved by owner-approved specification reconciliation recorded in [`docs/asdi/SPEC_FEEDBACK_HANDBOOK_SYNC.md`](SPEC_FEEDBACK_HANDBOOK_SYNC.md); it did not count as an implementation remediation cycle.
 
 ## Remediation cycle 1
 

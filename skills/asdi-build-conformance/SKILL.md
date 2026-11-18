@@ -68,7 +68,7 @@ Use the source ownership stated by the documents:
 
 Do not apply a simplistic “newest file wins” rule. If the documents conflict outside an explicitly assigned ownership boundary, record `SPEC_CONFLICT`, quote both clauses, identify the safety or implementation consequence, and do not silently choose a convenient interpretation. For implementation detail explicitly owned by V4, follow V4 and report the other document's mismatch.
 
-**Known source-metadata discrepancy to check:** the published Design page and Build Guide V4 currently refer to a companion Trust Handbook “rev 2” / frozen, while the available companion artifact may be labelled REV K. Verify the actual four files supplied for this run. If this discrepancy remains, record `SPEC_SYNC_CONFLICT`; do not claim that all four documents are synchronized. This metadata issue does not automatically block unrelated code tests, but it blocks a claim of four-document synchronization until the owner resolves it.
+**Source-metadata check:** the current authoritative sources identify the companion as **ASDI Trust Handbook · REV K** and state that the four-document set is synchronized at REV K. References to a rev-2/frozen Handbook in historical revision logs describe an earlier state, not current authority. Verify the actual four files supplied for this run and their hashes against `reference/AUTHORITY.md`; if an execution set differs from that manifest, record `SPEC_SOURCE_MISSING` or the applicable conflict.
 
 ## Invocation examples
 

@@ -17,6 +17,6 @@
     "trust_handbook": "reference/ASDI-TRUST-HANDBOOK.html",
     "archive": "reference/asdi-build-conformance.zip"
   },
-  "source_warning": "The Design and Build Guide text may still describe the Trust Handbook as rev 2 while the supplied artifact is labelled REV K. Record SPEC_SYNC_CONFLICT before claiming full four-document synchronization.",
+  "source_warning": "The owner-approved REV K sources are synchronized. Historical rev-2/frozen references describe an earlier state, not current authority. Verify executed sources against reference/AUTHORITY.md before claiming four-document conformance.",
   "read_only": true
 }

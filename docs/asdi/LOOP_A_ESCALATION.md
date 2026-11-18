@@ -28,7 +28,7 @@ The last local commit is therefore builder-side/verifier-overreach validated evi
 - Full suite at `b5c187d`: **100 tests passed, four expected skips**.
 - `git diff --check f2e3053..b5c187d`: clean.
 - No merge, deployment, exposure or production action is authorized.
-- Separate specification hold: Design REV K calls the Trust Handbook rev 2/frozen while the Guide and Handbook call it REV K/synchronized. See [`SPEC_FEEDBACK_HANDBOOK_SYNC.md`](SPEC_FEEDBACK_HANDBOOK_SYNC.md).
+- Former separate specification hold: the Handbook synchronization metadata conflict was resolved by owner-approved reconciliation on 2026-11-18. See [`SPEC_FEEDBACK_HANDBOOK_SYNC.md`](SPEC_FEEDBACK_HANDBOOK_SYNC.md). This does not release the Loop A process hold.
 
 ## Affected work
 
