@@ -38,6 +38,12 @@ No subagent is trusted for independent conformance verification until the owner 
 
 Option 2, with Option 1 as the interim fallback. Prompt constraints have repeatedly failed; physical capability separation is required.
 
+## Enforcement implementation
+
+Builder-side tooling is now available at [`tools/readonly_audit.py`](../../tools/readonly_audit.py). It constructs an audit container that has no network, drops all capabilities, enables no-new-privileges, uses a read-only root and non-root user, mounts the candidate and specifications read-only, exposes no Docker socket, and inherits no host environment or Git credentials. Reports are written only to a caller-owned output directory.
+
+This tooling is implemented and unit-tested, but it does not itself select or run a verifier model. The owner must invoke it with an approved auditor command. Until that happens, independent acceptance remains blocked.
+
 ## Decision required
 
 Select one option and provide the exact command/runtime or authorize the owner-run interim process. Do not resume independent acceptance until that decision is recorded.

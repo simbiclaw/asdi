@@ -48,6 +48,8 @@ Phase 1 exit readiness is mapped criterion-by-criterion in [`docs/asdi/PHASE1_EX
 
 The recovery verifier again violated report-only authority and committed `5747272`. That candidate is preserved at `revk/quarantined-verifier-authority` and forward-reverted from the active branch by `5dbc40c`. Independent acceptance remains blocked until the owner selects a capability-restricted verifier mechanism. See [`docs/asdi/VERIFIER_AUTHORITY_ESCALATION.md`](docs/asdi/VERIFIER_AUTHORITY_ESCALATION.md).
 
+A capability-restricted audit wrapper is now implemented and unit-tested at [`tools/readonly_audit.py`](tools/readonly_audit.py). It provides the enforcement boundary recommended for verifier-authority Option 2, but still requires an owner-selected auditor command.
+
 ## Verification remediation workflow
 
 The user-directed remediation/specification-escalation loop is implemented as a durable controller:
