@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import tempfile
 import unittest
 import subprocess
@@ -199,9 +200,152 @@ class ReadOnlyAuditTests(unittest.TestCase):
                 "/bin/true",
             ]
             exit_code = main(arguments)
-            self.assertEqual(exit_code, 0)
+            self.assertEqual(exit_code, 3)
             invocation = (report_dir / "invocation.json").read_text()
             self.assertIn(commit, invocation)
             self.assertIn("asdi-readonly-audit-candidate.", invocation)
-            execution = (report_dir / "execution.json").read_text()
-            self.assertIn('"timed_out": false', execution)
+            execution = json.loads((report_dir / "execution.json").read_text())
+            self.assertFalse(execution["timed_out"])
+            self.assertFalse(execution["report_validation"]["valid"])
+            wrapper = (report_dir / "wrapper-report.json").read_text()
+            self.assertIn('"accepted": false', wrapper)
+
+    def test_exact_commit_mode_rejects_nonindependent_report(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            repo = root / "repo"
+            destination = root / "export"
+            repo.mkdir()
+            subprocess.run(["git", "init", "-b", "main", str(repo)], check=True, capture_output=True)
+            (repo / "candidate.txt").write_text("candidate\n")
+            subprocess.run(["git", "-C", str(repo), "add", "."], check=True, capture_output=True)
+            subprocess.run(
+                [
+                    "git",
+                    "-C",
+                    str(repo),
+                    "-c",
+                    "user.name=Test",
+                    "-c",
+                    "user.email=test@invalid",
+                    "commit",
+                    "-m",
+                    "candidate",
+                ],
+                check=True,
+                capture_output=True,
+            )
+            commit = subprocess.run(
+                ["git", "-C", str(repo), "rev-parse", "HEAD"],
+                check=True,
+                capture_output=True,
+                text=True,
+            ).stdout.strip()
+            destination.mkdir()
+            report_path = destination / "conformance-report.json"
+            report_dir = root / "reports"
+            report_dir.mkdir()
+            report = {
+                "schema_version": "asdi.build-conformance-report/v1",
+                "audit_date": "2026-11-19",
+                "repo": "test",
+                "branch": "main",
+                "base_commit": "b" * 40,
+                "candidate_commit": commit,
+                "build_phase": "Pass 1 / Phase 1",
+                "scope": "test",
+                "spec_set": "REV K",
+                "source_complete": True,
+                "overall_result": "PASS",
+                "executive_result": "test",
+                "conformance_matrix": [],
+                "findings": [],
+                "tests_executed": [],
+                "adversarial_checks": [],
+                "phase_exit_decision": "test",
+                "next_actions": [],
+                "independent": False,
+            }
+            (report_dir / "conformance-report.json").write_text(json.dumps(report))
+            exit_code = main(
+                [
+                    "--candidate",
+                    str(destination),
+                    "--commit",
+                    commit,
+                    "--specs",
+                    str(ROOT / "reference"),
+                    "--skill-root",
+                    str(ROOT / "skills/asdi-build-conformance"),
+                    "--report-dir",
+                    str(root / "reports"),
+                    "--docker",
+                    "/usr/bin/true",
+                    "--",
+                    "/bin/true",
+                ]
+            )
+            self.assertEqual(exit_code, 3)
+            execution = json.loads((root / "reports/execution.json").read_text())
+            validation = execution["report_validation"]
+            self.assertEqual(validation["path"], str(report_dir / "conformance-report.json"))
+            self.assertTrue(validation["exists"])
+            self.assertFalse(validation["valid"])
+            self.assertEqual(validation["failures"], ["independent must be true"])
+            wrapper = json.loads((root / "reports/wrapper-report.json").read_text())
+            self.assertFalse(wrapper["accepted"])
+
+    def test_exact_commit_mode_accepts_independent_report(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            destination = root / "candidate"
+            destination.mkdir()
+            commit = "a" * 40
+            report_dir = root / "reports"
+            report_dir.mkdir()
+            report_path = root / "reports" / "conformance-report.json"
+            report = {
+                "schema_version": "asdi.build-conformance-report/v1",
+                "audit_date": "2026-11-19",
+                "repo": "test",
+                "branch": "main",
+                "base_commit": "b" * 40,
+                "candidate_commit": commit,
+                "build_phase": "Pass 1 / Phase 1",
+                "scope": "test",
+                "spec_set": "REV K",
+                "source_complete": True,
+                "overall_result": "PASS",
+                "executive_result": "test",
+                "conformance_matrix": [],
+                "findings": [],
+                "tests_executed": [],
+                "adversarial_checks": [],
+                "phase_exit_decision": "test",
+                "next_actions": [],
+                "independent": True,
+            }
+            report_path.write_text(json.dumps(report))
+            exit_code = main(
+                [
+                    "--candidate",
+                    str(destination),
+                    "--commit",
+                    commit,
+                    "--specs",
+                    str(ROOT / "reference"),
+                    "--skill-root",
+                    str(ROOT / "skills/asdi-build-conformance"),
+                    "--report-dir",
+                    str(root / "reports"),
+                    "--docker",
+                    "/usr/bin/true",
+                    "--",
+                    "/bin/true",
+                ]
+            )
+            self.assertEqual(exit_code, 0)
+            execution = json.loads((root / "reports/execution.json").read_text())
+            self.assertTrue(execution["report_validation"]["valid"])
+            wrapper = json.loads((root / "reports/wrapper-report.json").read_text())
+            self.assertTrue(wrapper["accepted"])

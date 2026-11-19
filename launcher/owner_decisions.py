@@ -8,6 +8,7 @@ import json
 import os
 import time
 import uuid
+import threading
 from pathlib import Path
 from typing import Any
 
@@ -44,11 +45,20 @@ class OwnerDecisionLog:
         self.root = Path(root).resolve()
         self.root.mkdir(parents=True, exist_ok=True)
         self.path = self.root / "owner-decisions.jsonl"
+        self._lock = threading.RLock()
 
     def records(self) -> list[dict[str, Any]]:
         if not self.path.exists():
             return []
-        return [json.loads(line) for line in self.path.read_text().splitlines() if line]
+        records: list[dict[str, Any]] = []
+        for line in self.path.read_text().splitlines():
+            if not line:
+                continue
+            record = json.loads(line)
+            if not isinstance(record, dict):
+                raise ValueError("owner decision record is not an object")
+            records.append(record)
+        return records
 
     def latest(self, decision_type: str | None = None) -> dict[str, Any] | None:
         matches = [
@@ -115,7 +125,7 @@ class OwnerDecisionLog:
             "previous_record_sha256": previous_hash,
         }
         record["record_sha256"] = record_digest(record)
-        with self.path.open("a") as handle:
+        with self._lock, self.path.open("a") as handle:
             handle.write(json.dumps(record, sort_keys=True) + "\n")
             handle.flush()
             os.fsync(handle.fileno())
@@ -123,19 +133,12 @@ class OwnerDecisionLog:
 
     def verify(self) -> dict[str, Any]:
         records = self.records()
-        if len({line for line in self.path.read_text().splitlines() if line}) != len(records):
-            return {
-                "records": len(records),
-                "valid": False,
-                "failures": ["duplicate JSONL record"],
-            }
-        if len({line for line in self.path.read_text().splitlines() if line}) != len(records):
-            return {
-                "records": len(records),
-                "valid": False,
-                "failures": ["duplicate JSONL record"],
-            }
         failures: list[str] = []
+        serialized = [
+            line for line in self.path.read_text().splitlines() if line
+        ] if self.path.exists() else []
+        if len(serialized) != len(records):
+            failures.append("duplicate or invalid JSONL record")
         previous_hash = None
         for index, record in enumerate(records, start=1):
             expected_previous = previous_hash
@@ -143,6 +146,12 @@ class OwnerDecisionLog:
                 failures.append(f"record {index} previous hash mismatch")
             if record_digest(record) != record.get("record_sha256"):
                 failures.append(f"record {index} hash mismatch")
+            if record.get("schema_version") != SCHEMA_VERSION:
+                failures.append(f"record {index} schema mismatch")
+            if record.get("decision_type") not in DECISION_TYPES:
+                failures.append(f"record {index} decision type mismatch")
+            elif record.get("choice") not in DECISION_TYPES[record["decision_type"]]:
+                failures.append(f"record {index} choice mismatch")
             previous_hash = record.get("record_sha256")
         return {"records": len(records), "valid": not failures, "failures": failures}
 

@@ -20,6 +20,18 @@
 
 The wrapper rejects auditor commands containing `docker`, the Docker socket path or token assignments. On timeout it writes an execution record with `timed_out=true` and exits `3`; it never reports a pass.
 
+The wrapper now also rejects an auditor exit zero unless the auditor writes a machine-readable report. Required fields follow the `asdi-build-conformance` report structure; the wrapper validates:
+
+- exact report schema version;
+- base and candidate commit bindings;
+- build phase and scope;
+- source completeness and specification set;
+- allowed overall result;
+- conformance matrix, findings, tests and adversarial checks;
+- explicit `independent: true`.
+
+A non-independent PASS is rejected with wrapper exit `3`, `accepted=false`, and failure `independent must be true`. This prevents an auditor process from crossing the C-5 boundary merely by exiting zero.
+
 ## Docker enforcement probe
 
 A temporary candidate and probe script were mounted through the wrapper on the local Docker image `safeclaw-us-egress:cc-2.1.283`. The probe attempted all three prohibited actions and observed:

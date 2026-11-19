@@ -17,7 +17,32 @@ import tempfile
 import time
 import uuid
 import zipfile
+from datetime import datetime, timezone
 from pathlib import Path
+
+
+ALLOWED_OVERALL_RESULTS = {"PASS", "FAIL", "BLOCKED", "CONFORMS_WITH_GAPS"}
+REQUIRED_REPORT_FIELDS = {
+    "schema_version",
+    "audit_date",
+    "repo",
+    "branch",
+    "base_commit",
+    "candidate_commit",
+    "build_phase",
+    "scope",
+    "spec_set",
+    "source_complete",
+    "overall_result",
+    "executive_result",
+    "conformance_matrix",
+    "findings",
+    "tests_executed",
+    "adversarial_checks",
+    "phase_exit_decision",
+    "next_actions",
+    "independent",
+}
 
 
 def build_command(
@@ -156,6 +181,49 @@ def export_commit(repo: Path, revision: str, destination: Path) -> str:
     return commit
 
 
+def validate_audit_report(path: Path, audit_commit: str) -> dict[str, Any]:
+    validation: dict[str, Any] = {
+        "path": str(path),
+        "exists": path.is_file(),
+        "valid": False,
+        "failures": [],
+    }
+    if not path.is_file():
+        validation["failures"].append("auditor did not write report")
+        return validation
+    try:
+        report = json.loads(path.read_text())
+    except (json.JSONDecodeError, OSError) as error:
+        validation["failures"].append(f"invalid report JSON: {error}")
+        return validation
+    if not isinstance(report, dict):
+        validation["failures"].append("report is not an object")
+        return validation
+    missing = sorted(REQUIRED_REPORT_FIELDS - set(report))
+    unexpected = sorted(set(report) - REQUIRED_REPORT_FIELDS)
+    if missing:
+        validation["failures"].append(f"missing report fields: {', '.join(missing)}")
+    if unexpected:
+        validation["failures"].append(f"unexpected report fields: {', '.join(unexpected)}")
+    if report.get("candidate_commit") != audit_commit:
+        validation["failures"].append("candidate_commit does not match audited revision")
+    if report.get("independent") is not True:
+        validation["failures"].append("independent must be true")
+    if report.get("overall_result") not in ALLOWED_OVERALL_RESULTS:
+        validation["failures"].append("invalid overall_result")
+    for field in (
+        "conformance_matrix",
+        "findings",
+        "tests_executed",
+        "adversarial_checks",
+    ):
+        if not isinstance(report.get(field), list):
+            validation["failures"].append(f"{field} must be an array")
+    validation["valid"] = not validation["failures"]
+    validation["report"] = report
+    return validation
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--docker", default=os.environ.get("ASDI_DOCKER", "docker"))
@@ -170,6 +238,10 @@ def main(argv: list[str] | None = None) -> int:
         default=Path("skills/asdi-build-conformance"),
     )
     parser.add_argument("--report-dir", type=Path, required=True)
+    parser.add_argument(
+        "--report-name",
+        default="conformance-report.json",
+    )
     parser.add_argument("--timeout-seconds", type=float, default=1800.0)
     parser.add_argument(
         "auditor",
@@ -179,11 +251,31 @@ def main(argv: list[str] | None = None) -> int:
     arguments = parser.parse_args(argv)
     if arguments.auditor and arguments.auditor[0] == "--":
         arguments.auditor.pop(0)
-    if bool(arguments.git_repo) != bool(arguments.commit):
-        parser.error("--git-repo and --commit must be supplied together")
+    if arguments.git_repo and not arguments.commit:
+        parser.error("--commit is required with --git-repo")
     report_dir = arguments.report_dir
     report_dir.mkdir(parents=True, exist_ok=True)
     started_at = time.time()
+
+    def utc_timestamp() -> str:
+        return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+
+    def write_wrapper_report(report: dict[str, Any]) -> None:
+        atomic_path = report_dir / ".wrapper-report.tmp"
+        atomic_path.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n")
+        os.replace(atomic_path, report_dir / "wrapper-report.json")
+
+    def reject(reason: str) -> int:
+        write_wrapper_report(
+            {
+                "schema_version": "asdi.readonly-audit-wrapper/v1",
+                "completed_at": utc_timestamp(),
+                "accepted": False,
+                "audit_commit": audit_commit,
+                "reason": reason,
+            }
+        )
+        return 3
 
     with tempfile.TemporaryDirectory(
         prefix="asdi-readonly-audit-candidate."
@@ -239,16 +331,37 @@ def main(argv: list[str] | None = None) -> int:
                 json.dumps(execution, indent=2, sort_keys=True) + "\n"
             )
             return 3
+        audit_report_path = report_dir / arguments.report_name
+        report_validation = validate_audit_report(audit_report_path, audit_commit)
+        report = report_validation.get("report")
         execution.update(
             {
                 "exit_code": completed.returncode,
                 "duration_seconds": round(time.time() - started_at, 3),
                 "timed_out": False,
+                "auditor_exit_accepted": completed.returncode == 0,
+                "report_validation": report_validation,
             }
         )
         execution_path = report_dir / "execution.json"
         execution_path.write_text(json.dumps(execution, indent=2, sort_keys=True) + "\n")
-        return completed.returncode
+        if completed.returncode != 0:
+            return reject("auditor command failed")
+        if not report_validation["valid"]:
+            return reject("auditor report invalid")
+        report = json.loads(audit_report_path.read_text())
+        accepted = report.get("overall_result") in {"PASS", "CONFORMS_WITH_GAPS"}
+        write_wrapper_report(
+            {
+                "schema_version": "asdi.readonly-audit-wrapper/v1",
+                "completed_at": utc_timestamp(),
+                "accepted": accepted,
+                "audit_commit": audit_commit,
+                "auditor_result": report.get("overall_result"),
+                "report": str(audit_report_path),
+            }
+        )
+        return 0 if accepted else 4
 
 
 if __name__ == "__main__":
