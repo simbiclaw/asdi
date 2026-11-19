@@ -650,3 +650,181 @@ class EventsCliTests(unittest.TestCase):
             result["events"][1]["payload"]["commit"],
             main_commit,
         )
+
+    def reviewer_executable(self, path: Path) -> Path:
+        path.write_text(
+            "#!/usr/bin/env python3\n"
+            "import json, sys\n"
+            "from pathlib import Path\n"
+            "packet = json.loads(Path(sys.argv[1]).read_text())\n"
+            "Path(sys.argv[3]).write_text(json.dumps({\n"
+            "    'schema_version': 'asdi.review-result/v1',\n"
+            "    'pass': 'review',\n"
+            "    'model': 'local-review-model',\n"
+            "    'independent_family': False,\n"
+            "    'reviewed_commit': packet['head_sha'],\n"
+            "    'status': 'pass',\n"
+            "    'findings': [],\n"
+            "}))\n"
+        )
+        path.chmod(path.stat().st_mode | stat.S_IXUSR)
+        return path
+
+    def pr_head_evidence(self, head: str, *, control: str = "caught") -> Path:
+        source = self.root / f"evidence-{head[:8]}-{control}"
+        source.mkdir(parents=True)
+        result = {
+            "schema": 2,
+            "run_id": f"r-{head[:8]}-{control}",
+            "commit": head,
+            "features": [
+                {
+                    "id": "feature:pipeline",
+                    "status": "pass",
+                    "control": control,
+                    "evidence": ["output.txt"],
+                    "limits": [],
+                }
+            ],
+        }
+        (source / "result.json").write_text(json.dumps(result))
+        (source / "output.txt").write_text("observed\n")
+        evidence = EvidenceStore(self.root / "evidence-store").put(
+            source,
+            result,
+            metadata={
+                "source": "pr-head",
+                "producer": {
+                    "kind": "verifier",
+                    "image_digest": "sha256:verifier",
+                },
+                "environment": {
+                    "run_image_digest": "sha256:run",
+                    "tool_versions": {"python": "3"},
+                },
+                "inputs": {
+                    "harness_commit": "c" * 40,
+                    "static_gates": "d" * 64,
+                    "product_profile": "e" * 64,
+                },
+            },
+        )
+        path = self.root / f"evidence-{head[:8]}-{control}.json"
+        self.write_json(path, evidence)
+        return path
+
+    def run_pipeline(self, head: str, evidence_path: Path) -> dict:
+        diff_path = self.root / "changed.diff"
+        diff_path.write_text("changed\n")
+        reviewer = self.reviewer_executable(self.root / f"reviewer-{head[:8]}")
+        result_path = self.root / f"review-result-{head[:8]}.json"
+        exit_code = main(
+            [
+                *self.common,
+                "run-pr-gate",
+                "--pr-number",
+                "14",
+                "--evidence",
+                str(evidence_path),
+                "--ci-status",
+                "pass",
+                "--diff",
+                str(diff_path),
+                "--reviewer",
+                "/usr/bin/python3",
+                "--reviewer",
+                str(reviewer),
+                "--reviewer",
+                "{packet}",
+                "--reviewer",
+                "{diff}",
+                "--reviewer",
+                "{output}",
+                "--name",
+                "local_review",
+                "--independent-family",
+                "false",
+                "--review-result-output",
+                str(result_path),
+                "--actor",
+                "merge-bot",
+                "--trm-level",
+                "T0",
+            ]
+        )
+        self.assertEqual(exit_code, 0)
+        self.assertTrue(json.loads(result_path.read_text())["execution"])
+        return json.loads(
+            (self.root / "latest-pr-gate-pipeline.json").read_text()
+        )
+
+    def test_pr_gate_pipeline_connects_evidence_review_policy_and_merge(self) -> None:
+        head = "4" * 40
+        initial = self.root / "pipeline-pull-request.json"
+        self.write_json(
+            initial,
+            {
+                "pr_number": 14,
+                "head_sha": head,
+                "base_ref": "main",
+                "changed_paths": ["src/feature.py"],
+            },
+        )
+        exit_code = main([
+            *self.common,
+            "append-event",
+            "--event-type",
+            "github.pull_request",
+            "--payload",
+            str(initial),
+        ])
+        self.assertEqual(exit_code, 0)
+        exit_code = main([*self.common, "catch-up", "--now", "500"])
+        self.assertEqual(exit_code, 0)
+
+        result = self.run_pipeline(head, self.pr_head_evidence(head))
+        self.assertEqual(result["policy"], "eligible")
+        self.assertFalse(result["merge_executed"])
+        self.assertEqual(
+            result["merge_dry_run"]["decision"],
+            "human_required",
+        )
+        self.assertEqual(result["packet"]["statuses"]["asdi/policy"], "pass")
+        self.assertEqual(len(result["appended_event_ids"]), 2)
+        review = json.loads(
+            (self.root / f"review-result-{head[:8]}.json").read_text()
+        )
+        self.assertEqual(review["status"], "pass")
+        self.assertIn("execution", review)
+
+    def test_missed_negative_control_blocks_pipeline(self) -> None:
+        head = "5" * 40
+        initial = self.root / "blocked-pull-request.json"
+        self.write_json(
+            initial,
+            {
+                "pr_number": 14,
+                "head_sha": head,
+                "base_ref": "main",
+                "changed_paths": ["src/feature.py"],
+            },
+        )
+        main([
+            *self.common,
+            "append-event",
+            "--event-type",
+            "github.pull_request",
+            "--payload",
+            str(initial),
+        ])
+        main([*self.common, "catch-up", "--now", "600"])
+        result = self.run_pipeline(
+            head,
+            self.pr_head_evidence(head, control="missed"),
+        )
+        self.assertEqual(result["policy"], "blocked")
+        self.assertFalse(result["merge_executed"])
+        self.assertEqual(
+            result["packet"]["statuses"]["asdi/policy"],
+            "fail",
+        )

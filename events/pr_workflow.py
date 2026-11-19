@@ -339,6 +339,14 @@ class PRWorkflowStore:
             return None
         return json.loads(path.read_text())  # type: ignore[no-any-return]
 
+    def packet(self, pr_number: int, head_sha: str) -> dict[str, Any]:
+        """Load the separately persisted packet for one exact PR head."""
+
+        path = self._packet_path(int(pr_number), str(head_sha))
+        if not path.is_file():
+            raise FileNotFoundError(f"PR packet not found: {path}")
+        return json.loads(path.read_text())  # type: ignore[no-any-return]
+
     def _validate_pull_request_payload(self, value: Any) -> list[str]:
         if not isinstance(value, dict):
             return ["pull request payload is not an object"]

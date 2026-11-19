@@ -18,12 +18,14 @@ from .pr_workflow import PRWorkflowStore
 from .pr_gate import PRGate, deployment_decision, post_merge_check
 from .review import ReviewCommand, review_event_payload, run_review
 from .comment_gate import agent_claims_block, classify_comment
+from .dispatcher import EventDispatcher
 from .verification import main_verification_event_payload, verification_event_payload
 from .github_reconciler import (
     GitHubCommand,
     GitHubReconciler,
     default_github_environment,
 )
+from .pipeline import run_pr_gate_pipeline
 
 
 def load_json(path: str | Path) -> Any:
@@ -156,6 +158,26 @@ def build_parser() -> argparse.ArgumentParser:
         default="http://127.0.0.1:7890",
     )
     reconcile.add_argument("--timeout-seconds", type=float, default=20.0)
+    pipeline = commands.add_parser("run-pr-gate")
+    pipeline.add_argument("--pr-number", type=int, required=True)
+    pipeline.add_argument("--evidence", required=True)
+    pipeline.add_argument(
+        "--ci-status",
+        choices=("pass", "fail", "blocked", "error"),
+        required=True,
+    )
+    pipeline.add_argument("--diff", required=True)
+    pipeline.add_argument("--reviewer", action="append", required=True)
+    pipeline.add_argument("--name", required=True)
+    pipeline.add_argument(
+        "--independent-family",
+        choices=("true", "false", "unavailable"),
+        required=True,
+    )
+    pipeline.add_argument("--timeout-seconds", type=float, default=600.0)
+    pipeline.add_argument("--review-result-output", required=True)
+    pipeline.add_argument("--actor", required=True)
+    pipeline.add_argument("--trm-level", default="T0")
     return parser
 
 
@@ -183,43 +205,15 @@ def main(argv: list[str] | None = None) -> int:
             base_ref=arguments.base_ref,
         )
         main_workflow = MainWorkflowStore(root / "main-workflow")
-        def handler(event: dict[str, Any]) -> None:
-            if event["event_type"] in {
-                "github.push",
-                "github.main_verification_completed",
-            }:
-                result = main_workflow.apply(event)
-                write_json(
-                    root / "main-workflow-results" / f"event-{event['event_id']}.json",
-                    result,
-                )
-                write_json(root / "latest-main-workflow.json", result)
-                return
-            if event["event_type"] not in {
-                "github.pull_request",
-                "github.verification_completed",
-                "github.review_completed",
-            }:
-                return
-            result = workflow.apply(event)
-            result_id = int(event["event_id"])
-            write_json(
-                root / "workflow-results" / f"event-{result_id}.json",
-                result,
-            )
-            write_json(root / "latest-pr-workflow.json", result)
-            if result["gate"] is not None:
-                write_json(root / "latest-policy.json", result["gate"])
-                packet = result["packet"]
-                packet_name = (
-                    f"pr-{packet['pr_number']}-{packet['head_sha'][:12]}.json"
-                )
-                write_json(root / "packets" / packet_name, packet)
-
+        dispatcher = EventDispatcher(
+            root=root,
+            workflow=workflow,
+            main_workflow=main_workflow,
+        )
         result = LocalPoller(
             journal=journal,
             state=state,
-        ).catch_up(handler=handler, now=arguments.now)
+        ).catch_up(handler=dispatcher.handle, now=arguments.now)
         if not isinstance(result, dict):
             raise ValueError("catch-up returned no result")
         write_json(root / "last-catch-up.json", result)
@@ -346,6 +340,42 @@ def main(argv: list[str] | None = None) -> int:
         )
         write_json(root / "last-main-verification-event.json", event)
         result = event
+    elif arguments.command == "run-pr-gate":
+        class_config, feature_map = load_gate_config(arguments)
+        workflow = PRWorkflowStore(
+            root / "pr-workflow",
+            class_config=class_config,
+            feature_map=feature_map,
+            base_ref=arguments.base_ref,
+        )
+        main_workflow = MainWorkflowStore(root / "main-workflow")
+        reviewer = ReviewCommand(
+            name=arguments.name,
+            argv=tuple(arguments.reviewer),
+            timeout_seconds=arguments.timeout_seconds,
+            independent_family=(
+                True
+                if arguments.independent_family == "true"
+                else False
+                if arguments.independent_family == "false"
+                else "unavailable"
+            ),
+        )
+        result = run_pr_gate_pipeline(
+            root=root,
+            journal=journal,
+            poller_state=state,
+            workflow=workflow,
+            main_workflow=main_workflow,
+            pr_number=arguments.pr_number,
+            evidence=load_json(arguments.evidence),
+            ci_status=arguments.ci_status,
+            diff=Path(arguments.diff).read_text(),
+            reviewer=reviewer,
+            actor=arguments.actor,
+            trm_level=arguments.trm_level,
+            review_result_path=arguments.review_result_output,
+        )
     elif arguments.command == "comment-gate":
         identities = yaml.safe_load(arguments.identities.read_text())
         result = classify_comment(

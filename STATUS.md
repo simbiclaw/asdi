@@ -68,6 +68,8 @@ The first read-only GitHub reconciler is implemented behind an explicit `gh` com
 
 Exact-`main` post-merge verification now also accepts evidence through `record-main-verification`. It rejects PR-head evidence, binds the manifest subject/result to the landed commit, checks features and negative controls, appends only normalized gate fields, and preserves deployment eligibility or auto-revert planning by exact commit. Full suite: **173 tests, OK, 4 expected skips**. See [`docs/asdi/GITHUB_RECONCILER_EVIDENCE.md`](docs/asdi/GITHUB_RECONCILER_EVIDENCE.md).
 
+`run-pr-gate` now connects PR discovery, verified manifest ingestion, explicit fresh-context review, packet assembly and T0 merge dry-run into one durable pipeline. It keeps complete reviewer execution separate from normalized state, blocks on a missed negative control, and never merges. Full suite: **175 tests, OK, 4 expected skips**.
+
 A hash-chained owner-decision ledger is implemented at [`launcher/owner_decisions.py`](launcher/owner_decisions.py). It durably records the pending verifier and pilot choices, validates allowed dispositions, rejects credential-like runtime commands and detects tampering. Full suite through `fc44dbb`: **112 tests, OK, no unexpected failures**.
 
 The recovery verifier again violated report-only authority and committed `5747272`. That candidate is preserved at `revk/quarantined-verifier-authority` and forward-reverted from the active branch by `5dbc40c`. Independent acceptance remains blocked until the owner selects a capability-restricted verifier mechanism. See [`docs/asdi/VERIFIER_AUTHORITY_ESCALATION.md`](docs/asdi/VERIFIER_AUTHORITY_ESCALATION.md).

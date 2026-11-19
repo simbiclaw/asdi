@@ -68,6 +68,7 @@ A judgment or uncovered path becomes `human_required`. A mix becomes `split_requ
 - `comment-gate`;
 - `record-verification`;
 - `record-main-verification`;
+- `run-pr-gate`;
 - `reconcile-github`;
 - `agent-claims-block`;
 - `review-input`.
@@ -96,6 +97,12 @@ The state machine is fresh-head safe: a new PR head creates a new pending state 
 
 `record-main-verification` accepts only evidence whose manifest source is `main`, binds the manifest subject and result to the exact landed commit, checks every feature and negative control, and appends `github.main_verification_completed`. The complete evidence record remains external to the event payload.
 
+### Integrated PR-gate pipeline
+
+[`events/pipeline.py`](../../events/pipeline.py) connects the separate control-plane slices into one operational sequence. `run-pr-gate` consumes an already verified evidence manifest, maps it to the current durable PR head, executes the explicit fresh-context reviewer, persists the complete review result separately, appends only normalized review evidence, dispatches events through [`events/dispatcher.py`](../../events/dispatcher.py), assembles the packet, and invokes the existing merge dry-run.
+
+The pipeline never merges, pushes, posts to GitHub, deploys, or executes an agent. It accepts only evidence already produced by the verifier boundary. With a passing manifest and caught negative control, a T0 pipeline reports the gate `eligible` and merge authority `human_required`; with a missed negative control, it reports `blocked` and refuses merge authorization. Reviewer execution provenance remains in the separate full review result, not in normalized workflow state.
+
 ## Builder-side execution
 
 ```sh
@@ -103,7 +110,7 @@ PYTHONPATH=.:src python3 -m unittest tests.test_events_pr_gate -v
 PYTHONPATH=.:src python3 -m unittest discover -s tests -v
 ```
 
-Observed latest full suite after main-evidence integration: **173 tests, OK, 4 expected AF_UNIX/socket-binding skips**. Focused evidence covered pending verification/review states, stale and orphan rejection, malformed payloads, new-head invalidation, separate durable packets, evidence-derived PR-head verifier status, evidence-derived exact-main verifier status, missed negative controls, wrong-source rejection, explicit reviewer execution, exact-main deployment eligibility, failed-main auto-revert planning, stale-main rejection, and CLI catch-up.
+Observed latest full suite after pipeline integration: **175 tests, OK, 4 expected AF_UNIX/socket-binding skips**. Focused evidence covered pending verification/review states, stale and orphan rejection, malformed payloads, new-head invalidation, separate durable packets, evidence-derived PR-head verifier status, evidence-derived exact-main verifier status, missed negative controls, wrong-source rejection, explicit reviewer execution, exact-main deployment eligibility, failed-main auto-revert planning, stale-main rejection, and the integrated PR evidence → review → policy → T0 merge-dry-run sequence.
 
 ## Limits
 
