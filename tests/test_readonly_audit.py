@@ -2,7 +2,10 @@ from __future__ import annotations
 
 import tempfile
 import unittest
+from unittest.mock import patch
 from pathlib import Path
+
+from tools.readonly_audit import main
 
 from tools.readonly_audit import build_command
 
@@ -26,6 +29,8 @@ class ReadOnlyAuditTests(unittest.TestCase):
                 auditor_command=["/usr/bin/python3", "/opt/asdi/skill/SKILL.md"],
             )
             self.assertEqual(command[0], "fake-docker")
+            self.assertEqual(command[command.index("--entrypoint") + 1], "/usr/bin/python3")
+            self.assertEqual(command[-1], "/opt/asdi/skill/SKILL.md")
             self.assertIn("--network", command)
             self.assertIn("none", command)
             self.assertIn("--cap-drop", command)
@@ -75,3 +80,32 @@ class ReadOnlyAuditTests(unittest.TestCase):
                     skill_root=root / "missing",
                     auditor_command=["true"],
                 )
+
+    def test_timeout_is_recorded_and_is_not_pass(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            for name in ("candidate", "specs", "skill", "reports"):
+                (root / name).mkdir()
+            report_dir = root / "reports"
+            arguments = [
+                "--candidate",
+                str(root / "candidate"),
+                "--specs",
+                str(ROOT / "reference"),
+                "--skill-root",
+                str(ROOT / "skills/asdi-build-conformance"),
+                "--report-dir",
+                str(report_dir),
+                "--timeout-seconds",
+                "0.01",
+                "--",
+                "/bin/true",
+            ]
+            with patch(
+                "tools.readonly_audit.subprocess.run",
+                side_effect=TimeoutError("audit timeout"),
+            ):
+                exit_code = main(arguments)
+            self.assertEqual(exit_code, 3)
+            execution = (report_dir / "execution.json").read_text()
+            self.assertIn('"timed_out": true', execution)

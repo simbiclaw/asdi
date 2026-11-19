@@ -14,6 +14,7 @@ import json
 import os
 import shlex
 import subprocess
+import time
 import tempfile
 import uuid
 from pathlib import Path
@@ -44,6 +45,8 @@ def build_command(
         raise ValueError("auditor command may not invoke Docker or mount the Docker socket")
     if any("GITHUB" in token.upper() or "TOKEN" in token.upper() for token in auditor_command):
         raise ValueError("auditor command may not contain token assignments")
+    entrypoint = auditor_command[0]
+    auditor_arguments = auditor_command[1:]
 
     return [
         docker,
@@ -76,12 +79,14 @@ def build_command(
         "PYTHONDONTWRITEBYTECODE=1",
         "--env",
         "ASDI_AUDIT_MODE=read_only",
+        "--entrypoint",
+        entrypoint,
         image,
-        *auditor_command,
+        *auditor_arguments,
     ]
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--docker", default=os.environ.get("ASDI_DOCKER", "docker"))
     parser.add_argument("--image", default="safeclaw-us-egress:cc-2.1.283")
@@ -93,12 +98,15 @@ def main() -> int:
         default=Path("skills/asdi-build-conformance"),
     )
     parser.add_argument("--report-dir", type=Path, required=True)
+    parser.add_argument("--timeout-seconds", type=float, default=1800.0)
     parser.add_argument(
         "auditor",
         nargs=argparse.REMAINDER,
         help="Auditor command executed inside the isolated container.",
     )
-    arguments = parser.parse_args()
+    arguments = parser.parse_args(argv)
+    if arguments.auditor and arguments.auditor[0] == "--":
+        arguments.auditor.pop(0)
     report_dir = arguments.report_dir
     report_dir.mkdir(parents=True, exist_ok=True)
     command = build_command(
@@ -119,7 +127,30 @@ def main() -> int:
         )
         + "\n"
     )
-    completed = subprocess.run(command, check=False)
+    started_at = time.time()
+    execution = {"timeout_seconds": arguments.timeout_seconds}
+    try:
+        completed = subprocess.run(command, check=False, timeout=arguments.timeout_seconds)
+    except (subprocess.TimeoutExpired, TimeoutError):
+        execution.update(
+            {
+                "exit_code": None,
+                "duration_seconds": round(time.time() - started_at, 3),
+                "timed_out": True,
+            }
+        )
+        execution_path = report_dir / "execution.json"
+        execution_path.write_text(json.dumps(execution, indent=2, sort_keys=True) + "\n")
+        return 3
+    execution.update(
+        {
+            "exit_code": completed.returncode,
+            "duration_seconds": round(time.time() - started_at, 3),
+            "timed_out": False,
+        }
+    )
+    execution_path = report_dir / "execution.json"
+    execution_path.write_text(json.dumps(execution, indent=2, sort_keys=True) + "\n")
     return completed.returncode
 
 

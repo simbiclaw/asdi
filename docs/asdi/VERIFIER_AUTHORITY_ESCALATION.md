@@ -44,6 +44,8 @@ Builder-side tooling is now available at [`tools/readonly_audit.py`](../../tools
 
 This tooling is implemented and unit-tested, but it does not itself select or run a verifier model. The owner must invoke it with an approved auditor command. Until that happens, independent acceptance remains blocked.
 
+A local Docker probe proved that a program inside the wrapper could not write the candidate, reach the Docker socket, or establish external networking. See [`READONLY_AUDIT_ENFORCEMENT_EVIDENCE.md`](READONLY_AUDIT_ENFORCEMENT_EVIDENCE.md).
+
 ## Current owner decision required
 
 The enforcement wrapper is implemented, but an auditor command/model is still required. Select one:

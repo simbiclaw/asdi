@@ -50,6 +50,8 @@ The recovery verifier again violated report-only authority and committed `574727
 
 A capability-restricted audit wrapper is now implemented and unit-tested at [`tools/readonly_audit.py`](tools/readonly_audit.py). It provides the enforcement boundary recommended for verifier-authority Option 2, but still requires an owner-selected auditor command.
 
+A local Docker enforcement probe proved that the wrapper blocks candidate writes, Docker socket access and external networking. A hung audit times out fail-closed and never reports pass. See [`docs/asdi/READONLY_AUDIT_ENFORCEMENT_EVIDENCE.md`](docs/asdi/READONLY_AUDIT_ENFORCEMENT_EVIDENCE.md).
+
 ## Verification remediation workflow
 
 The user-directed remediation/specification-escalation loop is implemented as a durable controller:
