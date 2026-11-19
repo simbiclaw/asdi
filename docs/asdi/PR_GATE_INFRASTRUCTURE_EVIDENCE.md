@@ -38,6 +38,19 @@ A judgment or uncovered path becomes `human_required`. A mix becomes `split_requ
 
 `post_merge_check` requires CI and verifier success bound to the exact `main` commit. Failure emits the required auto-revert branch and reason. Deployment is eligible only for an exact commit with a passing `main` result; stale results cannot authorize a new commit.
 
+### Operational CLI
+
+[`events/cli.py`](../../events/cli.py) exposes local, durable operations:
+
+- `append-event`;
+- `catch-up` with configured PR-gate dispatch;
+- `health`;
+- `gate`;
+- `post-merge`;
+- `deployment-decision`.
+
+Catch-up persists each eligible PR packet as `packets/pr-<number>-<head>.json`, updates `latest-policy.json`, records the poller cursor and health, and preserves all output on disk for later audit. `post-merge` and `deployment-decision` persist their exact evidence and decisions separately. The CLI uses no webhooks, no GitHub Actions and no inbound network listener.
+
 ## Builder-side execution
 
 ```sh
@@ -45,7 +58,7 @@ PYTHONPATH=.:src python3 -m unittest tests.test_events_pr_gate -v
 PYTHONPATH=.:src python3 -m unittest discover -s tests -v
 ```
 
-Observed latest full suite: **129 tests, OK, 4 expected AF_UNIX/socket-binding skips**.
+Observed latest full suite after the CLI: **131 tests, OK, 4 expected AF_UNIX/socket-binding skips**.
 
 ## Limits
 
