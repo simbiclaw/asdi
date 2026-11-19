@@ -15,6 +15,7 @@ from .journal import EventJournal, LocalPoller, PollerState
 from .merge_gate import evaluate_merge_packet
 from .pr_gate import PRGate, deployment_decision, post_merge_check
 from .review import ReviewCommand, run_review
+from .comment_gate import agent_claims_block, classify_comment
 
 
 def load_json(path: str | Path) -> Any:
@@ -51,6 +52,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--feature-map",
         type=Path,
         default=Path("config/coverage.yaml"),
+    )
+    parser.add_argument(
+        "--identities",
+        type=Path,
+        default=Path("config/identities.yaml"),
     )
     commands = parser.add_subparsers(dest="command", required=True)
 
@@ -91,6 +97,18 @@ def build_parser() -> argparse.ArgumentParser:
     merge.add_argument("--actor", required=True)
     merge.add_argument("--trm-level", default="T0")
     merge.add_argument("--result-output", required=True)
+    comment = commands.add_parser("comment-gate")
+    comment.add_argument("--author", required=True)
+    comment.add_argument("--body", required=True)
+    comment.add_argument("--allowed-resumer", action="append", required=True)
+    claims = commands.add_parser("agent-claims-block")
+    claims.add_argument("--text", required=True)
+    claims.add_argument("--max-chars", type=int, default=12_000)
+    review_input = commands.add_parser("review-input")
+    review_input.add_argument("--packet", required=True)
+    review_input.add_argument("--diff", required=True)
+    review_input.add_argument("--agent-claims", required=True)
+    review_input.add_argument("--output-dir", required=True)
     return parser
 
 
@@ -189,6 +207,27 @@ def main(argv: list[str] | None = None) -> int:
         )
         write_json(root / "latest-review.json", result)
         write_json(Path(arguments.result_output), result)
+    elif arguments.command == "comment-gate":
+        identities = yaml.safe_load(arguments.identities.read_text())
+        result = classify_comment(
+            author=arguments.author,
+            body=arguments.body,
+            allowed_comment_resumers=identities.get(
+                "allowed_comment_resumers",
+                [],
+            ),
+        )
+        write_json(root / "latest-comment-boundary.json", result)
+    elif arguments.command == "agent-claims-block":
+        result = agent_claims_block(arguments.text, max_chars=arguments.max_chars)
+        write_json(root / "latest-agent-claims-block.json", result)
+    elif arguments.command == "review-input":
+        claims = agent_claims_block(arguments.agent_claims)
+        output_dir = Path(arguments.output_dir)
+        write_json(output_dir / "review-packet.json", load_json(arguments.packet))
+        (output_dir / "changed.diff").write_text(arguments.diff)
+        write_json(output_dir / "agent-claims.json", claims)
+        result = claims
     print(json.dumps(result, indent=2, sort_keys=True))
     return 0
 
