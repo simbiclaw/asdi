@@ -37,6 +37,10 @@ A temporary candidate and probe script were mounted through the wrapper on the l
 
 The candidate retained only its original files; no `.forbidden` file was created.
 
+## Exact-commit binding
+
+Unit tests prove that `export_commit` exports only the requested Git tree, rejects unsafe archive paths, does not export `.git`, and returns the full commit SHA. The CLI exact-commit mode records the exported SHA, candidate path and Docker invocation before execution. A timeout still exits `3` with `timed_out=true`; a successful invocation exits `0` with `timed_out=false`.
+
 ## Scope
 
 This proves the capability boundary of the wrapper. It does not select an auditor model, produce a conformance verdict, or accept Phase 1.

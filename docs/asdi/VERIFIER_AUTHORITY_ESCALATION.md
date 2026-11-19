@@ -46,6 +46,8 @@ This tooling is implemented and unit-tested, but it does not itself select or ru
 
 A local Docker probe proved that a program inside the wrapper could not write the candidate, reach the Docker socket, or establish external networking. See [`READONLY_AUDIT_ENFORCEMENT_EVIDENCE.md`](READONLY_AUDIT_ENFORCEMENT_EVIDENCE.md).
 
+The wrapper now also supports exact-commit auditing with `--git-repo` and `--commit`. It resolves the revision, exports only that Git tree through a safe archive reader, mounts the exported candidate read-only, and injects `ASDI_AUDIT_COMMIT` into the isolated environment. This prevents a moving worktree or stale checkout from invalidating the audit.
+
 ## Current owner decision required
 
 The enforcement wrapper is implemented, but an auditor command/model is still required. Select one:
