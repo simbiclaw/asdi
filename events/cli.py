@@ -12,6 +12,7 @@ from typing import Any
 import yaml
 
 from .journal import EventJournal, LocalPoller, PollerState
+from .main_workflow import MainWorkflowStore
 from .merge_gate import evaluate_merge_packet
 from .pr_workflow import PRWorkflowStore
 from .pr_gate import PRGate, deployment_decision, post_merge_check
@@ -157,7 +158,19 @@ def main(argv: list[str] | None = None) -> int:
             feature_map=feature_map,
             base_ref=arguments.base_ref,
         )
+        main_workflow = MainWorkflowStore(root / "main-workflow")
         def handler(event: dict[str, Any]) -> None:
+            if event["event_type"] in {
+                "github.push",
+                "github.main_verification_completed",
+            }:
+                result = main_workflow.apply(event)
+                write_json(
+                    root / "main-workflow-results" / f"event-{event['event_id']}.json",
+                    result,
+                )
+                write_json(root / "latest-main-workflow.json", result)
+                return
             if event["event_type"] not in {
                 "github.pull_request",
                 "github.verification_completed",

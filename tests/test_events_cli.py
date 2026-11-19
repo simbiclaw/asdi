@@ -526,3 +526,48 @@ class EventsCliTests(unittest.TestCase):
         result = json.loads((self.root / "latest-pr-workflow.json").read_text())
         self.assertEqual(result["gate"]["decision"], "eligible")
         self.assertEqual(result["packet"]["review"]["reviewed_commit"], head)
+
+    def test_main_push_and_verification_persist_deployment_decision(self) -> None:
+        commit = "9" * 40
+        push_path = self.root / "push.json"
+        verification_path = self.root / "main-verification.json"
+        self.write_json(
+            push_path,
+            {"branch": "main", "commit": commit},
+        )
+        self.write_json(
+            verification_path,
+            {
+                "commit": commit,
+                "statuses": {"ci": "pass"},
+                "verifier": {
+                    "candidate_commit": commit,
+                    "status": "pass",
+                    "manifest_id": "m-main",
+                    "run_id": "r-main",
+                },
+            },
+        )
+        for event_type, payload in (
+            ("github.push", push_path),
+            ("github.main_verification_completed", verification_path),
+        ):
+            exit_code = main([
+                *self.common,
+                "append-event",
+                "--event-type",
+                event_type,
+                "--payload",
+                str(payload),
+            ])
+            self.assertEqual(exit_code, 0)
+        exit_code = main([*self.common, "catch-up", "--now", "400"])
+        self.assertEqual(exit_code, 0)
+        result = json.loads(
+            (self.root / "latest-main-workflow.json").read_text()
+        )
+        self.assertEqual(result["action"], "verification_recorded")
+        self.assertTrue(result["result"]["deployment_eligible"])
+        self.assertTrue(result["deployment"]["eligible"])
+        state_path = self.root / "main-workflow/main-state" / f"{commit}.json"
+        self.assertTrue(state_path.is_file())

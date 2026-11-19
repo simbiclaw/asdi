@@ -88,6 +88,10 @@ A later `github.review_completed` event must bind `reviewed_commit` to the curre
 
 The state machine is fresh-head safe: a new PR head creates a new pending state and does not carry forward prior review or verifier evidence; historical per-head files remain available. A stale review is recorded as a rejection without mutating the current state. A review arriving before its PR is also rejected. Invalid or unsupported workflow events are written under `workflow-rejections/`, while successful dispatch results are written under `workflow-results/` and `latest-pr-workflow.json`.
 
+### Event-driven post-merge workflow
+
+[`events/main_workflow.py`](../../events/main_workflow.py) records only `main` pushes by exact 40-character commit, then accepts verification separately. A verification result must carry CI and a manifest-bound verifier for the same commit. The store invokes the existing post-merge check, persists its pass/fail result and auto-revert plan by exact commit, and computes deployment eligibility from only that exact matching result. A newer `main` commit cannot inherit an older result. The CLI catch-up dispatches these events and persists each under `main-workflow-results/`, with the latest decision in `latest-main-workflow.json`.
+
 ## Builder-side execution
 
 ```sh
@@ -95,8 +99,8 @@ PYTHONPATH=.:src python3 -m unittest tests.test_events_pr_gate -v
 PYTHONPATH=.:src python3 -m unittest discover -s tests -v
 ```
 
-Observed latest full suite after verifier-event integration: **162 tests, OK, 4 expected AF_UNIX/socket-binding skips**. Focused evidence covered pending verification/review states, stale and orphan rejection, malformed payloads, new-head invalidation, separate durable packets, evidence-derived verifier status, missed negative controls, wrong-source rejection, explicit reviewer execution, normalized review-event creation, and CLI catch-up through an eligible packet.
+Observed latest full suite after post-merge workflow integration: **166 tests, OK, 4 expected AF_UNIX/socket-binding skips**. Focused evidence covered pending verification/review states, stale and orphan rejection, malformed payloads, new-head invalidation, separate durable packets, evidence-derived verifier status, missed negative controls, wrong-source rejection, explicit reviewer execution, exact-main deployment eligibility, failed-main auto-revert planning, stale-main rejection, and CLI catch-up.
 
 ## Limits
 
-This is reusable control-plane infrastructure. It is not Phase 4 exit evidence, because Phase 3 remains blocked pending the owner's pilot decision and Phase 4 has not executed the complete real PR lifecycle. The workflow accepts normalized local events; a GitHub API reconciler and launcher invocation inside that reconciler remain subsequent integration slices.
+This is reusable control-plane infrastructure. It is not Phase 4 exit evidence, because Phase 3 remains blocked pending the owner's pilot decision and Phase 4 has not executed the complete real PR lifecycle. The workflow accepts normalized local events; a GitHub API reconciler and launcher invocation inside that reconciler remain subsequent integration slices. Auto-revert planning does not execute Git or deployment actions.
