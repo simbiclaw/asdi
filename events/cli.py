@@ -13,6 +13,7 @@ import yaml
 
 from .journal import EventJournal, LocalPoller, PollerState
 from .merge_gate import evaluate_merge_packet
+from .pr_workflow import PRWorkflowStore
 from .pr_gate import PRGate, deployment_decision, post_merge_check
 from .review import ReviewCommand, run_review
 from .comment_gate import agent_claims_block, classify_comment
@@ -129,21 +130,32 @@ def main(argv: list[str] | None = None) -> int:
         result = event
     elif arguments.command == "catch-up":
         class_config, feature_map = load_gate_config(arguments)
-        gate = PRGate(
+        workflow = PRWorkflowStore(
+            root / "pr-workflow",
             class_config=class_config,
             feature_map=feature_map,
             base_ref=arguments.base_ref,
         )
-
         def handler(event: dict[str, Any]) -> None:
-            if event["event_type"] != "github.pull_request":
+            if event["event_type"] not in {
+                "github.pull_request",
+                "github.review_completed",
+            }:
                 return
-            result = gate.evaluate(event["payload"])
-            packet_name = (
-                f"pr-{result['pr_number']}-{result['head_sha'][:12]}.json"
+            result = workflow.apply(event)
+            result_id = int(event["event_id"])
+            write_json(
+                root / "workflow-results" / f"event-{result_id}.json",
+                result,
             )
-            write_json(root / "packets" / packet_name, result["packet"])
-            write_json(root / "latest-policy.json", result)
+            write_json(root / "latest-pr-workflow.json", result)
+            if result["gate"] is not None:
+                write_json(root / "latest-policy.json", result["gate"])
+                packet = result["packet"]
+                packet_name = (
+                    f"pr-{packet['pr_number']}-{packet['head_sha'][:12]}.json"
+                )
+                write_json(root / "packets" / packet_name, packet)
 
         result = LocalPoller(
             journal=journal,

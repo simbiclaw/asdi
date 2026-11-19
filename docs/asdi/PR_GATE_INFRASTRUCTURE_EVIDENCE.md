@@ -72,6 +72,14 @@ The untrusted-text boundary is enforced in the event CLI: allowlisted owners can
 
 The Pass 1 review boundary now accepts an explicitly configured reviewer command and normalizes its result into the PR-gate review contract. It validates head binding, output schema, finding buckets and `act`-finding evidence. A malformed or stale reviewer result becomes `blocked`, never pass.
 
+### Event-driven PR workflow
+
+[`events/pr_workflow.py`](../../events/pr_workflow.py) persists workflow state across separately arriving events rather than treating one PR event as a complete gate input. A normalized `github.pull_request` event records PR number, exact 40-character head SHA, base branch, changed paths, statuses and verifier evidence as `asdi.pr-state/v1`. Its `gate_decision` remains `pending_review`; review evidence embedded in that initial event is ignored.
+
+A later `github.review_completed` event must bind `reviewed_commit` to the current head, carry a boolean `passed` value that agrees with its `pass | fail | blocked` status, and reference the currently persisted PR state. Only then does the workflow invoke the existing fail-closed [`events/pr_gate.py`](../../events/pr_gate.py), persist the packet separately from state, and expose the policy decision. The CLI retains the short `packets/pr-<number>-<head>.json` filename in addition to durable `pr-workflow/pr-state/pr-<number>/<head>.json` and `pr-workflow/packets/pr-<number>/<head>.json` locations.
+
+The state machine is fresh-head safe: a new PR head creates a new pending state and does not carry forward prior review or verifier evidence; historical per-head files remain available. A stale review is recorded as a rejection without mutating the current state. A review arriving before its PR is also rejected. Invalid or unsupported workflow events are written under `workflow-rejections/`, while successful dispatch results are written under `workflow-results/` and `latest-pr-workflow.json`.
+
 ## Builder-side execution
 
 ```sh
@@ -79,8 +87,8 @@ PYTHONPATH=.:src python3 -m unittest tests.test_events_pr_gate -v
 PYTHONPATH=.:src python3 -m unittest discover -s tests -v
 ```
 
-Observed latest full suite after the untrusted-text boundary: **147 tests, OK, 4 expected AF_UNIX/socket-binding skips**.
+Observed latest full suite after the event-driven workflow: **154 tests, OK, 4 expected AF_UNIX/socket-binding skips**. Focused evidence covered the initial pending state, head-bound review evaluation, stale-review rejection, orphan-review rejection, malformed-payload rejection, new-head invalidation, separate durable packets, and CLI catch-up across two events.
 
 ## Limits
 
-This is reusable control-plane infrastructure. It is not Phase 4 exit evidence, because Phase 3 remains blocked pending the owner's pilot decision and Phase 4 has not executed the complete real PR lifecycle.
+This is reusable control-plane infrastructure. It is not Phase 4 exit evidence, because Phase 3 remains blocked pending the owner's pilot decision and Phase 4 has not executed the complete real PR lifecycle. The workflow accepts normalized local events; a GitHub API reconciler remains a subsequent integration slice.

@@ -45,6 +45,7 @@ class EventsCliTests(unittest.TestCase):
     def test_append_catch_up_health_and_gate_are_durable(self) -> None:
         head = "a" * 40
         payload = self.root / "pull-request.json"
+        review = self.root / "review-completed.json"
         self.write_json(
             payload,
             {
@@ -54,7 +55,18 @@ class EventsCliTests(unittest.TestCase):
                 "changed_paths": ["src/feature.py"],
                 "statuses": {"ci": "pass", "asdi/policy": "pass"},
                 "verifier": {"candidate_commit": head, "status": "pass"},
-                "review": {"reviewed_commit": head, "passed": True},
+            },
+        )
+        self.write_json(
+            review,
+            {
+                "pr_number": 9,
+                "head_sha": head,
+                "review": {
+                    "reviewed_commit": head,
+                    "status": "pass",
+                    "passed": True,
+                },
             },
         )
         exit_code = main(
@@ -76,6 +88,32 @@ class EventsCliTests(unittest.TestCase):
                 "catch-up",
                 "--now",
                 "100",
+            ]
+        )
+        self.assertEqual(exit_code, 0)
+        initial_result = json.loads(
+            (self.root / "latest-pr-workflow.json").read_text()
+        )
+        self.assertEqual(initial_result["state"]["gate_decision"], "pending_review")
+        self.assertFalse((self.root / "packets").exists())
+
+        exit_code = main(
+            [
+                *self.common,
+                "append-event",
+                "--event-type",
+                "github.review_completed",
+                "--payload",
+                str(review),
+            ]
+        )
+        self.assertEqual(exit_code, 0)
+        exit_code = main(
+            [
+                *self.common,
+                "catch-up",
+                "--now",
+                "101",
             ]
         )
         self.assertEqual(exit_code, 0)
@@ -139,6 +177,67 @@ class EventsCliTests(unittest.TestCase):
         )
         self.assertEqual(exit_code, 0)
         self.assertTrue(json.loads(decision_path.read_text())["eligible"])
+
+    def test_event_driven_pull_request_waits_for_review_event(self) -> None:
+        head = "f" * 40
+        initial_path = self.root / "pull-request.json"
+        review_path = self.root / "review-completed.json"
+        self.write_json(initial_path, {
+            "pr_number": 11,
+            "head_sha": head,
+            "base_ref": "main",
+            "changed_paths": ["src/feature.py"],
+            "statuses": {"ci": "pass", "asdi/policy": "pass"},
+            "verifier": {"candidate_commit": head, "status": "pass"},
+        })
+        self.write_json(review_path, {
+            "pr_number": 11,
+            "head_sha": head,
+            "review": {
+                "reviewed_commit": head,
+                "status": "pass",
+                "passed": True,
+            },
+        })
+
+        exit_code = main([
+            *self.common,
+            "append-event",
+            "--event-type",
+            "github.pull_request",
+            "--payload",
+            str(initial_path),
+        ])
+        self.assertEqual(exit_code, 0)
+        exit_code = main([*self.common, "catch-up", "--now", "200"])
+        self.assertEqual(exit_code, 0)
+        initial_result = json.loads(
+            (self.root / "latest-pr-workflow.json").read_text()
+        )
+        self.assertEqual(initial_result["state"]["gate_decision"], "pending_review")
+        self.assertIsNone(initial_result["packet"])
+        self.assertFalse((self.root / "packets").exists())
+
+        exit_code = main([
+            *self.common,
+            "append-event",
+            "--event-type",
+            "github.review_completed",
+            "--payload",
+            str(review_path),
+        ])
+        self.assertEqual(exit_code, 0)
+        exit_code = main([*self.common, "catch-up", "--now", "201"])
+        self.assertEqual(exit_code, 0)
+        result = json.loads((self.root / "latest-pr-workflow.json").read_text())
+        self.assertEqual(result["action"], "review_recorded")
+        self.assertEqual(result["gate"]["decision"], "eligible")
+        packet_path = self.root / "packets" / f"pr-11-{head[:12]}.json"
+        self.assertTrue(packet_path.is_file())
+        packet = json.loads(packet_path.read_text())
+        self.assertEqual(packet["policy_decision"], "eligible")
+        state_path = self.root / "pr-workflow/pr-state/pr-11" / f"{head}.json"
+        self.assertTrue(state_path.is_file())
 
     def test_merge_dry_run_persists_human_authority_decision(self) -> None:
         packet_path = self.root / "packet.json"
