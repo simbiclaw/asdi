@@ -370,3 +370,93 @@ class EventsCliTests(unittest.TestCase):
         self.assertEqual(result["status"], "pass")
         self.assertEqual(result["reviewed_commit"], head)
         self.assertTrue((self.root / "latest-review.json").is_file())
+
+    def test_review_event_bridges_executed_review_to_gate(self) -> None:
+        head = "1" * 40
+        packet_path = self.root / "review-packet.json"
+        diff_path = self.root / "changed.diff"
+        reviewer_path = self.root / "reviewer.py"
+        result_path = self.root / "review-result.json"
+        initial_path = self.root / "pull-request.json"
+        self.write_json(
+            packet_path,
+            {"pr_number": 12, "head_sha": head, "changed_paths": ["src/x"]},
+        )
+        diff_path.write_text("changed\n")
+        reviewer_path.write_text(
+            "#!/usr/bin/env python3\n"
+            "import json, sys\n"
+            "from pathlib import Path\n"
+            "packet = json.loads(Path(sys.argv[1]).read_text())\n"
+            "Path(sys.argv[3]).write_text(json.dumps({\n"
+            "    'schema_version': 'asdi.review-result/v1',\n"
+            "    'pass': 'review',\n"
+            "    'model': 'local-review-model',\n"
+            "    'independent_family': False,\n"
+            "    'reviewed_commit': packet['head_sha'],\n"
+            "    'status': 'pass',\n"
+            "    'findings': [],\n"
+            "}))\n"
+        )
+        reviewer_path.chmod(0o755)
+        self.write_json(
+            initial_path,
+            {
+                "pr_number": 12,
+                "head_sha": head,
+                "base_ref": "main",
+                "changed_paths": ["src/feature.py"],
+                "statuses": {"ci": "pass", "asdi/policy": "pass"},
+                "verifier": {"candidate_commit": head, "status": "pass"},
+            },
+        )
+        exit_code = main([
+            *self.common,
+            "append-event",
+            "--event-type",
+            "github.pull_request",
+            "--payload",
+            str(initial_path),
+        ])
+        self.assertEqual(exit_code, 0)
+        exit_code = main([*self.common, "catch-up", "--now", "300"])
+        self.assertEqual(exit_code, 0)
+
+        exit_code = main(
+            [
+                *self.common,
+                "review-event",
+                "--packet",
+                str(packet_path),
+                "--diff",
+                str(diff_path),
+                "--reviewer",
+                "/usr/bin/python3",
+                "--reviewer",
+                str(reviewer_path),
+                "--reviewer",
+                "{packet}",
+                "--reviewer",
+                "{diff}",
+                "--reviewer",
+                "{output}",
+                "--name",
+                "local_review",
+                "--independent-family",
+                "false",
+                "--result-output",
+                str(result_path),
+            ]
+        )
+        self.assertEqual(exit_code, 0)
+        self.assertTrue(result_path.is_file())
+        event = json.loads((self.root / "last-review-event.json").read_text())
+        self.assertEqual(event["event_type"], "github.review_completed")
+        self.assertTrue(event["payload"]["review"]["passed"])
+        self.assertNotIn("execution", event["payload"]["review"])
+
+        exit_code = main([*self.common, "catch-up", "--now", "301"])
+        self.assertEqual(exit_code, 0)
+        result = json.loads((self.root / "latest-pr-workflow.json").read_text())
+        self.assertEqual(result["gate"]["decision"], "eligible")
+        self.assertEqual(result["packet"]["review"]["reviewed_commit"], head)

@@ -62,6 +62,7 @@ A judgment or uncovered path becomes `human_required`. A mix becomes `split_requ
 - `deployment-decision`.
 - `merge-dry-run`.
 - `review`.
+- `review-event`;
 - `comment-gate`;
 - `agent-claims-block`;
 - `review-input`.
@@ -71,6 +72,8 @@ Catch-up persists each eligible PR packet as `packets/pr-<number>-<head>.json`, 
 The untrusted-text boundary is enforced in the event CLI: allowlisted owners can request resume, non-allowlisted comments remain inert data, and agent-authored claims are delimited, length-capped and end-marker-escaped before reviewer input.
 
 The Pass 1 review boundary now accepts an explicitly configured reviewer command and normalizes its result into the PR-gate review contract. It validates head binding, output schema, finding buckets and `act`-finding evidence. A malformed or stale reviewer result becomes `blocked`, never pass.
+
+`review-event` connects that review boundary to the durable workflow. It first persists the complete review execution result, including command provenance and captured output; it then appends only normalized, head-bound gate fields as `github.review_completed`. The event never carries reviewer execution logs or stdout, while the separately persisted review result preserves the full execution audit.
 
 ### Event-driven PR workflow
 
@@ -87,7 +90,7 @@ PYTHONPATH=.:src python3 -m unittest tests.test_events_pr_gate -v
 PYTHONPATH=.:src python3 -m unittest discover -s tests -v
 ```
 
-Observed latest full suite after the event-driven workflow: **154 tests, OK, 4 expected AF_UNIX/socket-binding skips**. Focused evidence covered the initial pending state, head-bound review evaluation, stale-review rejection, orphan-review rejection, malformed-payload rejection, new-head invalidation, separate durable packets, and CLI catch-up across two events.
+Observed latest full suite after review-to-event integration: **155 tests, OK, 4 expected AF_UNIX/socket-binding skips**. Focused evidence covered the initial pending state, head-bound review evaluation, stale-review rejection, orphan-review rejection, malformed-payload rejection, new-head invalidation, separate durable packets, explicit reviewer execution, normalized review-event creation, and CLI catch-up through an eligible packet.
 
 ## Limits
 

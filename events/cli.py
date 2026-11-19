@@ -15,7 +15,7 @@ from .journal import EventJournal, LocalPoller, PollerState
 from .merge_gate import evaluate_merge_packet
 from .pr_workflow import PRWorkflowStore
 from .pr_gate import PRGate, deployment_decision, post_merge_check
-from .review import ReviewCommand, run_review
+from .review import ReviewCommand, review_event_payload, run_review
 from .comment_gate import agent_claims_block, classify_comment
 
 
@@ -93,6 +93,18 @@ def build_parser() -> argparse.ArgumentParser:
     )
     review.add_argument("--timeout-seconds", type=float, default=600.0)
     review.add_argument("--result-output", required=True)
+    review_event = commands.add_parser("review-event")
+    review_event.add_argument("--packet", required=True)
+    review_event.add_argument("--diff", required=True)
+    review_event.add_argument("--reviewer", action="append", required=True)
+    review_event.add_argument("--name", required=True)
+    review_event.add_argument(
+        "--independent-family",
+        choices=("true", "false", "unavailable"),
+        required=True,
+    )
+    review_event.add_argument("--timeout-seconds", type=float, default=600.0)
+    review_event.add_argument("--result-output", required=True)
     merge = commands.add_parser("merge-dry-run")
     merge.add_argument("--packet", required=True)
     merge.add_argument("--actor", required=True)
@@ -199,7 +211,7 @@ def main(argv: list[str] | None = None) -> int:
         )
         write_json(root / "latest-merge-dry-run.json", result)
         write_json(Path(arguments.result_output), result)
-    elif arguments.command == "review":
+    elif arguments.command in {"review", "review-event"}:
         reviewer = ReviewCommand(
             name=arguments.name,
             argv=tuple(arguments.reviewer),
@@ -212,13 +224,21 @@ def main(argv: list[str] | None = None) -> int:
                 else "unavailable"
             ),
         )
+        packet = load_json(arguments.packet)
         result = run_review(
-            packet=load_json(arguments.packet),
+            packet=packet,
             diff=Path(arguments.diff).read_text(),
             command=reviewer,
         )
         write_json(root / "latest-review.json", result)
         write_json(Path(arguments.result_output), result)
+        if arguments.command == "review-event":
+            event = journal.append(
+                event_type="github.review_completed",
+                payload=review_event_payload(packet=packet, result=result),
+            )
+            write_json(root / "last-review-event.json", event)
+            result = event
     elif arguments.command == "comment-gate":
         identities = yaml.safe_load(arguments.identities.read_text())
         result = classify_comment(

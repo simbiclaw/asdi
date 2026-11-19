@@ -191,3 +191,47 @@ def run_review(
         result["execution"]["stdout"] = stdout[-8000:]
         result["execution"]["stderr"] = stderr[-8000:]
         return result
+
+
+def review_event_payload(
+    *,
+    packet: dict[str, Any],
+    result: dict[str, Any],
+) -> dict[str, Any]:
+    """Convert an executed review into the durable workflow-event contract.
+
+    Execution provenance and captured model output remain in the review result.
+    The journal receives only the normalized gate evidence.
+    """
+
+    pr_number = packet.get("pr_number")
+    head_sha = packet.get("head_sha")
+    if not isinstance(pr_number, int) or isinstance(pr_number, bool) or pr_number <= 0:
+        raise ValueError("review packet has no valid pr_number")
+    if not isinstance(head_sha, str) or not head_sha:
+        raise ValueError("review packet has no valid head_sha")
+    if result.get("schema_version") != "asdi.review-execution/v1":
+        raise ValueError("unsupported review execution schema")
+    if result.get("reviewed_commit") != head_sha:
+        raise ValueError("review result is not bound to packet head")
+    status = result.get("status")
+    if status not in ALLOWED_STATUS:
+        raise ValueError("review result has invalid status")
+    normalized = {
+        key: result[key]
+        for key in (
+            "schema_version",
+            "pass",
+            "model",
+            "independent_family",
+            "reviewed_commit",
+            "status",
+            "findings",
+        )
+    }
+    normalized["passed"] = status == "pass"
+    return {
+        "pr_number": pr_number,
+        "head_sha": head_sha,
+        "review": normalized,
+    }
