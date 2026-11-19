@@ -67,6 +67,7 @@ A judgment or uncovered path becomes `human_required`. A mix becomes `split_requ
 - `review-event`;
 - `comment-gate`;
 - `record-verification`;
+- `record-main-verification`;
 - `reconcile-github`;
 - `agent-claims-block`;
 - `review-input`.
@@ -93,6 +94,8 @@ The state machine is fresh-head safe: a new PR head creates a new pending state 
 
 [`events/main_workflow.py`](../../events/main_workflow.py) records only `main` pushes by exact 40-character commit, then accepts verification separately. A verification result must carry CI and a manifest-bound verifier for the same commit. The store invokes the existing post-merge check, persists its pass/fail result and auto-revert plan by exact commit, and computes deployment eligibility from only that exact matching result. A newer `main` commit cannot inherit an older result. The CLI catch-up dispatches these events and persists each under `main-workflow-results/`, with the latest decision in `latest-main-workflow.json`.
 
+`record-main-verification` accepts only evidence whose manifest source is `main`, binds the manifest subject and result to the exact landed commit, checks every feature and negative control, and appends `github.main_verification_completed`. The complete evidence record remains external to the event payload.
+
 ## Builder-side execution
 
 ```sh
@@ -100,7 +103,7 @@ PYTHONPATH=.:src python3 -m unittest tests.test_events_pr_gate -v
 PYTHONPATH=.:src python3 -m unittest discover -s tests -v
 ```
 
-Observed latest full suite after post-merge workflow integration: **166 tests, OK, 4 expected AF_UNIX/socket-binding skips**. Focused evidence covered pending verification/review states, stale and orphan rejection, malformed payloads, new-head invalidation, separate durable packets, evidence-derived verifier status, missed negative controls, wrong-source rejection, explicit reviewer execution, exact-main deployment eligibility, failed-main auto-revert planning, stale-main rejection, and CLI catch-up.
+Observed latest full suite after main-evidence integration: **173 tests, OK, 4 expected AF_UNIX/socket-binding skips**. Focused evidence covered pending verification/review states, stale and orphan rejection, malformed payloads, new-head invalidation, separate durable packets, evidence-derived PR-head verifier status, evidence-derived exact-main verifier status, missed negative controls, wrong-source rejection, explicit reviewer execution, exact-main deployment eligibility, failed-main auto-revert planning, stale-main rejection, and CLI catch-up.
 
 ## Limits
 

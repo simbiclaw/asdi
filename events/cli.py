@@ -18,7 +18,7 @@ from .pr_workflow import PRWorkflowStore
 from .pr_gate import PRGate, deployment_decision, post_merge_check
 from .review import ReviewCommand, review_event_payload, run_review
 from .comment_gate import agent_claims_block, classify_comment
-from .verification import verification_event_payload
+from .verification import main_verification_event_payload, verification_event_payload
 from .github_reconciler import (
     GitHubCommand,
     GitHubReconciler,
@@ -116,6 +116,14 @@ def build_parser() -> argparse.ArgumentParser:
     verification_event.add_argument("--packet", required=True)
     verification_event.add_argument("--evidence", required=True)
     verification_event.add_argument(
+        "--ci-status",
+        choices=("pass", "fail", "blocked", "error"),
+        required=True,
+    )
+    main_verification = commands.add_parser("record-main-verification")
+    main_verification.add_argument("--commit", required=True)
+    main_verification.add_argument("--evidence", required=True)
+    main_verification.add_argument(
         "--ci-status",
         choices=("pass", "fail", "blocked", "error"),
         required=True,
@@ -326,6 +334,17 @@ def main(argv: list[str] | None = None) -> int:
             ),
         )
         write_json(root / "last-verification-event.json", event)
+        result = event
+    elif arguments.command == "record-main-verification":
+        event = journal.append(
+            event_type="github.main_verification_completed",
+            payload=main_verification_event_payload(
+                commit=arguments.commit,
+                evidence=load_json(arguments.evidence),
+                ci_status=arguments.ci_status,
+            ),
+        )
+        write_json(root / "last-main-verification-event.json", event)
         result = event
     elif arguments.command == "comment-gate":
         identities = yaml.safe_load(arguments.identities.read_text())

@@ -532,36 +532,74 @@ class EventsCliTests(unittest.TestCase):
         commit = "9" * 40
         push_path = self.root / "push.json"
         verification_path = self.root / "main-verification.json"
+        evidence_source = self.root / "main-evidence-source"
+        evidence_source.mkdir()
+        verification_result = {
+            "schema": 2,
+            "run_id": "r-main-evidence",
+            "commit": commit,
+            "features": [
+                {
+                    "id": "feature:main",
+                    "status": "pass",
+                    "control": "caught",
+                    "evidence": ["output.txt"],
+                    "limits": [],
+                }
+            ],
+        }
+        (evidence_source / "result.json").write_text(
+            json.dumps(verification_result)
+        )
+        (evidence_source / "output.txt").write_text("observed\n")
+        evidence = EvidenceStore(self.root / "main-evidence-store").put(
+            evidence_source,
+            verification_result,
+            metadata={
+                "source": "main",
+                "producer": {
+                    "kind": "verifier",
+                    "image_digest": "sha256:verifier",
+                },
+                "environment": {
+                    "run_image_digest": "sha256:run",
+                    "tool_versions": {"python": "3"},
+                },
+                "inputs": {
+                    "harness_commit": "0" * 40,
+                    "static_gates": "5" * 64,
+                    "product_profile": "6" * 64,
+                },
+            },
+        )
         self.write_json(
             push_path,
             {"branch": "main", "commit": commit},
         )
         self.write_json(
             verification_path,
-            {
-                "commit": commit,
-                "statuses": {"ci": "pass"},
-                "verifier": {
-                    "candidate_commit": commit,
-                    "status": "pass",
-                    "manifest_id": "m-main",
-                    "run_id": "r-main",
-                },
-            },
+            evidence,
         )
-        for event_type, payload in (
-            ("github.push", push_path),
-            ("github.main_verification_completed", verification_path),
-        ):
-            exit_code = main([
-                *self.common,
-                "append-event",
-                "--event-type",
-                event_type,
-                "--payload",
-                str(payload),
-            ])
-            self.assertEqual(exit_code, 0)
+        exit_code = main([
+            *self.common,
+            "append-event",
+            "--event-type",
+            "github.push",
+            "--payload",
+            str(push_path),
+        ])
+        self.assertEqual(exit_code, 0)
+        exit_code = main([
+            *self.common,
+            "record-main-verification",
+            "--commit",
+            commit,
+            "--evidence",
+            str(verification_path),
+            "--ci-status",
+            "pass",
+        ])
+        self.assertEqual(exit_code, 0)
         exit_code = main([*self.common, "catch-up", "--now", "400"])
         self.assertEqual(exit_code, 0)
         result = json.loads(

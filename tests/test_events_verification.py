@@ -7,16 +7,21 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from events.verification import verification_event_payload
+from events.verification import main_verification_event_payload, verification_event_payload
 from launcher.evidence import EvidenceStore
 
 
 HEAD = "a" * 40
 
 
-def verified_evidence(root: Path, *, control: str = "caught") -> dict:
-    source = root / "source"
-    source.mkdir()
+def verified_evidence(
+    root: Path,
+    *,
+    control: str = "caught",
+    source: str = "pr-head",
+) -> dict:
+    evidence_directory = root / "source"
+    evidence_directory.mkdir()
     result = {
         "schema": 2,
         "run_id": "r-verification",
@@ -31,14 +36,14 @@ def verified_evidence(root: Path, *, control: str = "caught") -> dict:
             }
         ],
     }
-    (source / "result.json").write_text(json.dumps(result))
-    (source / "output.txt").write_text("observed\n")
+    (evidence_directory / "result.json").write_text(json.dumps(result))
+    (evidence_directory / "output.txt").write_text("observed\n")
     store = EvidenceStore(root / "store")
     return store.put(
-        source,
+        evidence_directory,
         result,
         metadata={
-            "source": "pr-head",
+            "source": source,
             "producer": {"kind": "verifier", "image_digest": "sha256:verifier"},
             "environment": {
                 "run_image_digest": "sha256:run",
@@ -72,6 +77,24 @@ class VerificationEventTests(unittest.TestCase):
         self.assertEqual(payload["verifier"]["candidate_commit"], HEAD)
         self.assertEqual(payload["verifier"]["status"], "pass")
         self.assertTrue(payload["verifier"]["manifest_id"].startswith("m-"))
+
+    def test_verified_main_evidence_maps_to_post_merge_payload(self) -> None:
+        payload = main_verification_event_payload(
+            commit=HEAD,
+            evidence=verified_evidence(self.root, source="main"),
+            ci_status="pass",
+        )
+        self.assertEqual(payload["commit"], HEAD)
+        self.assertEqual(payload["statuses"], {"ci": "pass"})
+        self.assertEqual(payload["verifier"]["status"], "pass")
+
+    def test_main_workflow_rejects_pr_head_source(self) -> None:
+        with self.assertRaises(ValueError):
+            main_verification_event_payload(
+                commit=HEAD,
+                evidence=verified_evidence(self.root, source="pr-head"),
+                ci_status="pass",
+            )
 
     def test_missed_negative_control_is_fail_not_pass(self) -> None:
         payload = verification_event_payload(

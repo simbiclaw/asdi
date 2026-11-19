@@ -7,6 +7,7 @@ from typing import Any
 
 
 CI_STATUSES = {"pass", "fail", "blocked", "error"}
+EVIDENCE_SOURCES = {"pr-head", "main"}
 
 
 def verification_event_payload(
@@ -15,7 +16,7 @@ def verification_event_payload(
     evidence: dict[str, Any],
     ci_status: str,
 ) -> dict[str, Any]:
-    """Return only the gate-contract subset of a verified evidence manifest."""
+    """Return the gate-contract subset of verified PR-head evidence."""
 
     pr_number = packet.get("pr_number")
     head_sha = packet.get("head_sha")
@@ -25,6 +26,53 @@ def verification_event_payload(
         raise ValueError("packet has no valid head_sha")
     if ci_status not in CI_STATUSES:
         raise ValueError("ci_status must be pass, fail, blocked or error")
+    verifier = verified_evidence_contract(
+        evidence=evidence,
+        commit=head_sha,
+        source="pr-head",
+    )
+    return {
+        "pr_number": pr_number,
+        "head_sha": head_sha,
+        "statuses": {"ci": ci_status},
+        "verifier": verifier,
+    }
+
+
+def main_verification_event_payload(
+    *,
+    commit: str,
+    evidence: dict[str, Any],
+    ci_status: str,
+) -> dict[str, Any]:
+    """Return the gate-contract subset of verified exact-``main`` evidence."""
+
+    if ci_status not in CI_STATUSES:
+        raise ValueError("ci_status must be pass, fail, blocked or error")
+    verifier = verified_evidence_contract(
+        evidence=evidence,
+        commit=commit,
+        source="main",
+    )
+    return {
+        "commit": commit,
+        "statuses": {"ci": ci_status},
+        "verifier": verifier,
+    }
+
+
+def verified_evidence_contract(
+    *,
+    evidence: dict[str, Any],
+    commit: str,
+    source: str,
+) -> dict[str, Any]:
+    """Validate one verified manifest and return its normalized verifier."""
+
+    if source not in EVIDENCE_SOURCES:
+        raise ValueError("evidence source must be pr-head or main")
+    if not isinstance(commit, str) or not commit:
+        raise ValueError("evidence commit is required")
     if not isinstance(evidence, dict) or evidence.get("valid") is not True:
         raise ValueError("evidence is not verified")
     if not isinstance(evidence.get("manifest_id"), str) or not evidence["manifest_id"]:
@@ -39,18 +87,17 @@ def verification_event_payload(
         not isinstance(subject, list)
         or len(subject) != 1
         or not isinstance(subject[0], dict)
-        or subject[0].get("digest", {}).get("gitCommit") != head_sha
+        or subject[0].get("digest", {}).get("gitCommit") != commit
     ):
-        raise ValueError("evidence subject is not bound to packet head")
-    if result.get("commit") != head_sha:
-        raise ValueError("evidence result is not bound to packet head")
+        raise ValueError("evidence subject is not bound to target commit")
+    if result.get("commit") != commit:
+        raise ValueError("evidence result is not bound to target commit")
     run_id = result.get("run_id")
     if not isinstance(run_id, str) or not run_id:
         raise ValueError("evidence result has no run_id")
     predicate = statement.get("predicate")
-    if not isinstance(predicate, dict) or predicate.get("source") != "pr-head":
-        raise ValueError("PR gate requires evidence source pr-head")
-
+    if not isinstance(predicate, dict) or predicate.get("source") != source:
+        raise ValueError(f"{source} gate requires evidence source {source}")
     features = result.get("features")
     failures: list[str] = []
     if not isinstance(features, list) or not features:
@@ -68,16 +115,11 @@ def verification_event_payload(
                 failures.append(f"feature {feature.get('id', index)} has no limits list")
 
     verifier = {
-        "candidate_commit": head_sha,
+        "candidate_commit": commit,
         "status": "fail" if failures else "pass",
         "manifest_id": evidence["manifest_id"],
         "run_id": run_id,
     }
     if failures:
         verifier["failures"] = failures
-    return {
-        "pr_number": pr_number,
-        "head_sha": head_sha,
-        "statuses": {"ci": ci_status},
-        "verifier": verifier,
-    }
+    return verifier
