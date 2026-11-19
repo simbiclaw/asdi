@@ -19,6 +19,11 @@ from .pr_gate import PRGate, deployment_decision, post_merge_check
 from .review import ReviewCommand, review_event_payload, run_review
 from .comment_gate import agent_claims_block, classify_comment
 from .verification import verification_event_payload
+from .github_reconciler import (
+    GitHubCommand,
+    GitHubReconciler,
+    default_github_environment,
+)
 
 
 def load_json(path: str | Path) -> Any:
@@ -132,6 +137,17 @@ def build_parser() -> argparse.ArgumentParser:
     review_input.add_argument("--diff", required=True)
     review_input.add_argument("--agent-claims", required=True)
     review_input.add_argument("--output-dir", required=True)
+    reconcile = commands.add_parser("reconcile-github")
+    reconcile.add_argument("--repository", required=True)
+    reconcile.add_argument(
+        "--gh",
+        default="/opt/homebrew/bin/gh",
+    )
+    reconcile.add_argument(
+        "--proxy",
+        default="http://127.0.0.1:7890",
+    )
+    reconcile.add_argument("--timeout-seconds", type=float, default=20.0)
     return parser
 
 
@@ -199,6 +215,44 @@ def main(argv: list[str] | None = None) -> int:
         if not isinstance(result, dict):
             raise ValueError("catch-up returned no result")
         write_json(root / "last-catch-up.json", result)
+    elif arguments.command == "reconcile-github":
+        environment = default_github_environment(proxy_url=arguments.proxy)
+        reconciler = GitHubReconciler(
+            journal=journal,
+            state_path=root / "github-reconciler-health.json",
+            repository=arguments.repository,
+            base_ref=arguments.base_ref,
+            pr_command=GitHubCommand(
+                argv=(
+                    arguments.gh,
+                    "pr",
+                    "list",
+                    "--repo",
+                    arguments.repository,
+                    "--state",
+                    "open",
+                    "--limit",
+                    "100",
+                    "--json",
+                    "number,headRefOid,baseRefName,files",
+                ),
+                timeout_seconds=arguments.timeout_seconds,
+                environment=environment,
+            ),
+            main_command=GitHubCommand(
+                argv=(
+                    arguments.gh,
+                    "api",
+                    f"repos/{arguments.repository}/commits/{arguments.base_ref}",
+                    "--jq",
+                    '{"sha": .sha}',
+                ),
+                timeout_seconds=arguments.timeout_seconds,
+                environment=environment,
+            ),
+        )
+        result = reconciler.reconcile()
+        write_json(root / "last-github-reconciliation.json", result)
     elif arguments.command == "health":
         result = LocalPoller(
             journal=journal,

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import stat
 import tempfile
 import unittest
 from pathlib import Path
@@ -571,3 +572,43 @@ class EventsCliTests(unittest.TestCase):
         self.assertTrue(result["deployment"]["eligible"])
         state_path = self.root / "main-workflow/main-state" / f"{commit}.json"
         self.assertTrue(state_path.is_file())
+
+    def test_reconcile_github_command_uses_explicit_read_only_adapter(self) -> None:
+        head = "7" * 40
+        main_commit = "8" * 40
+        fake_gh = self.root / "fake-gh"
+        fake_gh.write_text(
+            "#!/bin/sh\n"
+            "if test \"$1\" = pr; then\n"
+            f"  printf '%s' '[{{\"number\": 13,\"headRefOid\": \"{head}\",\"baseRefName\": \"main\",\"files\":[{{\"path\":\"src/feature.py\"}}]}}]'\n"
+            "else\n"
+            f"  printf '%s' '{{\"sha\": \"{main_commit}\"}}'\n"
+            "fi\n"
+        )
+        fake_gh.chmod(fake_gh.stat().st_mode | stat.S_IXUSR)
+        exit_code = main([
+            *self.common,
+            "reconcile-github",
+            "--repository",
+            "simbiclaw/asdi",
+            "--gh",
+            str(fake_gh),
+            "--proxy",
+            "http://127.0.0.1:9",
+            "--timeout-seconds",
+            "5",
+        ])
+        self.assertEqual(exit_code, 0)
+        result = json.loads(
+            (self.root / "last-github-reconciliation.json").read_text()
+        )
+        self.assertTrue(result["read_only"])
+        self.assertEqual(result["appended_count"], 2)
+        self.assertEqual(
+            result["events"][0]["payload"]["head_sha"],
+            head,
+        )
+        self.assertEqual(
+            result["events"][1]["payload"]["commit"],
+            main_commit,
+        )

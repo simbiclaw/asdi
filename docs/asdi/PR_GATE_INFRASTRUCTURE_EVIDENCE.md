@@ -67,6 +67,7 @@ A judgment or uncovered path becomes `human_required`. A mix becomes `split_requ
 - `review-event`;
 - `comment-gate`;
 - `record-verification`;
+- `reconcile-github`;
 - `agent-claims-block`;
 - `review-input`.
 
@@ -104,3 +105,5 @@ Observed latest full suite after post-merge workflow integration: **166 tests, O
 ## Limits
 
 This is reusable control-plane infrastructure. It is not Phase 4 exit evidence, because Phase 3 remains blocked pending the owner's pilot decision and Phase 4 has not executed the complete real PR lifecycle. The workflow accepts normalized local events; a GitHub API reconciler and launcher invocation inside that reconciler remain subsequent integration slices. Auto-revert planning does not execute Git or deployment actions.
+
+The first read-only GitHub reconciler slice is now implemented and builder-tested in [`events/github_reconciler.py`](../../events/github_reconciler.py). It normalizes exact PR heads and `main` commits into the existing journal, deduplicates current-state facts, uses a bounded shell-free `gh` command and minimal proxy environment, and fails closed without appends on command errors. The real authenticated probe remains blocked by an invalid host GitHub token; see [`GITHUB_RECONCILER_EVIDENCE.md`](GITHUB_RECONCILER_EVIDENCE.md).
