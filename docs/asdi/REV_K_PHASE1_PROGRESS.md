@@ -90,6 +90,8 @@ Live Docker recovery run `r-e8707e74-fcbf-4f95-8dd2-dd95ba720716` succeeded with
 
 Added an explicit adapter registry and a dedicated Claude Code stream-JSON adapter with Stop-hook observation, contract-derived prompt context, external guardrails and proxy-origin model routing. Live run `r-5fc95790-5990-4b1b-bca2-842d6fe6e367` succeeded against local LiteLLM with 5 turns, 6,303 tokens and $0.027948 spend. Static and base-harness checks passed; no socket/secrets were mounted; manifest `m-6ab537ce486a96d903aa7039` remained valid after teardown. Independent audit remains required.
 
+The fresh builder-owned adapter is no longer missing; it is implemented and builder-tested on the active branch. Independent verification remains outstanding.
+
 ## Phase 1 readiness — 2026-11-18
 
 All Build Guide V4 Phase 1 criteria are mapped to implementation and reproducible builder-side evidence in [`PHASE1_EXIT_READINESS.md`](PHASE1_EXIT_READINESS.md). Status: **builder-tested, independently unverified, not accepted**.
