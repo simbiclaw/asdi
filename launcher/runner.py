@@ -209,6 +209,17 @@ class DockerRuntime:
         self.remove_volume(workspace_volume)
         self.remove_volume(base_volume)
 
+    def teardown_verifier_resources(
+        self,
+        *,
+        workspace_volume: str,
+        base_volume: str,
+    ) -> None:
+        """Remove only verifier-only resources; verifier containers have no network."""
+
+        self.remove_volume(workspace_volume)
+        self.remove_volume(base_volume)
+
     def stop_proxy(self, name: str) -> None:
         self.kill(name)
         self.remove_container(name)
@@ -572,9 +583,11 @@ class REVKLauncher:
             checks = self._verify_head(
                 run_id=run_id,
                 workspace=workspace,
+                workspace_volume=workspace_volume,
                 base_volume=base_volume,
                 evidence_stage=evidence_stage,
                 verifier_result=verifier_result,
+                commit=self._head(),
             )
             passed = agent_exit == 0 and all(
                 check["status"] == "pass" for check in checks if check.get("blocking", True)
@@ -678,6 +691,173 @@ class REVKLauncher:
             self._record_failure(run_root, error)
             raise
 
+    def verify_revision(
+        self,
+        revision: str,
+        *,
+        source: str = "pr-head",
+    ) -> dict[str, Any]:
+        """Verify one exact revision without launching an agent.
+
+        This is the Phase 4 verifier entry point.  It starts no agent, no proxy,
+        and no run network.  Static checks and the base harness still execute in
+        the verifier container with ``--network none``.
+        """
+
+        if source not in {"pr-head", "main"}:
+            raise ValueError("verification source must be pr-head or main")
+        commit = self._revision(revision)
+        if len(commit) != 40 or any(char not in "0123456789abcdef" for char in commit):
+            raise ValueError("verification revision must resolve to a full Git SHA")
+        run_id = f"rv-{uuid.uuid4()}"
+        short = run_id.removeprefix("rv-").replace("-", "")[:16]
+        run_root = self.runs_root / run_id
+        workspace = run_root / "workspace"
+        base = run_root / "base"
+        evidence_stage = run_root / "evidence"
+        evidence_stage.mkdir(parents=True, exist_ok=True)
+        workspace_volume = f"asdi-verify-workspace-{short}"
+        base_volume = f"asdi-verify-base-{short}"
+        started = time.time()
+        self._save_state(
+            run_root,
+            {
+                "run_id": run_id,
+                "mode": "verifier_only",
+                "status": "verifying",
+                "revision": revision,
+                "commit": commit,
+                "source": source,
+                "workspace_volume": workspace_volume,
+                "base_volume": base_volume,
+                "network": "none",
+                "started_at": started,
+            },
+        )
+        self._fresh_export(workspace, revision=revision)
+        self._fresh_export(base, revision=self.base_branch)
+        self.runtime.create_volume(workspace_volume)
+        self.runtime.create_volume(base_volume)
+        self.runtime.populate_volume(workspace_volume, workspace)
+        self.runtime.populate_volume(base_volume, base, destination="/opt/base")
+        self.runtime.chown_volume(workspace_volume, "/workspace", "1001:1001")
+        try:
+            verifier_result: dict[str, Any] = {}
+            checks = self._verify_head(
+                run_id=run_id,
+                workspace=workspace,
+                workspace_volume=workspace_volume,
+                base_volume=base_volume,
+                evidence_stage=evidence_stage,
+                verifier_result=verifier_result,
+                commit=commit,
+            )
+            features = verifier_result.get("features")
+            valid_features = isinstance(features, list) and bool(features) and all(
+                isinstance(feature, dict)
+                and feature.get("status") == "pass"
+                and feature.get("control") == "caught"
+                and isinstance(feature.get("limits"), list)
+                for feature in features
+            )
+            if valid_features:
+                result_features = features
+            else:
+                result_features = [
+                    {
+                        "id": "verification-result",
+                        "status": "fail",
+                        "control": "caught",
+                        "evidence": [],
+                        "limits": ["Verifier did not produce a valid caught-control result"],
+                    }
+                ]
+            result_path = evidence_stage / "result.json"
+            result_path.write_text(
+                json.dumps(
+                    {
+                        "schema": 2,
+                        "run_id": run_id,
+                        "commit": commit,
+                        "features": result_features,
+                    },
+                    indent=2,
+                    sort_keys=True,
+                )
+                + "\n"
+            )
+            gates_path = base / ".asdi" / "static-gates.yaml"
+            profile_path = base / ".asdi" / "product.yaml"
+            evidence = EvidenceStore(self.root / "evidence").put(
+                evidence_stage,
+                json.loads(result_path.read_text()),
+                metadata={
+                    "source": source,
+                    "producer": {
+                        "kind": "verifier",
+                        "image_digest": self.runtime.inspect_image(self.verifier_image),
+                    },
+                    "environment": {
+                        "run_image_digest": self.runtime.inspect_image(self.verifier_image),
+                        "tool_versions": {"python": "container-image"},
+                    },
+                    "inputs": {
+                        "harness_commit": self._revision(self.base_branch),
+                        "static_gates": self._file_digest(gates_path),
+                        "product_profile": self._file_digest(profile_path),
+                    },
+                },
+            )
+            status = "succeeded" if valid_features else "failed"
+            runtime_evidence = {
+                "mode": "verifier_only",
+                "network": "none",
+                "socket_mounted": False,
+                "secrets_mounted": False,
+                "agent_started": False,
+                "workspace_volume": workspace_volume,
+                "base_volume": base_volume,
+            }
+            self._save_state(
+                run_root,
+                {
+                    "run_id": run_id,
+                    "mode": "verifier_only",
+                    "status": status,
+                    "revision": revision,
+                    "commit": commit,
+                    "source": source,
+                    "checks": checks,
+                    "evidence": evidence,
+                    "runtime": runtime_evidence,
+                    "network": "none",
+                    "started_at": self._saved_started_at(run_root),
+                    "finished_at": time.time(),
+                },
+            )
+            self.runtime.teardown_verifier_resources(
+                workspace_volume=workspace_volume,
+                base_volume=base_volume,
+            )
+            return {
+                "schema_version": "asdi.verifier-only-result/v1",
+                "run_id": run_id,
+                "status": status,
+                "revision": revision,
+                "commit": commit,
+                "source": source,
+                "checks": checks,
+                "evidence": evidence,
+                "runtime": runtime_evidence,
+            }
+        except Exception as error:
+            self.runtime.teardown_verifier_resources(
+                workspace_volume=workspace_volume,
+                base_volume=base_volume,
+            )
+            self._record_failure(run_root, error)
+            raise
+
     def _save_state(self, run_root: Path, state: dict[str, Any]) -> None:
         atomic_json(run_root / "launcher-state.json", state)
 
@@ -712,9 +892,11 @@ class REVKLauncher:
         *,
         run_id: str,
         workspace: Path,
+        workspace_volume: str,
         base_volume: str,
         evidence_stage: Path,
         verifier_result: dict[str, Any],
+        commit: str,
     ) -> list[dict[str, Any]]:
         with tempfile.TemporaryDirectory() as temporary:
             base = Path(temporary) / "base"
@@ -724,8 +906,6 @@ class REVKLauncher:
             if not gates_path.is_file():
                 raise RuntimeError("base branch is missing static-gates manifest")
             manifest = _minimal_yaml(gates_path.read_text())
-            short = run_id.removeprefix("r-").replace("-", "")[:16]
-            workspace_volume = f"asdi-workspace-{short}"
             workspace_inspect = Path(temporary) / "workspace-inspect"
             workspace_inspect.mkdir()
             checks = run_container_checks(
@@ -733,7 +913,7 @@ class REVKLauncher:
                 image=self.verifier_image,
                 manifest=manifest,
                 run_id=run_id,
-                commit=self._head(),
+                commit=commit,
                 mounts=[
                     f"type=volume,source={workspace_volume},destination=/workspace",
                     f"type=volume,source={base_volume},destination=/opt/base,readonly",
@@ -742,7 +922,9 @@ class REVKLauncher:
             verify_check = self._run_base_verify(
                 run_id=run_id,
                 base=base,
+                workspace_volume=workspace_volume,
                 base_volume=base_volume,
+                commit=commit,
             )
             checks.append(verify_check)
             (workspace_inspect / ".asdi-evidence" / "static-gates.json").parent.mkdir(
@@ -766,7 +948,7 @@ class REVKLauncher:
             self._collect_verify_result(
                 workspace=workspace_inspect,
                 run_id=run_id,
-                commit=self._head(),
+                commit=commit,
                 verify_check=verify_check,
                 verifier_result=verifier_result,
             )
@@ -825,7 +1007,9 @@ class REVKLauncher:
         *,
         run_id: str,
         base: Path,
+        workspace_volume: str,
         base_volume: str,
+        commit: str,
     ) -> dict[str, Any]:
         """Run the base-branch verify entrypoint after static gates."""
 
@@ -840,7 +1024,6 @@ class REVKLauncher:
                 "stdout": "",
                 "stderr": "base branch has no executable verify/bin/verify",
             }
-        short = run_id.removeprefix("r-").replace("-", "")[:16]
         command = [
             self.runtime.docker,
             "run",
@@ -855,7 +1038,7 @@ class REVKLauncher:
             "--tmpfs",
             "/tmp:rw,noexec,nosuid,nodev,size=64m",
             "--mount",
-            f"type=volume,source=asdi-workspace-{short},destination=/workspace",
+            f"type=volume,source={workspace_volume},destination=/workspace",
             "--mount",
             f"type=volume,source={base_volume},destination=/opt/base,readonly",
             "--workdir",
@@ -863,7 +1046,7 @@ class REVKLauncher:
             "--env",
             f"ASDI_RUN_ID={run_id}",
             "--env",
-            f"ASDI_COMMIT={self._head()}",
+            f"ASDI_COMMIT={commit}",
             "--env",
             "ASDI_HEAD=/workspace",
             "--env",
@@ -904,11 +1087,11 @@ class REVKLauncher:
             "stderr": stderr[-4000:],
         }
 
-    def _fresh_export(self, destination: Path) -> None:
+    def _fresh_export(self, destination: Path, *, revision: str | None = None) -> None:
         if destination.exists():
             shutil.rmtree(destination)
         destination.mkdir(parents=True)
-        self._export_tree(self.base_branch, destination)
+        self._export_tree(revision or self.base_branch, destination)
 
     def _head(self) -> str:
         result = subprocess.run(

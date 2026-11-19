@@ -27,6 +27,7 @@ def build_parser() -> argparse.ArgumentParser:
         choices=("fixture", "claude"),
         default="fixture",
     )
+    parser.add_argument("--verifier-image", default=None)
     parser.add_argument("--agent-script")
     parser.add_argument("--docker", default=None)
     parser.add_argument("--live", action="store_true")
@@ -55,6 +56,10 @@ def build_parser() -> argparse.ArgumentParser:
     kill.add_argument("--run-id", required=True)
     governance = commands.add_parser("governance", help="Show TRM and paired metrics")
     governance.add_argument("--window-days", type=int, default=7)
+    verify = commands.add_parser("verify", help="Verify one exact revision without an agent")
+    verify.add_argument("--revision", required=True)
+    verify.add_argument("--source", choices=("pr-head", "main"), default="pr-head")
+    verify.add_argument("--output")
     return parser
 
 
@@ -148,6 +153,22 @@ def main(argv: list[str] | None = None) -> int:
             )
         )
         return 0
+    if args.command == "verify":
+        launcher = REVKLauncher(
+            root=root,
+            product_root=Path(args.product_root),
+            base_branch=args.base_branch,
+            verifier_image=args.verifier_image,
+            runtime=DockerRuntime(args.docker),
+        )
+        result = launcher.verify_revision(args.revision, source=args.source)
+        rendered = json.dumps(result, indent=2, sort_keys=True) + "\n"
+        if args.output:
+            output = Path(args.output)
+            output.parent.mkdir(parents=True, exist_ok=True)
+            output.write_text(rendered)
+        print(rendered, end="")
+        return 0 if result["status"] == "succeeded" else 3
     return 2
 
 

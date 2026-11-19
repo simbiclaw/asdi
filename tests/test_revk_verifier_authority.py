@@ -65,7 +65,9 @@ class VerifierAuthorityTests(unittest.TestCase):
             check = launcher._run_base_verify(
                 run_id="r-fixture",
                 base=base_export,
+                workspace_volume="asdi-workspace-fixture",
                 base_volume="asdi-base-fixture",
+                commit="a" * 40,
             )
             self.assertEqual(check["status"], "blocked")
             self.assertIn("executable", check["stderr"])
@@ -76,13 +78,15 @@ class VerifierAuthorityTests(unittest.TestCase):
             check = launcher._run_base_verify(
                 run_id="r-fixture",
                 base=base_export,
+                workspace_volume="asdi-workspace-fixture",
                 base_volume="asdi-base-fixture",
+                commit="a" * 40,
             )
             self.assertEqual(check["status"], "pass")
             self.assertEqual(check["exit_code"], 0)
             invocations = docker_log.read_text().splitlines()
             self.assertTrue(invocations)
-            self.assertIn(f"ASDI_COMMIT={launcher._head()}", invocations)
+            self.assertIn(f"ASDI_COMMIT={'a' * 40}", invocations)
             self.assertFalse(
                 any("destination=/opt/base:ro" in line for line in invocations)
             )

@@ -287,7 +287,9 @@ class RevKGuardrailTests(unittest.TestCase):
             check = launcher._run_base_verify(
                 run_id="r-fixture",
                 base=base,
+                workspace_volume="asdi-workspace-fixture",
                 base_volume="asdi-base-fixture",
+                commit="a" * 40,
             )
             self.assertEqual(check["status"], "pass")
             arguments = recorded.read_text()

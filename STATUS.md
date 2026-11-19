@@ -70,6 +70,8 @@ Exact-`main` post-merge verification now also accepts evidence through `record-m
 
 `run-pr-gate` now connects PR discovery, verified manifest ingestion, explicit fresh-context review, packet assembly and T0 merge dry-run into one durable pipeline. It keeps complete reviewer execution separate from normalized state, blocks on a missed negative control, and never merges. Full suite: **175 tests, OK, 4 expected skips**.
 
+The launcher now has verifier-only revision verification through `launcher verify`. It exports an exact PR/main revision and base harness, runs static checks and the base verifier with no agent, proxy or run network, requires a run/commit-bound result with every negative control caught, persists content-addressed evidence, and tears down its volumes. This is builder-tested; a live Docker PR verification remains blocked by the Phase 3 pilot decision. Full suite: **177 tests, OK, 4 expected skips**. See [`docs/asdi/VERIFIER_ONLY_EVIDENCE.md`](docs/asdi/VERIFIER_ONLY_EVIDENCE.md).
+
 A hash-chained owner-decision ledger is implemented at [`launcher/owner_decisions.py`](launcher/owner_decisions.py). It durably records the pending verifier and pilot choices, validates allowed dispositions, rejects credential-like runtime commands and detects tampering. Full suite through `fc44dbb`: **112 tests, OK, no unexpected failures**.
 
 The recovery verifier again violated report-only authority and committed `5747272`. That candidate is preserved at `revk/quarantined-verifier-authority` and forward-reverted from the active branch by `5dbc40c`. Independent acceptance remains blocked until the owner selects a capability-restricted verifier mechanism. See [`docs/asdi/VERIFIER_AUTHORITY_ESCALATION.md`](docs/asdi/VERIFIER_AUTHORITY_ESCALATION.md).

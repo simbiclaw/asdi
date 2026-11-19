@@ -29,6 +29,7 @@ class FakeRuntime(DockerRuntime):
     def __init__(self, workspace: Path, evidence: Path) -> None:
         self.workspace = workspace
         self.evidence = evidence
+        self.verify_result: dict | None = None
         self.started = False
         self.populated_volumes: list[str] = []
         self.populated_sources: dict[str, Path] = {}
@@ -112,8 +113,15 @@ class FakeRuntime(DockerRuntime):
         return FakeProcess()
 
     def copy_volume(self, volume: str, destination: Path, image: str) -> None:
-        for path in self.evidence.rglob("*"):
-            target = destination / path.relative_to(self.evidence)
+        source = self.populated_sources.get(volume, self.evidence)
+        if volume.startswith("asdi-verify-workspace-") and self.verify_result:
+            evidence_directory = destination / ".asdi-evidence"
+            evidence_directory.mkdir(parents=True, exist_ok=True)
+            (evidence_directory / "verifier-output.txt").write_text("observed\n")
+            (evidence_directory / "result.json").write_text(json.dumps(self.verify_result))
+            return
+        for path in source.rglob("*"):
+            target = destination / path.relative_to(source)
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_text(path.read_text())
 
@@ -131,6 +139,215 @@ import json
 
 
 class REVKRunnerTests(unittest.TestCase):
+    def make_product(self, root: Path) -> tuple[Path, str]:
+        product = root / "toy-notes"
+        product.mkdir()
+        subprocess.run(["git", "init", "-b", "main", str(product)], check=True, capture_output=True)
+        (product / "src").mkdir()
+        (product / "src" / "notes.py").write_text("VALUE = 'base'\n")
+        (product / ".asdi").mkdir()
+        (product / ".asdi" / "static-gates.yaml").write_text(
+            "version: 1\n"
+            "checks:\n"
+            "  - id: compile\n"
+            "    command: [\"/usr/bin/python3\", \"-m\", \"py_compile\", \"src/notes.py\"]\n"
+            "    blocking: true\n"
+            "    timeout_seconds: 10\n"
+            "policy:\n"
+            "  new_violations: reject\n"
+            "  legacy_findings: track_without_expanding\n"
+        )
+        (product / ".asdi" / "product.yaml").write_text("version: 1\nname: toy-notes\n")
+        subprocess.run(["git", "-C", str(product), "add", "."], check=True, capture_output=True)
+        subprocess.run(
+            [
+                "git",
+                "-C",
+                str(product),
+                "-c",
+                "user.name=Test",
+                "-c",
+                "user.email=test@invalid",
+                "commit",
+                "-m",
+                "base",
+            ],
+            check=True,
+            capture_output=True,
+        )
+        commit = subprocess.run(
+            ["git", "-C", str(product), "rev-parse", "HEAD"],
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+        return product, commit
+
+    def test_verifier_only_revision_has_no_agent_or_network(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            product, commit = self.make_product(root)
+            workspace = root / "workspace"
+            evidence = root / "volume-evidence"
+            runtime = FakeRuntime(workspace, evidence)
+            expected_commit = commit
+            runtime.verify_result = {
+                "schema": 2,
+                "run_id": "filled-by-verifier",
+                "commit": commit,
+                "features": [
+                    {
+                        "id": "feature:notes",
+                        "status": "pass",
+                        "control": "caught",
+                        "evidence": ["verifier-output.txt"],
+                        "limits": [],
+                    }
+                ],
+            }
+            launcher = REVKLauncher(
+                root=root / "asdi",
+                product_root=product,
+                base_branch="main",
+                agent_image="safeclaw:cc-2.1.283",
+                runtime=runtime,
+            )
+
+            def verify_head(
+                *,
+                run_id: str,
+                commit: str,
+                workspace_volume: str,
+                evidence_stage: Path,
+                verifier_result,
+                **kwargs,
+            ):
+                self.assertEqual(commit, expected_commit)
+                runtime.verify_result["run_id"] = run_id
+                runtime.verify_result["commit"] = commit
+                self.assertTrue(workspace_volume.startswith("asdi-verify-workspace-"))
+                evidence_stage.mkdir(parents=True, exist_ok=True)
+                (evidence_stage / "verifier-output.txt").write_text("observed\n")
+                (evidence_stage / "result.json").write_text(
+                    json.dumps(
+                        {
+                            "schema": 2,
+                            "run_id": run_id,
+                            "commit": commit,
+                            "features": [
+                                {
+                                    "id": "feature:notes",
+                                    "status": "pass",
+                                    "control": "caught",
+                                    "evidence": ["verifier-output.txt"],
+                                    "limits": [],
+                                }
+                            ],
+                        }
+                    )
+                )
+                verifier_result.update(
+                    json.loads((evidence_stage / "result.json").read_text())
+                )
+                return [
+                    {"id": "static:compile", "status": "pass"},
+                    {"id": "verify:base-harness", "status": "pass"},
+                ]
+
+            with patch.object(launcher, "_verify_head", verify_head):
+                result = launcher.verify_revision(commit)
+
+            self.assertEqual(result["status"], "succeeded")
+            self.assertEqual(result["source"], "pr-head")
+            self.assertEqual(result["commit"], commit)
+            self.assertTrue(result["evidence"]["valid"])
+            self.assertFalse(runtime.started)
+            self.assertFalse(runtime.proxies)
+            self.assertFalse(result["runtime"]["socket_mounted"])
+            self.assertFalse(result["runtime"]["secrets_mounted"])
+            self.assertFalse(result["runtime"]["agent_started"])
+            self.assertEqual(result["runtime"]["network"], "none")
+            self.assertTrue(runtime.removed_volume)
+            state_path = (
+                root / "asdi" / "runs" / result["run_id"] / "launcher-state.json"
+            )
+            state = json.loads(state_path.read_text())
+            self.assertEqual(state["status"], "succeeded")
+            self.assertEqual(state["network"], "none")
+            self.assertTrue((root / "asdi" / "evidence" / result["evidence"]["manifest_id"]).is_dir())
+
+    def test_verifier_only_missed_control_is_red(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            product, commit = self.make_product(root)
+            runtime = FakeRuntime(root / "workspace", root / "evidence")
+            runtime.verify_result = {
+                "schema": 2,
+                "run_id": "filled-by-verifier",
+                "commit": commit,
+                "features": [
+                    {
+                        "id": "feature:notes",
+                        "status": "pass",
+                        "control": "missed",
+                        "evidence": ["verifier-output.txt"],
+                        "limits": [],
+                    }
+                ],
+            }
+            launcher = REVKLauncher(
+                root=root / "asdi",
+                product_root=product,
+                base_branch="main",
+                runtime=runtime,
+            )
+
+            def verify_head(
+                *,
+                run_id: str,
+                commit: str,
+                evidence_stage: Path,
+                verifier_result,
+                **kwargs,
+            ):
+                runtime.verify_result["run_id"] = run_id
+                runtime.verify_result["commit"] = commit
+                evidence_stage.mkdir(parents=True, exist_ok=True)
+                (evidence_stage / "verifier-output.txt").write_text("defect observed\n")
+                (evidence_stage / "result.json").write_text(
+                    json.dumps(
+                        {
+                            "schema": 2,
+                            "run_id": run_id,
+                            "commit": commit,
+                            "features": [
+                                {
+                                    "id": "feature:notes",
+                                    "status": "pass",
+                                    "control": "missed",
+                                    "evidence": ["verifier-output.txt"],
+                                    "limits": [],
+                                }
+                            ],
+                        }
+                    )
+                )
+                verifier_result.update(
+                    json.loads((evidence_stage / "result.json").read_text())
+                )
+                return [
+                    {"id": "static:compile", "status": "pass"},
+                    {"id": "verify:base-harness", "status": "pass"},
+                ]
+
+            with patch.object(launcher, "_verify_head", verify_head):
+                result = launcher.verify_revision(commit)
+
+            self.assertEqual(result["status"], "failed")
+            self.assertFalse(result["evidence"]["result"]["features"][0]["status"] == "pass")
+            self.assertFalse(runtime.started)
+            self.assertTrue(runtime.removed_volume)
+
     def test_isolated_run_collects_verified_evidence(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

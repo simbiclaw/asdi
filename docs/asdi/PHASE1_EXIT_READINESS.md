@@ -13,7 +13,7 @@
 | Guardrails enforced outside the run | structured stream monitor in [`launcher/runner.py`](../../launcher/runner.py) | turn/token/spend/wall-clock tests | Implemented / builder-tested |
 | Egress proxy with allowlist and key injection | [`launcher/egress_proxy.py`](../../launcher/egress_proxy.py) | live Claude adapter run `r-5fc95790-5990-4b1b-bca2-842d6fe6e367` | Implemented / builder-tested live |
 | Agent adapter with a working CLI and stop hook | [`launcher/agent_adapters.py`](../../launcher/agent_adapters.py), [`launcher/agents/claude_adapter.py`](../../launcher/agents/claude_adapter.py) | live run above; adapter tests | Implemented / builder-tested live |
-| Verifier runs static gates then base-branch verify | static runner and `_verify_head` | live run; verifier-authority tests | Implemented / builder-tested |
+| Verifier runs static gates then base-branch verify | static runner and `_verify_head`; verifier-only `verify_revision` | live run; verifier-authority tests; verifier-only tests | Implemented / builder-tested |
 | Red verifier overrides successful agent | launcher status logic | `test_successful_agent_cannot_overturn_red_verifier` | Negative control passes |
 | Base-branch harness edits do not authorize green | `_fresh_export` plus result binding | `test_base_harness_snapshot_ignores_agent_weakening`; `test_green_verify_exit_requires_bound_caught_feature_result` | Negative control passes |
 | No token/model key in run or verifier | explicit environment allowlist and command scan | `test_run_environment_has_no_model_key`; `test_verifier_command_has_no_model_credentials` | Negative control passes |
@@ -25,7 +25,7 @@
 PYTHONPATH=.:src python3 -m unittest discover -s tests -v
 ```
 
-Latest implementation-suite result at `20dd6f7`: **140 tests, OK, 4 expected AF_UNIX/socket-binding skips**.
+Latest implementation-suite result at the verifier-only slice: **177 tests, OK, 4 expected AF_UNIX/socket-binding skips**. This adds builder-tested verifier-only orchestration; it does not change the candidate's independently unverified/accepted status.
 
 ## Pending owner decisions
 
