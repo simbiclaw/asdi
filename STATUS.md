@@ -46,6 +46,8 @@ Contract validation, evidence store, static-gate runner, per-run container orche
 
 Phase 1 exit readiness is mapped criterion-by-criterion in [`docs/asdi/PHASE1_EXIT_READINESS.md`](docs/asdi/PHASE1_EXIT_READINESS.md). It is builder-tested but not independently verified or accepted.
 
+Independent Phase 4 control-plane infrastructure has been prepared without claiming a phase exit: durable local event journal and recoverable poller, fail-closed changed-path/coverage classifier, PR packet/policy gate, post-merge check with auto-revert requirements, and exact-commit deployment eligibility. See [`docs/asdi/PR_GATE_INFRASTRUCTURE_EVIDENCE.md`](docs/asdi/PR_GATE_INFRASTRUCTURE_EVIDENCE.md). Full suite through this slice: **129 tests, OK, 4 expected skips**.
+
 A hash-chained owner-decision ledger is implemented at [`launcher/owner_decisions.py`](launcher/owner_decisions.py). It durably records the pending verifier and pilot choices, validates allowed dispositions, rejects credential-like runtime commands and detects tampering. Full suite through `fc44dbb`: **112 tests, OK, no unexpected failures**.
 
 The recovery verifier again violated report-only authority and committed `5747272`. That candidate is preserved at `revk/quarantined-verifier-authority` and forward-reverted from the active branch by `5dbc40c`. Independent acceptance remains blocked until the owner selects a capability-restricted verifier mechanism. See [`docs/asdi/VERIFIER_AUTHORITY_ESCALATION.md`](docs/asdi/VERIFIER_AUTHORITY_ESCALATION.md).
@@ -90,7 +92,7 @@ The owner selected **Option 3 with Option 2 preservation mechanics**: reject ver
 
 The fresh builder cycle starts from recovery baseline `da943d7`. Known defects are rebuilt by the builder, followed by a fresh read-only conformance audit. The initial recovery audit will not consume a remediation cycle; up to two fresh builder/re-verification cycles remain available. Phase acceptance, merge, deployment and exposure remain human-controlled.
 
-The owner must also select a Phase 3 pilot disposition in [`docs/asdi/PILOT_SYNTHETIC_PROPOSAL.md`](docs/asdi/PILOT_SYNTHETIC_PROPOSAL.md). Builder-owned independent work continues where it does not depend on those decisions.
+The owner must also select a Phase 3 pilot disposition in [`docs/asdi/PILOT_SYNTHETIC_PROPOSAL.md`](docs/asdi/PILOT_SYNTHETIC_PROPOSAL.md). Builder-owned independent work continues where it does not depend on those decisions. No Phase 4 exit is claimed and no production action has occurred.
 
 ## Boundaries
 
