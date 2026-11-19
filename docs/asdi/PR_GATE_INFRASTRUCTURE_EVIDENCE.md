@@ -38,6 +38,10 @@ A judgment or uncovered path becomes `human_required`. A mix becomes `split_requ
 
 `post_merge_check` requires CI and verifier success bound to the exact `main` commit. Failure emits the required auto-revert branch and reason. Deployment is eligible only for an exact commit with a passing `main` result; stale results cannot authorize a new commit.
 
+### Merge dry-run boundary
+
+[`events/merge_gate.py`](../../events/merge_gate.py) accepts only an eligible `asdi.pr-packet/v1` packet and feeds the Phase 0 fail-closed merge policy. It records whether the outcome is `eligible`, `human_required`, `blocked` or `refused`; `merge_executed` remains false in every case. T0 and judgment paths remain human-governed, while agent/status identities are refused.
+
 ### Operational CLI
 
 [`events/cli.py`](../../events/cli.py) exposes local, durable operations:
@@ -48,6 +52,7 @@ A judgment or uncovered path becomes `human_required`. A mix becomes `split_requ
 - `gate`;
 - `post-merge`;
 - `deployment-decision`.
+- `merge-dry-run`.
 
 Catch-up persists each eligible PR packet as `packets/pr-<number>-<head>.json`, updates `latest-policy.json`, records the poller cursor and health, and preserves all output on disk for later audit. `post-merge` and `deployment-decision` persist their exact evidence and decisions separately. The CLI uses no webhooks, no GitHub Actions and no inbound network listener.
 
@@ -58,7 +63,7 @@ PYTHONPATH=.:src python3 -m unittest tests.test_events_pr_gate -v
 PYTHONPATH=.:src python3 -m unittest discover -s tests -v
 ```
 
-Observed latest full suite after the CLI: **131 tests, OK, 4 expected AF_UNIX/socket-binding skips**.
+Observed latest focused merge-boundary suite: **4 tests, OK**.
 
 ## Limits
 

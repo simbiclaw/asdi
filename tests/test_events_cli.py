@@ -136,3 +136,38 @@ class EventsCliTests(unittest.TestCase):
         )
         self.assertEqual(exit_code, 0)
         self.assertTrue(json.loads(decision_path.read_text())["eligible"])
+
+    def test_merge_dry_run_persists_human_authority_decision(self) -> None:
+        packet_path = self.root / "packet.json"
+        result_path = self.root / "merge-dry-run.json"
+        self.write_json(
+            packet_path,
+            {
+                "schema_version": "asdi.pr-packet/v1",
+                "pr_number": 9,
+                "head_sha": "c" * 40,
+                "policy_decision": "eligible",
+                "statuses": {"ci": "pass", "asdi/policy": "pass"},
+                "classification": {"change_class": "agent_mergeable"},
+            },
+        )
+        exit_code = main(
+            [
+                *self.common,
+                "merge-dry-run",
+                "--packet",
+                str(packet_path),
+                "--actor",
+                "merge-bot",
+                "--trm-level",
+                "T0",
+                "--result-output",
+                str(result_path),
+            ]
+        )
+        self.assertEqual(exit_code, 0)
+        result = json.loads(result_path.read_text())
+        self.assertEqual(result["decision"], "human_required")
+        self.assertTrue(result["human_required"])
+        self.assertFalse(result["merge_executed"])
+        self.assertTrue((self.root / "latest-merge-dry-run.json").is_file())

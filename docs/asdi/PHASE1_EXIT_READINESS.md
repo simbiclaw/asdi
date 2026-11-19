@@ -1,6 +1,6 @@
 # REV K Phase 1 exit readiness
 
-**Candidate:** `fc44dbb`
+**Candidate:** `ee19dc0` (implementation; recovery documentation may add later commits)
 **Status:** **Builder-tested / independently unverified / not accepted**
 
 ## Exit-criterion map
@@ -25,7 +25,7 @@
 PYTHONPATH=.:src python3 -m unittest discover -s tests -v
 ```
 
-Latest observed result through the full suite at `fc44dbb`: **112 tests, OK, no unexpected failures**. The new tests cover the exact-commit audit wrapper and durable owner-decision log.
+Latest implementation-suite result through merge-dry-run integration at `ee19dc0`: **136 tests, OK, 4 expected AF_UNIX/socket-binding skips**.
 
 ## Pending owner decisions
 

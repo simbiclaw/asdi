@@ -12,6 +12,7 @@ from typing import Any
 import yaml
 
 from .journal import EventJournal, LocalPoller, PollerState
+from .merge_gate import evaluate_merge_packet
 from .pr_gate import PRGate, deployment_decision, post_merge_check
 
 
@@ -72,6 +73,11 @@ def build_parser() -> argparse.ArgumentParser:
     deployment.add_argument("--commit", required=True)
     deployment.add_argument("--main-results", required=True)
     deployment.add_argument("--decision-output", required=True)
+    merge = commands.add_parser("merge-dry-run")
+    merge.add_argument("--packet", required=True)
+    merge.add_argument("--actor", required=True)
+    merge.add_argument("--trm-level", default="T0")
+    merge.add_argument("--result-output", required=True)
     return parser
 
 
@@ -142,6 +148,14 @@ def main(argv: list[str] | None = None) -> int:
         )
         write_json(root / "latest-deployment-decision.json", result)
         write_json(Path(arguments.decision_output), result)
+    elif arguments.command == "merge-dry-run":
+        result = evaluate_merge_packet(
+            load_json(arguments.packet),
+            actor=arguments.actor,
+            trm_level=arguments.trm_level,
+        )
+        write_json(root / "latest-merge-dry-run.json", result)
+        write_json(Path(arguments.result_output), result)
     print(json.dumps(result, indent=2, sort_keys=True))
     return 0
 

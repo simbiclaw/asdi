@@ -48,7 +48,9 @@ Phase 1 exit readiness is mapped criterion-by-criterion in [`docs/asdi/PHASE1_EX
 
 Independent Phase 4 control-plane infrastructure has been prepared without claiming a phase exit: durable local event journal and recoverable poller, fail-closed changed-path/coverage classifier, PR packet/policy gate, post-merge check with auto-revert requirements, and exact-commit deployment eligibility. See [`docs/asdi/PR_GATE_INFRASTRUCTURE_EVIDENCE.md`](docs/asdi/PR_GATE_INFRASTRUCTURE_EVIDENCE.md). Full suite through this slice: **129 tests, OK, 4 expected skips**.
 
-The Phase 4 control plane now has a durable local CLI for event append/catch-up, poller health, PR policy packets, post-merge decisions and deployment eligibility. Full suite through this slice: **131 tests, OK, 4 expected skips**.
+The Phase 4 control plane now has a durable local CLI for event append/catch-up, poller health, PR policy packets, post-merge decisions, deployment eligibility and merge dry-run. Full suite through this slice: **136 tests, OK, 4 expected skips**.
+
+The PR packet is connected to the Phase 0 fail-closed merge dry-run. The dry-run persists `human_required`, `blocked` or `refused` outcomes and never executes a merge. Agent/status identities are refused, and T0/judgment paths remain human-governed.
 
 A hash-chained owner-decision ledger is implemented at [`launcher/owner_decisions.py`](launcher/owner_decisions.py). It durably records the pending verifier and pilot choices, validates allowed dispositions, rejects credential-like runtime commands and detects tampering. Full suite through `fc44dbb`: **112 tests, OK, no unexpected failures**.
 
@@ -84,7 +86,7 @@ The fresh cycle-2 verifier for candidate `19e6e2d` was stopped by the model prov
 
 Strict verifier hardening now requires a launcher-collected `result.json` bound to the run and commit, with every feature passing and its negative control caught. Live Docker negative and positive runs both produced valid content-addressed evidence; the malformed verifier stayed red and the corrected fixture succeeded.
 
-Phase 1 now has a per-run HTTP/CONNECT egress proxy attached to both the internal run network and `asdi-egress`. The agent receives only proxy URLs; the proxy performs destination authorization and injects the local model key. A live Docker run and separate proxy proof passed. The verifier-authored live coding-CLI slice is rejected from the active branch and preserved for reference; a fresh builder-owned implementation is still required.
+Phase 1 now has a per-run HTTP/CONNECT egress proxy attached to both the internal run network and `asdi-egress`. The agent receives only proxy URLs; the proxy performs destination authorization and injects the local model key. A live Docker run and separate proxy proof passed. The fresh builder-owned Claude adapter is implemented and exercised against local LiteLLM through the per-run proxy; it records stream turns, usage, Stop-hook evidence and result artifacts, while the ASDI verifier remains authoritative.
 
 ## Next
 
