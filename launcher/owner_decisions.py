@@ -6,7 +6,6 @@ import argparse
 import hashlib
 import json
 import os
-import shlex
 import time
 import uuid
 from pathlib import Path
@@ -80,6 +79,10 @@ class OwnerDecisionLog:
         selected_path = selected_path.strip() if selected_path else None
         if choice == "select_existing_pilot" and not selected_path:
             raise ValueError("an existing pilot requires selected_path")
+        if selected_path and (
+            not Path(selected_path).is_absolute() or not Path(selected_path).is_dir()
+        ):
+            raise ValueError("selected pilot path must be an existing absolute directory")
         if choice != "select_existing_pilot":
             selected_path = None
         runtime_command = list(runtime_command or [])
@@ -120,6 +123,18 @@ class OwnerDecisionLog:
 
     def verify(self) -> dict[str, Any]:
         records = self.records()
+        if len({line for line in self.path.read_text().splitlines() if line}) != len(records):
+            return {
+                "records": len(records),
+                "valid": False,
+                "failures": ["duplicate JSONL record"],
+            }
+        if len({line for line in self.path.read_text().splitlines() if line}) != len(records):
+            return {
+                "records": len(records),
+                "valid": False,
+                "failures": ["duplicate JSONL record"],
+            }
         failures: list[str] = []
         previous_hash = None
         for index, record in enumerate(records, start=1):
@@ -130,6 +145,36 @@ class OwnerDecisionLog:
                 failures.append(f"record {index} hash mismatch")
             previous_hash = record.get("record_sha256")
         return {"records": len(records), "valid": not failures, "failures": failures}
+
+    def status(self) -> dict[str, Any]:
+        verification = self.verify()
+        decisions: dict[str, Any] = {}
+        for decision_type in DECISION_TYPES:
+            record = self.latest(decision_type)
+            decisions[decision_type] = {
+                "recorded": record is not None,
+                "choice": record.get("choice") if record else None,
+                "decision_id": record.get("decision_id") if record else None,
+                "selected_path": record.get("selected_path") if record else None,
+            }
+        pilot_choice = decisions["phase3_pilot"]["choice"]
+        decisions["phase3_pilot"]["phase3_can_start"] = pilot_choice in {
+            "select_existing_pilot",
+            "approve_synthetic_toy_notes",
+        }
+        return {
+            "log_valid": verification["valid"],
+            "verification": verification,
+            "decisions": decisions,
+            "ready_for_next_phase": verification["valid"] and all(
+                item["recorded"] for item in decisions.values()
+            ),
+            "pending": [
+                decision_type
+                for decision_type, item in decisions.items()
+                if not item["recorded"]
+            ],
+        }
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -146,6 +191,7 @@ def main(argv: list[str] | None = None) -> int:
     record.add_argument("--runtime-command", action="append")
     commands.add_parser("list")
     commands.add_parser("verify")
+    commands.add_parser("status")
     arguments = parser.parse_args(argv)
     log = OwnerDecisionLog(arguments.root)
     if arguments.command == "record":
@@ -160,8 +206,10 @@ def main(argv: list[str] | None = None) -> int:
         )
     elif arguments.command == "list":
         result = log.records()
-    else:
+    elif arguments.command == "verify":
         result = log.verify()
+    else:
+        result = log.status()
     print(json.dumps(result, indent=2, sort_keys=True))
     return 0 if arguments.command != "verify" or result["valid"] else 2
 
