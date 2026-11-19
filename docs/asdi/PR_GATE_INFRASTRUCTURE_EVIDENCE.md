@@ -42,6 +42,10 @@ A judgment or uncovered path becomes `human_required`. A mix becomes `split_requ
 
 [`events/merge_gate.py`](../../events/merge_gate.py) accepts only an eligible `asdi.pr-packet/v1` packet and feeds the Phase 0 fail-closed merge policy. It records whether the outcome is `eligible`, `human_required`, `blocked` or `refused`; `merge_executed` remains false in every case. T0 and judgment paths remain human-governed, while agent/status identities are refused.
 
+### Independent review command boundary
+
+[`events/review.py`](../../events/review.py) executes one explicit, absolute, shell-free reviewer command in fresh context with no inherited host environment. It provides the packet, changed diff and output path through placeholders; enforces a timeout; validates `asdi.review-result/v1`; requires `reviewed_commit` to match the PR head; and blocks on malformed output. `act` findings must include evidence. The normalized result records model, `independent_family`, status, findings and execution provenance.
+
 ### Operational CLI
 
 [`events/cli.py`](../../events/cli.py) exposes local, durable operations:
@@ -53,8 +57,11 @@ A judgment or uncovered path becomes `human_required`. A mix becomes `split_requ
 - `post-merge`;
 - `deployment-decision`.
 - `merge-dry-run`.
+- `review`.
 
 Catch-up persists each eligible PR packet as `packets/pr-<number>-<head>.json`, updates `latest-policy.json`, records the poller cursor and health, and preserves all output on disk for later audit. `post-merge` and `deployment-decision` persist their exact evidence and decisions separately. The CLI uses no webhooks, no GitHub Actions and no inbound network listener.
+
+The Pass 1 review boundary now accepts an explicitly configured reviewer command and normalizes its result into the PR-gate review contract. It validates head binding, output schema, finding buckets and `act`-finding evidence. A malformed or stale reviewer result becomes `blocked`, never pass.
 
 ## Builder-side execution
 
@@ -63,7 +70,7 @@ PYTHONPATH=.:src python3 -m unittest tests.test_events_pr_gate -v
 PYTHONPATH=.:src python3 -m unittest discover -s tests -v
 ```
 
-Observed latest focused merge-boundary suite: **4 tests, OK**.
+Observed latest focused merge-boundary and review suites: **11 tests, OK**.
 
 ## Limits
 

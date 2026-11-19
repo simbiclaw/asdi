@@ -171,3 +171,59 @@ class EventsCliTests(unittest.TestCase):
         self.assertTrue(result["human_required"])
         self.assertFalse(result["merge_executed"])
         self.assertTrue((self.root / "latest-merge-dry-run.json").is_file())
+
+    def test_review_command_executes_explicit_reviewer(self) -> None:
+        head = "d" * 40
+        packet_path = self.root / "review-packet.json"
+        diff_path = self.root / "changed.diff"
+        reviewer_path = self.root / "reviewer.py"
+        result_path = self.root / "review-result.json"
+        self.write_json(packet_path, {"head_sha": head, "changed_paths": ["src/x"]})
+        diff_path.write_text("changed\n")
+        reviewer_path.write_text(
+            "#!/usr/bin/env python3\n"
+            "import json, sys\n"
+            "from pathlib import Path\n"
+            "packet = json.loads(Path(sys.argv[1]).read_text())\n"
+            "Path(sys.argv[3]).write_text(json.dumps({\n"
+            "    'schema_version': 'asdi.review-result/v1',\n"
+            "    'pass': 'review',\n"
+            "    'model': 'local-review-model',\n"
+            "    'independent_family': False,\n"
+            "    'reviewed_commit': packet['head_sha'],\n"
+            "    'status': 'pass',\n"
+            "    'findings': [],\n"
+            "}))\n"
+        )
+        reviewer_path.chmod(0o755)
+        exit_code = main(
+            [
+                *self.common,
+                "review",
+                "--packet",
+                str(packet_path),
+                "--diff",
+                str(diff_path),
+                "--reviewer",
+                "/usr/bin/python3",
+                "--reviewer",
+                str(reviewer_path),
+                "--reviewer",
+                "{packet}",
+                "--reviewer",
+                "{diff}",
+                "--reviewer",
+                "{output}",
+                "--name",
+                "local_review",
+                "--independent-family",
+                "false",
+                "--result-output",
+                str(result_path),
+            ]
+        )
+        self.assertEqual(exit_code, 0)
+        result = json.loads(result_path.read_text())
+        self.assertEqual(result["status"], "pass")
+        self.assertEqual(result["reviewed_commit"], head)
+        self.assertTrue((self.root / "latest-review.json").is_file())

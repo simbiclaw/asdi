@@ -14,6 +14,7 @@ import yaml
 from .journal import EventJournal, LocalPoller, PollerState
 from .merge_gate import evaluate_merge_packet
 from .pr_gate import PRGate, deployment_decision, post_merge_check
+from .review import ReviewCommand, run_review
 
 
 def load_json(path: str | Path) -> Any:
@@ -73,6 +74,18 @@ def build_parser() -> argparse.ArgumentParser:
     deployment.add_argument("--commit", required=True)
     deployment.add_argument("--main-results", required=True)
     deployment.add_argument("--decision-output", required=True)
+    review = commands.add_parser("review")
+    review.add_argument("--packet", required=True)
+    review.add_argument("--diff", required=True)
+    review.add_argument("--reviewer", action="append", required=True)
+    review.add_argument("--name", required=True)
+    review.add_argument(
+        "--independent-family",
+        choices=("true", "false", "unavailable"),
+        required=True,
+    )
+    review.add_argument("--timeout-seconds", type=float, default=600.0)
+    review.add_argument("--result-output", required=True)
     merge = commands.add_parser("merge-dry-run")
     merge.add_argument("--packet", required=True)
     merge.add_argument("--actor", required=True)
@@ -155,6 +168,26 @@ def main(argv: list[str] | None = None) -> int:
             trm_level=arguments.trm_level,
         )
         write_json(root / "latest-merge-dry-run.json", result)
+        write_json(Path(arguments.result_output), result)
+    elif arguments.command == "review":
+        reviewer = ReviewCommand(
+            name=arguments.name,
+            argv=tuple(arguments.reviewer),
+            timeout_seconds=arguments.timeout_seconds,
+            independent_family=(
+                True
+                if arguments.independent_family == "true"
+                else False
+                if arguments.independent_family == "false"
+                else "unavailable"
+            ),
+        )
+        result = run_review(
+            packet=load_json(arguments.packet),
+            diff=Path(arguments.diff).read_text(),
+            command=reviewer,
+        )
+        write_json(root / "latest-review.json", result)
         write_json(Path(arguments.result_output), result)
     print(json.dumps(result, indent=2, sort_keys=True))
     return 0
