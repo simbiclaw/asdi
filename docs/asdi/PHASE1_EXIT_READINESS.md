@@ -1,6 +1,6 @@
 # REV K Phase 1 exit readiness
 
-**Candidate:** `ee19dc0` (implementation; recovery documentation may add later commits)
+**Candidate:** `20dd6f7`
 **Status:** **Builder-tested / independently unverified / not accepted**
 
 ## Exit-criterion map
@@ -25,7 +25,7 @@
 PYTHONPATH=.:src python3 -m unittest discover -s tests -v
 ```
 
-Latest implementation-suite result through merge-dry-run integration at `ee19dc0`: **136 tests, OK, 4 expected AF_UNIX/socket-binding skips**.
+Latest implementation-suite result at `20dd6f7`: **140 tests, OK, 4 expected AF_UNIX/socket-binding skips**.
 
 ## Pending owner decisions
 
