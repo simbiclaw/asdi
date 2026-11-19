@@ -128,6 +128,19 @@ class PRGateTests(unittest.TestCase):
         self.assertIn("review is not bound to PR head", result["failures"])
         self.assertIn("verifier is not bound to PR head", result["failures"])
 
+    def test_policy_status_is_output_not_circular_input(self) -> None:
+        gate = PRGate(class_config=CLASS_CONFIG, feature_map=FEATURE_MAP)
+        payload = self.valid_payload("1" * 40)
+        payload["statuses"] = {"ci": "pass"}
+        result = gate.evaluate(payload)
+        self.assertEqual(result["decision"], "eligible")
+        self.assertEqual(result["packet"]["statuses"]["asdi/policy"], "pass")
+
+        payload["verifier"] = {"candidate_commit": "old", "status": "pass"}
+        blocked = gate.evaluate(payload)
+        self.assertEqual(blocked["decision"], "blocked")
+        self.assertEqual(blocked["packet"]["statuses"]["asdi/policy"], "fail")
+
 
 class PostMergeTests(unittest.TestCase):
     def test_failed_main_requires_auto_revert_and_blocks_deploy(self) -> None:

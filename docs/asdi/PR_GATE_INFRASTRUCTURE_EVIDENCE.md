@@ -25,7 +25,7 @@ This models the passive-GitHub/local-poller boundary. It does not add webhooks, 
 
 [`events/pr_gate.py`](../../events/pr_gate.py) evaluates one immutable PR head and emits an `asdi.pr-packet/v1` payload. It requires:
 
-- `ci` and `asdi/policy` to pass;
+- `ci` to pass;
 - verifier result bound to the exact PR head;
 - review result bound to the exact PR head;
 - base branch to match;
@@ -33,6 +33,8 @@ This models the passive-GitHub/local-poller boundary. It does not add webhooks, 
 - no uncovered product path.
 
 A judgment or uncovered path becomes `human_required`. A mix becomes `split_required`. Missing or failed checks become `blocked`. A new PR head invalidates prior review/verifier evidence.
+
+`asdi/policy` is emitted by this evaluation as required by Build Guide V4 §10.1, rather than accepted as a circular gate input. The packet records the derived policy status: pass for eligible or human-required routing, fail for split-required or blocked.
 
 ### Post-merge and deployment eligibility
 
@@ -64,6 +66,7 @@ A judgment or uncovered path becomes `human_required`. A mix becomes `split_requ
 - `review`.
 - `review-event`;
 - `comment-gate`;
+- `record-verification`;
 - `agent-claims-block`;
 - `review-input`.
 
@@ -77,7 +80,9 @@ The Pass 1 review boundary now accepts an explicitly configured reviewer command
 
 ### Event-driven PR workflow
 
-[`events/pr_workflow.py`](../../events/pr_workflow.py) persists workflow state across separately arriving events rather than treating one PR event as a complete gate input. A normalized `github.pull_request` event records PR number, exact 40-character head SHA, base branch, changed paths, statuses and verifier evidence as `asdi.pr-state/v1`. Its `gate_decision` remains `pending_review`; review evidence embedded in that initial event is ignored.
+[`events/pr_workflow.py`](../../events/pr_workflow.py) persists workflow state across separately arriving events rather than treating one PR event as a complete gate input. A normalized `github.pull_request` event records PR number, exact 40-character head SHA, base branch and changed paths as `asdi.pr-state/v1`; verification and review may arrive separately. Review evidence embedded in the initial PR event is ignored.
+
+`github.verification_completed` accepts only a head-bound verifier result and explicit CI status; it rejects `asdi/policy` as an input. [`events/verification.py`](../../events/verification.py) maps a valid evidence manifest to this event and requires source `pr-head`, exact subject/result commit, a non-empty feature list, every feature pass, and every negative control caught. A missed negative control becomes verifier `fail`, never pass. CLI `record-verification` separately persists the complete evidence record and appends only the normalized gate payload.
 
 A later `github.review_completed` event must bind `reviewed_commit` to the current head, carry a boolean `passed` value that agrees with its `pass | fail | blocked` status, and reference the currently persisted PR state. Only then does the workflow invoke the existing fail-closed [`events/pr_gate.py`](../../events/pr_gate.py), persist the packet separately from state, and expose the policy decision. The CLI retains the short `packets/pr-<number>-<head>.json` filename in addition to durable `pr-workflow/pr-state/pr-<number>/<head>.json` and `pr-workflow/packets/pr-<number>/<head>.json` locations.
 
@@ -90,8 +95,8 @@ PYTHONPATH=.:src python3 -m unittest tests.test_events_pr_gate -v
 PYTHONPATH=.:src python3 -m unittest discover -s tests -v
 ```
 
-Observed latest full suite after review-to-event integration: **155 tests, OK, 4 expected AF_UNIX/socket-binding skips**. Focused evidence covered the initial pending state, head-bound review evaluation, stale-review rejection, orphan-review rejection, malformed-payload rejection, new-head invalidation, separate durable packets, explicit reviewer execution, normalized review-event creation, and CLI catch-up through an eligible packet.
+Observed latest full suite after verifier-event integration: **162 tests, OK, 4 expected AF_UNIX/socket-binding skips**. Focused evidence covered pending verification/review states, stale and orphan rejection, malformed payloads, new-head invalidation, separate durable packets, evidence-derived verifier status, missed negative controls, wrong-source rejection, explicit reviewer execution, normalized review-event creation, and CLI catch-up through an eligible packet.
 
 ## Limits
 
-This is reusable control-plane infrastructure. It is not Phase 4 exit evidence, because Phase 3 remains blocked pending the owner's pilot decision and Phase 4 has not executed the complete real PR lifecycle. The workflow accepts normalized local events; a GitHub API reconciler remains a subsequent integration slice.
+This is reusable control-plane infrastructure. It is not Phase 4 exit evidence, because Phase 3 remains blocked pending the owner's pilot decision and Phase 4 has not executed the complete real PR lifecycle. The workflow accepts normalized local events; a GitHub API reconciler and launcher invocation inside that reconciler remain subsequent integration slices.

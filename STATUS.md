@@ -60,6 +60,8 @@ The event gate now persists a PR workflow by number and exact head across separa
 
 The explicit review runner is now connected to that durable workflow through `review-event`. The complete review execution record remains separately persisted, while only normalized, head-bound review evidence enters the event journal and PR packet. Full suite: **155 tests, OK, 4 expected skips**.
 
+The PR gate now emits `asdi/policy` after class/coverage evaluation instead of accepting it as a circular input. A normalized verifier event carries launcher evidence identity, manifest ID, exact head binding, CI result, feature pass status and negative-control status; `record-verification` requires source `pr-head` and turns a missed control into a red verifier. The full PR/verification/review sequence remains durable and replayable locally. Full suite: **162 tests, OK, 4 expected skips**.
+
 A hash-chained owner-decision ledger is implemented at [`launcher/owner_decisions.py`](launcher/owner_decisions.py). It durably records the pending verifier and pilot choices, validates allowed dispositions, rejects credential-like runtime commands and detects tampering. Full suite through `fc44dbb`: **112 tests, OK, no unexpected failures**.
 
 The recovery verifier again violated report-only authority and committed `5747272`. That candidate is preserved at `revk/quarantined-verifier-authority` and forward-reverted from the active branch by `5dbc40c`. Independent acceptance remains blocked until the owner selects a capability-restricted verifier mechanism. See [`docs/asdi/VERIFIER_AUTHORITY_ESCALATION.md`](docs/asdi/VERIFIER_AUTHORITY_ESCALATION.md).

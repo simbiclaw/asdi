@@ -21,6 +21,7 @@ from .pr_gate import PRGate
 
 FULL_SHA = re.compile(r"^[0-9a-f]{40}$")
 REVIEW_STATUSES = {"pass", "fail", "blocked"}
+VERIFIER_STATUSES = {"pass", "fail", "blocked", "error"}
 
 
 class PRWorkflowStore:
@@ -42,7 +43,11 @@ class PRWorkflowStore:
 
     def apply(self, event: dict[str, Any]) -> dict[str, Any]:
         event_type = event.get("event_type")
-        if event_type not in {"github.pull_request", "github.review_completed"}:
+        if event_type not in {
+            "github.pull_request",
+            "github.verification_completed",
+            "github.review_completed",
+        }:
             return self._reject(event, "unsupported_event_type")
         try:
             event_id = int(event["event_id"])
@@ -53,6 +58,8 @@ class PRWorkflowStore:
 
         if event_type == "github.pull_request":
             return self._apply_pull_request(event, event_id)
+        if event_type == "github.verification_completed":
+            return self._apply_verification(event, event_id)
         return self._apply_review(event, event_id)
 
     def _apply_pull_request(
@@ -92,10 +99,14 @@ class PRWorkflowStore:
             "head_sha": head_sha,
             "base_ref": str(payload["base_ref"]),
             "changed_paths": list(payload["changed_paths"]),
-            "statuses": dict(payload["statuses"]),
-            "verifier": dict(payload["verifier"]),
+            "statuses": dict(payload.get("statuses", {})),
+            "verifier": payload.get("verifier"),
             "review": None,
-            "gate_decision": "pending_review",
+            "gate_decision": (
+                "pending_review"
+                if payload.get("verifier") is not None
+                else "pending_verification"
+            ),
             "gate_failures": None,
             "created_by_event_id": event_id,
             "updated_by_event_id": event_id,
@@ -162,22 +173,29 @@ class PRWorkflowStore:
             "updated_by_event_id": event_id,
             "updated_at": utc_now(),
         }
-        gate = PRGate(
-            class_config=self.class_config,
-            feature_map=self.feature_map,
-            base_ref=self.base_ref,
-        ).evaluate(
-            {
+        state_path = self._head_state_path(pr_number, head_sha)
+        if updated_state.get("verifier") is None:
+            updated_state.update(
+                {
+                    "gate_decision": "pending_verification",
+                    "gate_failures": None,
+                }
+            )
+            atomic_json(state_path, updated_state)
+            atomic_json(self._current_path(pr_number), updated_state)
+            return {
+                "schema_version": "asdi.pr-workflow-result/v1",
+                "event_id": event_id,
+                "event_type": "github.review_completed",
+                "action": "review_recorded_pending_verification",
                 "pr_number": pr_number,
                 "head_sha": head_sha,
-                "base_ref": updated_state["base_ref"],
-                "changed_paths": updated_state["changed_paths"],
-                "statuses": updated_state["statuses"],
-                "verifier": updated_state["verifier"],
-                "review": review,
+                "state": updated_state,
+                "state_path": str(state_path),
+                "gate": None,
+                "packet": None,
             }
-        )
-        packet = gate["packet"]
+        gate, packet = self._evaluate_gate(updated_state)
         updated_state.update(
             {
                 "gate_decision": gate["decision"],
@@ -185,7 +203,6 @@ class PRWorkflowStore:
             }
         )
 
-        state_path = self._head_state_path(pr_number, head_sha)
         packet_path = self._packet_path(pr_number, head_sha)
         atomic_json(state_path, updated_state)
         atomic_json(self._current_path(pr_number), updated_state)
@@ -203,6 +220,118 @@ class PRWorkflowStore:
             "packet": packet,
             "packet_path": str(packet_path),
         }
+
+    def _apply_verification(
+        self,
+        event: dict[str, Any],
+        event_id: int,
+    ) -> dict[str, Any]:
+        failures = self._validate_verification_payload(event.get("payload"))
+        if failures:
+            rejection = self._reject(event, "invalid_verification_payload", failures)
+            return {**rejection, "state": None, "gate": None, "packet": None}
+
+        payload = event["payload"]
+        pr_number = int(payload["pr_number"])
+        head_sha = str(payload["head_sha"])
+        state = self.current_state(pr_number)
+        if state is None or state.get("schema_version") != "asdi.pr-state/v1":
+            rejection = self._reject(event, "verification_without_pull_request")
+            return {**rejection, "state": None, "gate": None, "packet": None}
+        if state.get("head_sha") != head_sha or state.get("pr_number") != pr_number:
+            rejection = self._reject(
+                event,
+                "verification_is_not_bound_to_current_head",
+            )
+            return {**rejection, "state": state, "gate": None, "packet": None}
+
+        verifier = dict(payload["verifier"])
+        if state.get("verifier") == verifier and state.get("statuses") == payload["statuses"]:
+            return {
+                "schema_version": "asdi.pr-workflow-result/v1",
+                "event_id": event_id,
+                "event_type": "github.verification_completed",
+                "action": "verification_replayed",
+                "pr_number": pr_number,
+                "head_sha": head_sha,
+                "state": state,
+                "gate": None,
+                "packet": None,
+            }
+
+        updated_state = {
+            **state,
+            "statuses": dict(payload["statuses"]),
+            "verifier": verifier,
+            "updated_by_event_id": event_id,
+            "updated_at": utc_now(),
+        }
+        if state.get("review") is None:
+            updated_state.update(
+                {
+                    "gate_decision": "pending_review",
+                    "gate_failures": None,
+                }
+            )
+            state_path = self._head_state_path(pr_number, head_sha)
+            atomic_json(state_path, updated_state)
+            atomic_json(self._current_path(pr_number), updated_state)
+            return {
+                "schema_version": "asdi.pr-workflow-result/v1",
+                "event_id": event_id,
+                "event_type": "github.verification_completed",
+                "action": "verification_recorded",
+                "pr_number": pr_number,
+                "head_sha": head_sha,
+                "state": updated_state,
+                "state_path": str(state_path),
+                "gate": None,
+                "packet": None,
+            }
+
+        gate, packet = self._evaluate_gate(updated_state)
+        updated_state.update(
+            {
+                "gate_decision": gate["decision"],
+                "gate_failures": gate["failures"],
+            }
+        )
+        state_path = self._head_state_path(pr_number, head_sha)
+        packet_path = self._packet_path(pr_number, head_sha)
+        atomic_json(state_path, updated_state)
+        atomic_json(self._current_path(pr_number), updated_state)
+        atomic_json(packet_path, packet)
+        return {
+            "schema_version": "asdi.pr-workflow-result/v1",
+            "event_id": event_id,
+            "event_type": "github.verification_completed",
+            "action": "verification_recorded",
+            "pr_number": pr_number,
+            "head_sha": head_sha,
+            "state": updated_state,
+            "state_path": str(state_path),
+            "gate": gate,
+            "packet": packet,
+            "packet_path": str(packet_path),
+        }
+
+    def _evaluate_gate(self, state: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
+        gate = PRGate(
+            class_config=self.class_config,
+            feature_map=self.feature_map,
+            base_ref=self.base_ref,
+        ).evaluate(
+            {
+                "pr_number": state["pr_number"],
+                "head_sha": state["head_sha"],
+                "base_ref": state["base_ref"],
+                "changed_paths": state["changed_paths"],
+                "statuses": state["statuses"],
+                "verifier": state["verifier"],
+                "review": state["review"],
+            }
+        )
+        return gate, gate["packet"]
 
     def current_state(self, pr_number: int) -> dict[str, Any] | None:
         path = self._current_path(int(pr_number))
@@ -230,11 +359,43 @@ class PRWorkflowStore:
         ):
             failures.append("changed_paths must be a non-empty string array")
         statuses = value.get("statuses")
-        if not isinstance(statuses, dict):
-            failures.append("statuses must be an object")
+        verifier = value.get("verifier")
+        if verifier is not None and not isinstance(verifier, dict):
+            failures.append("verifier must be an object when present")
+        return failures
+
+    def _validate_verification_payload(self, value: Any) -> list[str]:
+        if not isinstance(value, dict):
+            return ["verification payload is not an object"]
+        failures: list[str] = []
+        pr_number = value.get("pr_number")
+        if not isinstance(pr_number, int) or isinstance(pr_number, bool) or pr_number <= 0:
+            failures.append("pr_number must be a positive integer")
+        head_sha = value.get("head_sha")
+        if not isinstance(head_sha, str) or not FULL_SHA.fullmatch(head_sha):
+            failures.append("head_sha must be a 40-character lowercase SHA")
+        statuses = value.get("statuses")
+        if not isinstance(statuses, dict) or statuses.get("ci") not in {
+            "pass",
+            "fail",
+            "blocked",
+            "error",
+        }:
+            failures.append("statuses must include a ci result")
+        if isinstance(statuses, dict) and "asdi/policy" in statuses:
+            failures.append("asdi/policy is an output and may not be an input")
         verifier = value.get("verifier")
         if not isinstance(verifier, dict):
             failures.append("verifier must be an object")
+            return failures
+        if verifier.get("candidate_commit") != head_sha:
+            failures.append("verifier is not bound to head_sha")
+        if verifier.get("status") not in VERIFIER_STATUSES:
+            failures.append("verifier status is invalid")
+        if not isinstance(verifier.get("manifest_id"), str) or not verifier["manifest_id"]:
+            failures.append("verifier manifest_id is required")
+        if not isinstance(verifier.get("run_id"), str) or not verifier["run_id"]:
+            failures.append("verifier run_id is required")
         return failures
 
     def _validate_review_payload(self, value: Any) -> list[str]:
@@ -290,6 +451,7 @@ class PRWorkflowStore:
             "event_type": event.get("event_type"),
             "action": reason,
             "reason": reason,
+            "failures": failures or [],
             "state": None,
             "gate": None,
             "packet": None,

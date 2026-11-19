@@ -17,6 +17,7 @@ from .pr_workflow import PRWorkflowStore
 from .pr_gate import PRGate, deployment_decision, post_merge_check
 from .review import ReviewCommand, review_event_payload, run_review
 from .comment_gate import agent_claims_block, classify_comment
+from .verification import verification_event_payload
 
 
 def load_json(path: str | Path) -> Any:
@@ -105,6 +106,14 @@ def build_parser() -> argparse.ArgumentParser:
     )
     review_event.add_argument("--timeout-seconds", type=float, default=600.0)
     review_event.add_argument("--result-output", required=True)
+    verification_event = commands.add_parser("record-verification")
+    verification_event.add_argument("--packet", required=True)
+    verification_event.add_argument("--evidence", required=True)
+    verification_event.add_argument(
+        "--ci-status",
+        choices=("pass", "fail", "blocked", "error"),
+        required=True,
+    )
     merge = commands.add_parser("merge-dry-run")
     merge.add_argument("--packet", required=True)
     merge.add_argument("--actor", required=True)
@@ -151,6 +160,7 @@ def main(argv: list[str] | None = None) -> int:
         def handler(event: dict[str, Any]) -> None:
             if event["event_type"] not in {
                 "github.pull_request",
+                "github.verification_completed",
                 "github.review_completed",
             }:
                 return
@@ -239,6 +249,17 @@ def main(argv: list[str] | None = None) -> int:
             )
             write_json(root / "last-review-event.json", event)
             result = event
+    elif arguments.command == "record-verification":
+        event = journal.append(
+            event_type="github.verification_completed",
+            payload=verification_event_payload(
+                packet=load_json(arguments.packet),
+                evidence=load_json(arguments.evidence),
+                ci_status=arguments.ci_status,
+            ),
+        )
+        write_json(root / "last-verification-event.json", event)
+        result = event
     elif arguments.command == "comment-gate":
         identities = yaml.safe_load(arguments.identities.read_text())
         result = classify_comment(

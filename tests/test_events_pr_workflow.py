@@ -42,6 +42,24 @@ def review_payload(head: str = HEAD_A, event_id: int = 2) -> dict:
     }
 
 
+def verification_payload(head: str = HEAD_A, event_id: int = 2) -> dict:
+    return {
+        "event_id": event_id,
+        "event_type": "github.verification_completed",
+        "payload": {
+            "pr_number": 7,
+            "head_sha": head,
+            "statuses": {"ci": "pass"},
+            "verifier": {
+                "candidate_commit": head,
+                "status": "pass",
+                "manifest_id": "m-test",
+                "run_id": "r-test",
+            },
+        },
+    }
+
+
 class PRWorkflowStoreTests(unittest.TestCase):
     def setUp(self) -> None:
         self.temporary = tempfile.TemporaryDirectory()
@@ -63,6 +81,16 @@ class PRWorkflowStoreTests(unittest.TestCase):
             "event_id": event_id,
             "event_type": "github.pull_request",
             "payload": pull_request_payload(head),
+        }
+
+    def minimal_initial_event(self, head: str = HEAD_A, event_id: int = 1) -> dict:
+        payload = pull_request_payload(head)
+        payload.pop("statuses")
+        payload.pop("verifier")
+        return {
+            "event_id": event_id,
+            "event_type": "github.pull_request",
+            "payload": payload,
         }
 
     def test_initial_pull_request_is_pending_without_review(self) -> None:
@@ -139,6 +167,44 @@ class PRWorkflowStoreTests(unittest.TestCase):
         self.assertIsNone(result["packet"])
         self.assertTrue(
             (self.root / "workflow-rejections/event-2.json").is_file()
+        )
+
+    def test_verification_then_review_is_sequentially_eligible(self) -> None:
+        result = self.store.apply(self.minimal_initial_event())
+        self.assertEqual(result["state"]["gate_decision"], "pending_verification")
+
+        result = self.store.apply(verification_payload(event_id=2))
+        self.assertEqual(result["action"], "verification_recorded")
+        self.assertEqual(result["state"]["gate_decision"], "pending_review")
+
+        result = self.store.apply(review_payload(event_id=3))
+        self.assertEqual(result["gate"]["decision"], "eligible")
+        self.assertEqual(
+            result["packet"]["statuses"]["asdi/policy"],
+            "pass",
+        )
+
+    def test_review_before_verification_remains_pending(self) -> None:
+        self.store.apply(self.minimal_initial_event())
+        result = self.store.apply(review_payload(event_id=2))
+
+        self.assertEqual(result["action"], "review_recorded_pending_verification")
+        self.assertIsNone(result["gate"])
+        self.assertEqual(result["state"]["gate_decision"], "pending_verification")
+        self.assertIsNotNone(result["state"]["review"])
+
+    def test_policy_status_cannot_be_verification_input(self) -> None:
+        event = verification_payload()
+        event["payload"]["statuses"]["asdi/policy"] = "pass"
+        result = self.store.apply(event)
+
+        self.assertEqual(
+            result["action"],
+            "invalid_verification_payload",
+        )
+        self.assertIn(
+            "asdi/policy is an output and may not be an input",
+            result["failures"],
         )
 
     def test_malformed_event_is_rejected(self) -> None:

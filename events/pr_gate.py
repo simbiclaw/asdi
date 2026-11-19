@@ -8,7 +8,7 @@ from typing import Any
 from .classifier import classify_changed_paths, load_mapping
 
 
-REQUIRED_STATUSES = {"ci", "asdi/policy"}
+REQUIRED_STATUSES = {"ci"}
 
 
 def _required(value: dict[str, Any], key: str) -> Any:
@@ -70,13 +70,26 @@ class PRGate:
         elif classification["human_required"]:
             decision = "human_required"
 
+        # The policy status is the output of this class/policy evaluation, not
+        # a circular input.  Human-required means all automated checks passed
+        # and routing now requires the human; split/blocked remains red.
+        policy_status = (
+            "pass"
+            if decision in {"eligible", "human_required"}
+            else "fail"
+        )
+        posted_statuses = {
+            **statuses,
+            "asdi/policy": policy_status,
+        }
+
         packet = {
             "schema_version": "asdi.pr-packet/v1",
             "pr_number": pr_number,
             "head_sha": head_sha,
             "base_ref": base_ref,
             "changed_paths": sorted(paths),
-            "statuses": statuses,
+            "statuses": posted_statuses,
             "verifier": verifier,
             "review": review,
             "classification": classification,

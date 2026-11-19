@@ -6,6 +6,7 @@ import unittest
 from pathlib import Path
 
 from events.cli import main
+from launcher.evidence import EvidenceStore
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -378,6 +379,7 @@ class EventsCliTests(unittest.TestCase):
         reviewer_path = self.root / "reviewer.py"
         result_path = self.root / "review-result.json"
         initial_path = self.root / "pull-request.json"
+        evidence_path = self.root / "evidence.json"
         self.write_json(
             packet_path,
             {"pr_number": 12, "head_sha": head, "changed_paths": ["src/x"]},
@@ -406,10 +408,49 @@ class EventsCliTests(unittest.TestCase):
                 "head_sha": head,
                 "base_ref": "main",
                 "changed_paths": ["src/feature.py"],
-                "statuses": {"ci": "pass", "asdi/policy": "pass"},
-                "verifier": {"candidate_commit": head, "status": "pass"},
             },
         )
+        evidence_source = self.root / "evidence-source"
+        evidence_source.mkdir()
+        verification_result = {
+            "schema": 2,
+            "run_id": "r-pr-gate",
+            "commit": head,
+            "features": [
+                {
+                    "id": "feature:test",
+                    "status": "pass",
+                    "control": "caught",
+                    "evidence": ["output.txt"],
+                    "limits": [],
+                }
+            ],
+        }
+        (evidence_source / "result.json").write_text(
+            json.dumps(verification_result)
+        )
+        (evidence_source / "output.txt").write_text("observed\n")
+        evidence = EvidenceStore(self.root / "evidence-store").put(
+            evidence_source,
+            verification_result,
+            metadata={
+                "source": "pr-head",
+                "producer": {
+                    "kind": "verifier",
+                    "image_digest": "sha256:verifier",
+                },
+                "environment": {
+                    "run_image_digest": "sha256:run",
+                    "tool_versions": {"python": "3"},
+                },
+                "inputs": {
+                    "harness_commit": "2" * 40,
+                    "static_gates": "3" * 64,
+                    "product_profile": "4" * 64,
+                },
+            },
+        )
+        self.write_json(evidence_path, evidence)
         exit_code = main([
             *self.common,
             "append-event",
@@ -421,6 +462,31 @@ class EventsCliTests(unittest.TestCase):
         self.assertEqual(exit_code, 0)
         exit_code = main([*self.common, "catch-up", "--now", "300"])
         self.assertEqual(exit_code, 0)
+
+        exit_code = main([
+            *self.common,
+            "record-verification",
+            "--packet",
+            str(packet_path),
+            "--evidence",
+            str(evidence_path),
+            "--ci-status",
+            "pass",
+        ])
+        self.assertEqual(exit_code, 0)
+        exit_code = main([*self.common, "catch-up", "--now", "300.5"])
+        self.assertEqual(exit_code, 0)
+        verification_result_state = json.loads(
+            (self.root / "latest-pr-workflow.json").read_text()
+        )
+        self.assertEqual(
+            verification_result_state["state"]["gate_decision"],
+            "pending_review",
+        )
+        self.assertEqual(
+            verification_result_state["state"]["verifier"]["status"],
+            "pass",
+        )
 
         exit_code = main(
             [
