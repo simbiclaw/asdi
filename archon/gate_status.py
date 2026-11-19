@@ -33,10 +33,12 @@ CONTEXT = "asdi/review"
 
 
 def decide(pull: dict[str, Any], comments: list[dict[str, Any]], *, trusted: list[str],
-           ignore_prs: tuple[int, ...], ignore_created_before: str | None) -> tuple[str, str]:
+           ignore_prs: tuple[int, ...], ignore_created_before: str | None,
+           include_prs: tuple[int, ...] = ()) -> tuple[str, str]:
     """Return (state, description) for the PR's current head."""
     number, head = int(pull["number"]), pull["head"]["sha"]
-    if number in ignore_prs or (ignore_created_before and pull["created_at"] <= ignore_created_before):
+    excluded = number in ignore_prs or (ignore_created_before and pull["created_at"] <= ignore_created_before)
+    if excluded and number not in include_prs:
         return "success", "Excluded from ASDI review by config/review.json"
     if pull.get("draft"):
         return "pending", "Draft: reviewed once marked ready"
@@ -67,7 +69,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     comments = client._request("GET", f"/repos/{config.repo}/issues/{args.pr}/comments?per_page=100")
     state, description = decide(pull, comments, trusted=config.trusted_reviewers, ignore_prs=config.ignore_prs,
-                                ignore_created_before=config.ignore_created_before)
+                                ignore_created_before=config.ignore_created_before, include_prs=config.include_prs)
     client.post_status(pull["head"]["sha"], state=state, context=CONTEXT, description=description, target_url=None)
     print(f"PR #{args.pr} @ {pull['head']['sha'][:12]}: {state} - {description}")
     return 0

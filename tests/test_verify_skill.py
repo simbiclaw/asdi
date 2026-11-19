@@ -173,6 +173,13 @@ class ReportAndFeedbackTests(unittest.TestCase):
         self.assertEqual(v["verdict"], "NOT VERIFIED")
         self.assertIn("can never be overridden", " ".join(v["problems"]))
 
+    def test_pr_evidence_is_checked_against_the_head_commit(self) -> None:
+        self.confirm("ST-C1", "--status", "pass", "--observed", "ok", "--evidence", ".github/workflows/x.yml")
+        git(self.f.repo, "checkout", "-q", self.f.base)  # working tree no longer has the PR's file
+        self.assertEqual(self.verdict()["verdict"], "VERIFIED")
+        self.confirm("ST-C1", "--status", "pass", "--observed", "ok", "--evidence", "src/missing.py")
+        self.assertIn("not in the repo at the head commit", " ".join(self.verdict()["problems"]))
+
     def test_feedback_issue_and_gate_comment(self) -> None:
         self.confirm("ST-C1", "--status", "fail", "--observed", "workflow added without owner decision")
         self.assertEqual(self.verdict()["verdict"], "NOT VERIFIED")

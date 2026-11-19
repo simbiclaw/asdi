@@ -33,5 +33,9 @@
   "max_attempts": 3,
   "trusted_reviewers": [
     "simbiclaw"
-  ]
+  ],
+  "include_prs": [
+    2
+  ],
+  "include_note": "Owner direction 2026-11-19: new commits on PR #2 go through verify-then-review, incrementally from the last reviewed head (first base cca86b0f1bca24d2e30385aa53c7fd7a2c45098b)."
 }

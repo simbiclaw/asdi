@@ -82,6 +82,7 @@ class ReviewerConfig:
     stale_after_seconds: int
     may_post_status: bool
     trusted_reviewers: list[str] = dataclasses.field(default_factory=list)
+    include_prs: tuple[int, ...] = ()
 
 
 def load_reviewer_config(path: str | Path | None = None) -> ReviewerConfig:
@@ -116,4 +117,5 @@ def load_reviewer_config(path: str | Path | None = None) -> ReviewerConfig:
         stale_after_seconds=int(defaults["poller_stale_after_seconds"]),
         may_post_status=rights.get("may_post_status") is True and rights.get("may_merge") is False,
         trusted_reviewers=list(review.get("trusted_reviewers", [])),
+        include_prs=tuple(int(n) for n in review.get("include_prs", [])),
     )

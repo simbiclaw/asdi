@@ -424,6 +424,16 @@ class GateStatusTests(unittest.TestCase):
         latest = [self.comment("simbiclaw", "b" * 40, "fail"), self.comment("simbiclaw", "b" * 40, "pass")]
         self.assertEqual(self.decide(latest)[0], "success")
 
+    def test_included_pr_overrides_the_exclusions(self) -> None:
+        from archon.gate_status import decide
+        pull = {"number": 2, "head": {"sha": "b" * 40}, "created_at": "2026-11-16T00:00:00Z", "draft": False}
+        args = dict(trusted=["simbiclaw"], ignore_prs=(1, 2), ignore_created_before="2026-11-18T08:38:16Z")
+        self.assertEqual(decide(pull, [], **args)[0], "success")
+        self.assertEqual(decide(pull, [], include_prs=(2,), **args)[0], "pending")
+        self.assertEqual(decide(pull, [self.comment("simbiclaw", "b" * 40, "fail")], include_prs=(2,), **args)[0],
+                         "failure")
+        self.assertEqual(load_reviewer_config().include_prs, (2,))
+
     def test_excluded_and_draft_prs(self) -> None:
         self.assertEqual(self.decide([], number=2)[0], "success")
         self.assertEqual(self.decide([], created_at="2026-11-17T00:00:00Z")[0], "success")

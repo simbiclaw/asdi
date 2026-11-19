@@ -20,7 +20,7 @@ A row prefilled with "needs_confirmation": true must be settled by the verifier
 import sys, os
 sys.dont_write_bytecode = True  # keep the skill folder unchanged
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import collections, json
+import collections, json, subprocess
 from common import NEVER_OVERRIDE, load_register, owner_overrides, select, STATUSES
 
 if len(sys.argv) != 2:
@@ -34,6 +34,15 @@ if res["target"] == "pr":
 else:
     decisions = owner_overrides(res["repo"]) if res.get("repo") and os.path.isdir(res["repo"]) else {}
 overridden = {}
+
+
+def in_repo(name):
+    """Target pr: evidence lives in the PR's head commit, not in the verifier's working tree."""
+    if res["target"] == "pr" and res.get("commit"):
+        probe = subprocess.run(["git", "-C", res["repo"], "cat-file", "-e", "%s:%s" % (res["commit"], name)],
+                               capture_output=True)
+        return probe.returncode == 0
+    return os.path.exists(os.path.join(res["repo"], name))
 got = {r["id"]: r for r in res.get("results", [])}
 problems = []
 
@@ -78,8 +87,9 @@ for rid, r in got.items():
                 problems.append("%s: evidence file %s does not exist" % (rid, e))
         elif (res.get("repo") and os.path.isdir(res["repo"]) and "://" not in e and " " not in name
               and ("/" in name or "." in name)):
-            if not os.path.exists(os.path.join(res["repo"], name)):
-                problems.append("%s: evidence refers to %s, which is not in the repo" % (rid, name))
+            if not in_repo(name):
+                problems.append("%s: evidence refers to %s, which is not in the repo%s"
+                                % (rid, name, " at the head commit" if res["target"] == "pr" else ""))
 
 counts = collections.Counter("overridden" if r["id"] in overridden else r.get("status", "")
                              for r in got.values() if r["id"] in rows)

@@ -95,7 +95,7 @@
    "statement": "Every exit test the builder claims as passing is confirmed by this run.",
    "how": "After the target rows are done, add to the claims list every claim in STATUS.md that maps to a row in this run, with your own status for it. Claims about other targets go in notes. One claim you could not confirm fails this row.",
    "control": "",
-   "pr_how": "Lines the PR adds to STATUS.md that claim an exit test or phase passed must each be confirmed by a row in this run or by an earlier VERIFIED report; record them in claims. No added claim is a pass with observed 'no new claims'."
+   "pr_how": "Lines the PR adds to STATUS.md that claim success are listed by pr_check.py. A claim that maps to a row of this pr run must be confirmed by that row or recorded in claims as unconfirmed (which fails this row). Claims about other targets, such as Phase 1 live-run evidence that needs Docker, go in notes for phase verification, as the register's main rule says. A line that claims phase acceptance without a VERIFIED phase report is a fail."
   },
   {
    "id": "ST-ORDER-1",
