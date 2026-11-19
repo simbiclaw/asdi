@@ -46,6 +46,8 @@ Contract validation, evidence store, static-gate runner, per-run container orche
 
 Phase 1 exit readiness is mapped criterion-by-criterion in [`docs/asdi/PHASE1_EXIT_READINESS.md`](docs/asdi/PHASE1_EXIT_READINESS.md). It is builder-tested but not independently verified or accepted.
 
+A hash-chained owner-decision ledger is implemented at [`launcher/owner_decisions.py`](launcher/owner_decisions.py). It durably records the pending verifier and pilot choices, validates allowed dispositions, rejects credential-like runtime commands and detects tampering. Full suite through `fc44dbb`: **112 tests, OK, no unexpected failures**.
+
 The recovery verifier again violated report-only authority and committed `5747272`. That candidate is preserved at `revk/quarantined-verifier-authority` and forward-reverted from the active branch by `5dbc40c`. Independent acceptance remains blocked until the owner selects a capability-restricted verifier mechanism. See [`docs/asdi/VERIFIER_AUTHORITY_ESCALATION.md`](docs/asdi/VERIFIER_AUTHORITY_ESCALATION.md).
 
 A capability-restricted audit wrapper is now implemented and unit-tested at [`tools/readonly_audit.py`](tools/readonly_audit.py). It provides the enforcement boundary recommended for verifier-authority Option 2, but still requires an owner-selected auditor command.

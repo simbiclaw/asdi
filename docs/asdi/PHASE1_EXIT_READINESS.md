@@ -1,6 +1,6 @@
 # REV K Phase 1 exit readiness
 
-**Candidate:** `90aa7c0`
+**Candidate:** `fc44dbb`
 **Status:** **Builder-tested / independently unverified / not accepted**
 
 ## Exit-criterion map
@@ -25,7 +25,15 @@
 PYTHONPATH=.:src python3 -m unittest discover -s tests -v
 ```
 
-Latest observed result through the full suite at `f2942aa`: **106 tests, OK, no unexpected failures**. Documentation-only commits through `90aa7c0` do not alter that implementation evidence.
+Latest observed result through the full suite at `fc44dbb`: **112 tests, OK, no unexpected failures**. The new tests cover the exact-commit audit wrapper and durable owner-decision log.
+
+## Pending owner decisions
+
+The durable decision log at [`launcher/owner_decisions.py`](../../launcher/owner_decisions.py) can record the two choices required before the next lifecycle phase. It uses a hash-chained JSONL ledger, detects record mutation, rejects credential-like runtime commands and requires an explicit path when selecting an existing pilot.
+
+```sh
+PYTHONPATH=src:. python3 -m launcher.owner_decisions --root ./state decisions --help 2>/dev/null || true
+```
 
 ## Decision boundary
 
