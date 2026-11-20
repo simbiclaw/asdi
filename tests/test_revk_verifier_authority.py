@@ -10,7 +10,7 @@ from pathlib import Path
 
 from launcher.runner import DockerRuntime, REVKLauncher
 from tests.test_revk_guardrails import KillTrackingRuntime
-from tests.test_revk_runner import FakeProcess, FakeRuntime
+from tests.test_revk_runner import FakeProcess, FakeRuntime, record_static_checks
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -207,9 +207,14 @@ class VerifierAuthorityTests(unittest.TestCase):
                 agent_script=AGENT,
             )
             self.make_product(Path(temporary) / "product")
-            launcher._verify_head = lambda **kwargs: [
-                {"id": "static:forced-red", "status": "fail", "exit_code": 1}
-            ]
+            def verify_head(**kwargs):
+                return record_static_checks(
+                    evidence_stage=kwargs["evidence_stage"],
+                    run_id=kwargs["run_id"],
+                    checks=[{"id": "static:forced-red", "status": "fail", "exit_code": 1}],
+                )
+
+            launcher._verify_head = verify_head
             result = launcher.run(CONTRACT)
             self.assertEqual(result.status, "failed")
             self.assertEqual(runtime.kwargs["image"], "safeclaw:cc-2.1.283")
@@ -270,7 +275,14 @@ class VerifierAuthorityTests(unittest.TestCase):
                 runtime=runtime,
                 agent_script=AGENT,
             )
-            launcher._verify_head = lambda **kwargs: []
+            def verify_head(**kwargs):
+                return record_static_checks(
+                    evidence_stage=kwargs["evidence_stage"],
+                    run_id=kwargs["run_id"],
+                    checks=[{"id": "static:fixture", "status": "pass"}],
+                )
+
+            launcher._verify_head = verify_head
             launcher.run(CONTRACT)
             environment = runtime.kwargs["environment"]
             for key in environment:

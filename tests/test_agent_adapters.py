@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import subprocess
 import tempfile
 import unittest
@@ -7,7 +8,7 @@ from pathlib import Path
 
 from launcher.agent_adapters import ADAPTERS, adapter_script
 from launcher.runner import REVKLauncher
-from tests.test_revk_runner import FakeRuntime
+from tests.test_revk_runner import FakeRuntime, record_static_checks
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -36,6 +37,33 @@ class AgentAdapterTests(unittest.TestCase):
         )
         self.assertEqual(completed.returncode, 0)
         self.assertIn("--stop-hook", completed.stdout)
+
+    def test_claude_adapter_refuses_credential_like_environment(self) -> None:
+        script = adapter_script(ROOT / "launcher/agents", "claude")
+        environment = {
+            "PATH": "/usr/bin:/bin",
+            "BAD_MODEL_API_KEY": "must-not-be-forwarded",
+        }
+        completed = subprocess.run(
+            [
+                "/usr/bin/python3",
+                str(script),
+                "--workspace",
+                str(ROOT),
+                "--run-id",
+                "r-test",
+                "--commit",
+                "a" * 40,
+            ],
+            env=environment,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(completed.returncode, 2)
+        payload = json.loads(completed.stdout)
+        self.assertEqual(payload["error"], "credential_like_environment")
+        self.assertEqual(payload["names"], ["BAD_MODEL_API_KEY"])
 
     def test_runner_binds_selected_adapter_without_credentials(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -72,9 +100,16 @@ class AgentAdapterTests(unittest.TestCase):
                 runtime=runtime,
                 agent_adapter="claude",
             )
-            launcher._verify_head = lambda **kwargs: [
-                {"id": "static:forced-red", "status": "fail", "blocking": True}
-            ]
+            def verify_head(**kwargs):
+                return record_static_checks(
+                    evidence_stage=kwargs["evidence_stage"],
+                    run_id=kwargs["run_id"],
+                    checks=[
+                        {"id": "static:forced-red", "status": "fail", "blocking": True}
+                    ],
+                )
+
+            launcher._verify_head = verify_head
             result = launcher.run(CONTRACT)
             self.assertEqual(result.status, "failed")
             self.assertTrue(runtime.started)

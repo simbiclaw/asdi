@@ -389,19 +389,19 @@ class REVKLauncher:
             )
             raise RuntimeError("spend guardrail exceeded before launch")
 
-        self._fresh_export(workspace)
-        base_export = run_root / "base"
-        self._fresh_export(base_export)
-        self.runtime.create_network(network)
-        self.runtime.create_volume(volume)
-        self.runtime.create_volume(workspace_volume)
-        self.runtime.create_volume(base_volume)
-        self.runtime.ensure_bridge_network(self.egress_network)
-        self.runtime.populate_volume(workspace_volume, workspace)
-        self.runtime.populate_volume(base_volume, base_export, destination="/opt/base")
-        self.runtime.chown_volume(workspace_volume, "/workspace", "1001:1001")
-        self.runtime.chown_volume(volume, "/evidence", "1001:1001")
         try:
+            self._fresh_export(workspace)
+            base_export = run_root / "base"
+            self._fresh_export(base_export)
+            self.runtime.create_network(network)
+            self.runtime.create_volume(volume)
+            self.runtime.create_volume(workspace_volume)
+            self.runtime.create_volume(base_volume)
+            self.runtime.ensure_bridge_network(self.egress_network)
+            self.runtime.populate_volume(workspace_volume, workspace)
+            self.runtime.populate_volume(base_volume, base_export, destination="/opt/base")
+            self.runtime.chown_volume(workspace_volume, "/workspace", "1001:1001")
+            self.runtime.chown_volume(volume, "/evidence", "1001:1001")
             model_key = os.environ.get(self.model_key_env)
             proxy_environment = {
                 "ASDI_MODEL_HOST": self.model_host,
@@ -710,8 +710,8 @@ class REVKLauncher:
         commit = self._revision(revision)
         if len(commit) != 40 or any(char not in "0123456789abcdef" for char in commit):
             raise ValueError("verification revision must resolve to a full Git SHA")
-        run_id = f"rv-{uuid.uuid4()}"
-        short = run_id.removeprefix("rv-").replace("-", "")[:16]
+        run_id = f"r-v{uuid.uuid4().hex}"
+        short = run_id[2:18]
         run_root = self.runs_root / run_id
         workspace = run_root / "workspace"
         base = run_root / "base"
@@ -1016,7 +1016,7 @@ class REVKLauncher:
 
         verify_path = base / "verify" / "bin" / "verify"
         started = time.time()
-        short = run_id.removeprefix("rv-").removeprefix("r-").replace("-", "")[:16]
+        short = run_id.removeprefix("r-v").removeprefix("r-").replace("-", "")[:16]
         container = f"asdi-verify-{short}"
         if not verify_path.is_file() or not os.access(verify_path, os.X_OK):
             return {

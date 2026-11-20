@@ -14,7 +14,11 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from .verification import main_verification_event_payload, verification_event_payload
+from .verification import (
+    ci_status_from_checks,
+    main_verification_event_payload,
+    verification_event_payload,
+)
 
 
 FULL_SHA = re.compile(r"^[0-9a-f]{40}$")
@@ -23,30 +27,25 @@ VERIFICATION_SOURCES = {"pr-head", "main"}
 FORBIDDEN_TOKEN_MARKERS = ("api_key", "authorization", "password", "secret", "token")
 
 
-def ci_status_from_checks(checks: Any) -> str:
-    """Derive the immutable ``ci`` result from named static-gate checks."""
-
+def _static_checks(checks: Any) -> list[Any]:
     if not isinstance(checks, list):
-        return "error"
-    static_checks = [
+        return []
+    return [
         check
         for check in checks
         if isinstance(check, dict) and str(check.get("id", "")).startswith("static:")
     ]
-    if not static_checks:
-        return "error"
-    if any(check.get("status") in {"error", "blocked"} for check in static_checks):
-        return "error"
-    if any(
-        check.get("blocking", True) is True and check.get("status") != "pass"
-        for check in static_checks
-    ):
-        return "fail"
-    if any(check.get("blocking", True) is False and check.get("status") == "fail" for check in static_checks):
-        return "pass"
-    if all(check.get("status") == "pass" for check in static_checks):
-        return "pass"
-    return "error"
+
+
+def _normalized_static_checks(checks: Any) -> list[dict[str, Any]]:
+    return [
+        {
+            "id": check.get("id"),
+            "status": check.get("status"),
+            "blocking": check.get("blocking", True),
+        }
+        for check in _static_checks(checks)
+    ]
 
 
 @dataclass(frozen=True)
@@ -182,6 +181,18 @@ def validate_verifier_result(
         failures.append("verifier evidence subject is not bound to target commit")
     if statement.get("predicate", {}).get("source") != source:
         failures.append(f"verification requires evidence statement source {source}")
+    statement_static_checks = statement.get("predicate", {}).get("static_checks")
+    if not isinstance(statement_static_checks, dict):
+        failures.append("verifier evidence statement has no static_checks")
+    else:
+        statement_checks = statement_static_checks.get("checks")
+        if statement_static_checks.get("run_id") != report.get("run_id"):
+            failures.append("evidence statement static_checks run_id mismatch")
+        if (
+            not isinstance(statement_checks, list)
+            or _normalized_static_checks(statement_checks) != _normalized_static_checks(checks)
+        ):
+            failures.append("evidence statement static_checks do not match verifier checks")
     return failures
 
 
@@ -194,7 +205,7 @@ def run_verification(
 
     if not isinstance(head_sha, str) or not FULL_SHA.fullmatch(head_sha):
         raise ValueError("verification head must be a 40-character lowercase SHA")
-    execution_run_id = f"rvx-{uuid.uuid4()}"
+    execution_run_id = f"r-x{uuid.uuid4().hex}"
     started = time.time()
     with tempfile.TemporaryDirectory(prefix="asdi-verifier-command.") as temporary:
         root = Path(temporary)
@@ -314,11 +325,6 @@ def verification_execution_event_payload(
     derived_ci = result.get("ci_status")
     if derived_ci not in {"pass", "fail", "blocked", "error"}:
         derived_ci = "error"
-    mismatches: list[str] = []
-    if ci_status != derived_ci:
-        mismatches.append(
-            f"declared ci status {ci_status!r} does not match derived status {derived_ci!r}"
-        )
     if isinstance(evidence, dict) and evidence.get("valid") is True:
         try:
             if source == "pr-head":
@@ -333,15 +339,22 @@ def verification_execution_event_payload(
                     evidence=evidence,
                     ci_status=ci_status,
                 )
+            declared_ci = ci_status
+            derived_ci = payload["verifier"].get("ci_status")
+            status_failures: list[str] = []
             if result.get("status") != "succeeded":
+                status_failures.append("verifier execution status is not succeeded")
+            if derived_ci != "pass":
+                status_failures.append(
+                    f"evidence-derived ci status is {derived_ci!r}"
+                )
+            if declared_ci != derived_ci:
+                status_failures.append(
+                    f"declared ci status {declared_ci!r} does not match derived status {derived_ci!r}"
+                )
+            if status_failures:
                 payload["verifier"]["status"] = "fail"
-                payload["verifier"]["failures"] = [
-                    "verifier execution status is not succeeded",
-                    *mismatches,
-                ]
-            elif mismatches:
-                payload["verifier"]["status"] = "fail"
-                payload["verifier"]["failures"] = mismatches
+                payload["verifier"]["failures"] = status_failures
             payload["statuses"]["ci"] = derived_ci
             return payload
         except ValueError:

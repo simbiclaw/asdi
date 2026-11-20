@@ -6,8 +6,37 @@ from __future__ import annotations
 from typing import Any
 
 
-CI_STATUSES = {"pass", "fail", "blocked", "error"}
 EVIDENCE_SOURCES = {"pr-head", "main"}
+
+
+def ci_status_from_checks(value: Any) -> str:
+    """Derive CI from the named static gates, ignoring other verifier checks."""
+
+    if not isinstance(value, list):
+        return "error"
+    checks = [
+        check
+        for check in value
+        if isinstance(check, dict)
+        and str(check.get("id", "")).startswith("static:")
+    ]
+    if not checks:
+        return "error"
+    if any(check.get("status") in {"error", "blocked"} for check in checks):
+        return "error"
+    if any(
+        check.get("blocking", True) is True and check.get("status") != "pass"
+        for check in checks
+    ):
+        return "fail"
+    if any(
+        check.get("blocking", True) is False and check.get("status") == "fail"
+        for check in checks
+    ):
+        return "pass"
+    if all(check.get("status") == "pass" for check in checks):
+        return "pass"
+    return "error"
 
 
 def verification_event_payload(
@@ -24,17 +53,16 @@ def verification_event_payload(
         raise ValueError("packet has no valid pr_number")
     if not isinstance(head_sha, str) or not head_sha:
         raise ValueError("packet has no valid head_sha")
-    if ci_status not in CI_STATUSES:
-        raise ValueError("ci_status must be pass, fail, blocked or error")
     verifier = verified_evidence_contract(
         evidence=evidence,
         commit=head_sha,
         source="pr-head",
+        ci_status=ci_status,
     )
     return {
         "pr_number": pr_number,
         "head_sha": head_sha,
-        "statuses": {"ci": ci_status},
+        "statuses": {"ci": verifier["ci_status"]},
         "verifier": verifier,
     }
 
@@ -47,16 +75,15 @@ def main_verification_event_payload(
 ) -> dict[str, Any]:
     """Return the gate-contract subset of verified exact-``main`` evidence."""
 
-    if ci_status not in CI_STATUSES:
-        raise ValueError("ci_status must be pass, fail, blocked or error")
     verifier = verified_evidence_contract(
         evidence=evidence,
         commit=commit,
         source="main",
+        ci_status=ci_status,
     )
     return {
         "commit": commit,
-        "statuses": {"ci": ci_status},
+        "statuses": {"ci": verifier["ci_status"]},
         "verifier": verifier,
     }
 
@@ -66,6 +93,7 @@ def verified_evidence_contract(
     evidence: dict[str, Any],
     commit: str,
     source: str,
+    ci_status: str | None = None,
 ) -> dict[str, Any]:
     """Validate one verified manifest and return its normalized verifier."""
 
@@ -98,8 +126,16 @@ def verified_evidence_contract(
     predicate = statement.get("predicate")
     if not isinstance(predicate, dict) or predicate.get("source") != source:
         raise ValueError(f"{source} gate requires evidence source {source}")
+    static_checks = predicate.get("static_checks")
+    if not isinstance(static_checks, dict):
+        static_checks = []
+    derived_ci = ci_status_from_checks(
+        static_checks.get("checks") if isinstance(static_checks, dict) else static_checks
+    )
     features = result.get("features")
     failures: list[str] = []
+    if not isinstance(predicate.get("static_checks"), dict):
+        failures.append("evidence statement has no static_checks")
     if not isinstance(features, list) or not features:
         failures.append("evidence result has no features")
     else:
@@ -119,7 +155,14 @@ def verified_evidence_contract(
         "status": "fail" if failures else "pass",
         "manifest_id": evidence["manifest_id"],
         "run_id": run_id,
+        "ci_status": derived_ci,
     }
     if failures:
         verifier["failures"] = failures
+    if ci_status is not None and ci_status != derived_ci:
+        verifier["status"] = "fail"
+        failures = verifier.setdefault("failures", [])
+        failures.append(
+            f"declared ci status {ci_status!r} does not match derived status {derived_ci!r}"
+        )
     return verifier

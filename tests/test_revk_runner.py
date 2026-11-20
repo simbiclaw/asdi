@@ -13,6 +13,21 @@ from launcher.runner import DockerRuntime, REVKLauncher
 ROOT = Path(__file__).resolve().parents[1]
 
 
+def record_static_checks(
+    *, evidence_stage: Path, run_id: str, checks: list[dict]
+) -> list[dict]:
+    path = evidence_stage / ".asdi-evidence" / "static-gates.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(
+            {"run_id": run_id, "checks": checks},
+            indent=2,
+            sort_keys=True,
+        )
+    )
+    return checks
+
+
 class FakeProcess:
     def __init__(self) -> None:
         self.returncode = 0
@@ -249,10 +264,14 @@ class REVKRunnerTests(unittest.TestCase):
                 verifier_result.update(
                     json.loads((evidence_stage / "result.json").read_text())
                 )
-                return [
-                    {"id": "static:compile", "status": "pass"},
-                    {"id": "verify:base-harness", "status": "pass"},
-                ]
+                return record_static_checks(
+                    evidence_stage=evidence_stage,
+                    run_id=run_id,
+                    checks=[
+                        {"id": "static:compile", "status": "pass"},
+                        {"id": "verify:base-harness", "status": "pass"},
+                    ],
+                )
 
             with patch.object(launcher, "_verify_head", verify_head):
                 result = launcher.verify_revision(commit)
@@ -335,10 +354,14 @@ class REVKRunnerTests(unittest.TestCase):
                 verifier_result.update(
                     json.loads((evidence_stage / "result.json").read_text())
                 )
-                return [
-                    {"id": "static:compile", "status": "pass"},
-                    {"id": "verify:base-harness", "status": "pass"},
-                ]
+                return record_static_checks(
+                    evidence_stage=evidence_stage,
+                    run_id=run_id,
+                    checks=[
+                        {"id": "static:compile", "status": "pass"},
+                        {"id": "verify:base-harness", "status": "pass"},
+                    ],
+                )
 
             with patch.object(launcher, "_verify_head", verify_head):
                 result = launcher.verify_revision(commit)
@@ -396,9 +419,14 @@ class REVKRunnerTests(unittest.TestCase):
                 runtime=runtime,
                 agent_script=ROOT / "launcher/agents/fixture_agent.py",
             )
-            launcher._verify_head = lambda **kwargs: [
-                {"id": "static:compile", "status": "pass", "exit_code": 0}
-            ]
+            def verify_head(**kwargs):
+                return record_static_checks(
+                    evidence_stage=kwargs["evidence_stage"],
+                    run_id=kwargs["run_id"],
+                    checks=[{"id": "static:compile", "status": "pass", "exit_code": 0}],
+                )
+
+            launcher._verify_head = verify_head
             with patch.dict(
                 "os.environ",
                 {"LITELLM_MASTER_KEY": "proxy-only-test-key"},
@@ -435,3 +463,30 @@ class REVKRunnerTests(unittest.TestCase):
                 expected_workspace.resolve(),
             )
             self.assertTrue((expected_workspace / "src" / "notes.py").is_file())
+
+    def test_setup_failure_cleans_resources_and_records_terminal_failure(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            product, _commit = self.make_product(root)
+            runtime = FakeRuntime(root / "workspace", root / "evidence")
+
+            def fail_populate(*args, **kwargs) -> None:
+                raise RuntimeError("populate failed")
+
+            runtime.populate_volume = fail_populate
+            launcher = REVKLauncher(
+                root=root / "asdi",
+                product_root=product,
+                runtime=runtime,
+            )
+            with self.assertRaisesRegex(RuntimeError, "populate failed"):
+                launcher.run(ROOT / "schemas/examples/run-contract.valid.json")
+
+            state_paths = list((root / "asdi" / "runs").glob("*/launcher-state.json"))
+            self.assertEqual(len(state_paths), 1)
+            state = json.loads(state_paths[0].read_text())
+            self.assertEqual(state["status"], "failed")
+            self.assertEqual(state["failure"]["message"], "populate failed")
+            self.assertTrue(runtime.removed_network)
+            self.assertTrue(runtime.removed_volume)
+            self.assertEqual(runtime.stopped_proxy, "asdi-egress-" + state["run_id"][2:].replace("-", "")[:16])

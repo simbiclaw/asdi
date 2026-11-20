@@ -180,3 +180,19 @@ class PostMergeTests(unittest.TestCase):
         )
         deployment = deployment_decision(commit="0" * 40, main_results=[result])
         self.assertFalse(deployment["eligible"])
+
+    def test_forged_passed_flag_without_post_merge_contract_is_blocked(self) -> None:
+        commit = "1" * 40
+        forged = {
+            "commit": commit,
+            "passed": True,
+            "deployment_eligible": False,
+            "failures": ["main verifier is not pass"],
+            "auto_revert": {"required": True, "reverted_commit": commit},
+        }
+        deployment = deployment_decision(commit=commit, main_results=[forged])
+        self.assertFalse(deployment["eligible"])
+        self.assertEqual(
+            deployment["reason"],
+            "no valid passing post-merge result for exact commit",
+        )

@@ -16,6 +16,17 @@ import subprocess
 from pathlib import Path
 
 
+CREDENTIAL_NAME_MARKERS = ("KEY", "TOKEN", "SECRET", "PASSWORD", "CREDENTIAL")
+
+
+def forbidden_environment_names(environment: dict[str, str]) -> list[str]:
+    return sorted(
+        name
+        for name in environment
+        if any(marker in name.upper() for marker in CREDENTIAL_NAME_MARKERS)
+    )
+
+
 def stop_hook(arguments: argparse.Namespace) -> int:
     evidence = Path("/evidence")
     evidence.mkdir(parents=True, exist_ok=True)
@@ -74,6 +85,11 @@ def main() -> int:
     arguments = parser.parse_args()
     if arguments.stop_hook:
         return stop_hook(arguments)
+
+    forbidden = forbidden_environment_names(os.environ)
+    if forbidden:
+        print(json.dumps({"error": "credential_like_environment", "names": forbidden}), flush=True)
+        return 2
 
     workspace = Path(arguments.workspace)
     settings_path = configure_agent(workspace, arguments.run_id, arguments.commit)

@@ -6,9 +6,13 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import shutil
 from pathlib import Path
 from typing import Any
+
+
+RUN_ID = re.compile(r"^r-[A-Za-z0-9-]+$")
 
 
 class EvidenceStore:
@@ -102,6 +106,8 @@ class EvidenceStore:
             raise ValueError("evidence source is not allowed")
 
         self._validate_result(observed, file_paths=None)
+        static_checks = self._read_static_checks(source, observed["run_id"])
+        self._validate_static_checks(static_checks, observed["run_id"])
 
         statement_identity = {
             "subject": [{"name": "asdi-run", "digest": {"gitCommit": observed["commit"]}}],
@@ -121,6 +127,7 @@ class EvidenceStore:
                     }
                     for item in observed["features"]
                 ],
+                "static_checks": static_checks,
             },
         }
         manifest_id = "m-" + hashlib.sha256(
@@ -160,6 +167,7 @@ class EvidenceStore:
                 "environment": metadata["environment"],
                 "inputs": metadata["inputs"],
                 "checks": statement_identity["predicate"]["checks"],
+                "static_checks": static_checks,
                 "files": file_records,
             },
         }
@@ -208,6 +216,14 @@ class EvidenceStore:
         ]
         if predicate.get("checks") != expected_checks:
             failures.append("statement checks do not match result")
+        static_checks = predicate.get("static_checks")
+        if static_checks is None:
+            failures.append("statement is missing static_checks")
+        else:
+            try:
+                self._validate_static_checks(static_checks, result.get("run_id"))
+            except (TypeError, ValueError) as error:
+                failures.append(str(error))
         for item in statement["predicate"].get("files", []):
             recorded_path = item.get("path")
             path = root / "objects" / recorded_path if isinstance(recorded_path, str) else None
@@ -262,7 +278,12 @@ class EvidenceStore:
     def _validate_result(self, result: Any, *, file_paths: set[str] | None) -> None:
         if not isinstance(result, dict) or set(result) != {"schema", "run_id", "commit", "features"}:
             raise ValueError("result.json fields do not match schema 2")
-        if result.get("schema") != 2 or not result.get("run_id") or not result.get("commit"):
+        if (
+            result.get("schema") != 2
+            or not isinstance(result.get("run_id"), str)
+            or not RUN_ID.fullmatch(result["run_id"])
+            or not result.get("commit")
+        ):
             raise ValueError("result.json is not bound to schema, run and revision")
         features = result.get("features")
         if not isinstance(features, list) or not features:
@@ -288,6 +309,45 @@ class EvidenceStore:
                 not isinstance(limit, str) for limit in feature.get("limits")
             ):
                 raise ValueError("feature limits must be an array of strings")
+
+    @staticmethod
+    def _read_static_checks(source: Path, run_id: str) -> Any:
+        path = source / ".asdi-evidence" / "static-gates.json"
+        if not path.is_file():
+            raise ValueError("static gate checks are required in .asdi-evidence/static-gates.json")
+        try:
+            value = json.loads(path.read_text())
+        except (OSError, json.JSONDecodeError) as error:
+            raise ValueError(f"invalid static gate checks: {error}") from error
+        return value
+
+    @staticmethod
+    def _validate_static_checks(value: Any, run_id: str) -> None:
+        if not isinstance(value, dict) or set(value) != {"run_id", "checks"}:
+            raise ValueError("static_checks must contain run_id and checks")
+        if value.get("run_id") != run_id:
+            raise ValueError("static_checks run_id mismatch")
+        checks = value.get("checks")
+        if not isinstance(checks, list) or not checks:
+            raise ValueError("static_checks checks must be a non-empty array")
+        seen: set[str] = set()
+        has_static_gate = False
+        for check in checks:
+            if not isinstance(check, dict):
+                raise ValueError("static check must be an object")
+            check_id = check.get("id")
+            if not isinstance(check_id, str) or not check_id:
+                raise ValueError("gate check id is required")
+            if check_id in seen:
+                raise ValueError("gate check id is duplicated")
+            seen.add(check_id)
+            if check.get("status") not in {"pass", "fail", "error", "blocked"}:
+                raise ValueError("gate check status is invalid")
+            if "blocking" in check and type(check["blocking"]) is not bool:
+                raise ValueError("gate check blocking must be boolean")
+            has_static_gate = has_static_gate or check_id.startswith("static:")
+        if not has_static_gate:
+            raise ValueError("static_checks must include a named static gate")
 
 
 def _sha256(path: Path) -> str:

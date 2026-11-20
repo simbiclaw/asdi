@@ -17,6 +17,7 @@ from .main_pipeline import run_main_verification_pipeline
 from .merge_gate import evaluate_merge_packet
 from .pr_workflow import PRWorkflowStore
 from .pr_gate import PRGate, deployment_decision, post_merge_check
+from .release_gate import release_readiness
 from .review import ReviewCommand, review_event_payload, run_review
 from .comment_gate import agent_claims_block, classify_comment
 from .dispatcher import EventDispatcher
@@ -92,6 +93,10 @@ def build_parser() -> argparse.ArgumentParser:
     deployment.add_argument("--commit", required=True)
     deployment.add_argument("--main-results", required=True)
     deployment.add_argument("--decision-output", required=True)
+    readiness = commands.add_parser("release-readiness")
+    readiness.add_argument("--commit", required=True)
+    readiness.add_argument("--artifact-digest", required=True)
+    readiness.add_argument("--readiness-output", required=True)
     review = commands.add_parser("review")
     review.add_argument("--packet", required=True)
     review.add_argument("--diff", required=True)
@@ -303,6 +308,16 @@ def main(argv: list[str] | None = None) -> int:
         )
         write_json(root / "latest-deployment-decision.json", result)
         write_json(Path(arguments.decision_output), result)
+    elif arguments.command == "release-readiness":
+        main_workflow = MainWorkflowStore(root / "main-workflow")
+        result = release_readiness(
+            commit=arguments.commit,
+            artifact_digest=arguments.artifact_digest,
+            main_state=main_workflow.current_state(arguments.commit),
+            current_state=main_workflow.current_state(),
+        )
+        write_json(root / "latest-release-readiness.json", result)
+        write_json(Path(arguments.readiness_output), result)
     elif arguments.command == "merge-dry-run":
         result = evaluate_merge_packet(
             load_json(arguments.packet),

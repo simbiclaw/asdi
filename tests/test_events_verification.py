@@ -19,6 +19,7 @@ def verified_evidence(
     *,
     control: str = "caught",
     source: str = "pr-head",
+    static_status: str = "pass",
 ) -> dict:
     evidence_directory = root / "source"
     evidence_directory.mkdir()
@@ -38,6 +39,15 @@ def verified_evidence(
     }
     (evidence_directory / "result.json").write_text(json.dumps(result))
     (evidence_directory / "output.txt").write_text("observed\n")
+    (evidence_directory / ".asdi-evidence").mkdir(exist_ok=True)
+    (evidence_directory / ".asdi-evidence" / "static-gates.json").write_text(
+        json.dumps({
+            "run_id": "r-verification",
+            "checks": [
+                {"id": "static:test", "status": static_status, "blocking": True}
+            ],
+        })
+    )
     store = EvidenceStore(root / "store")
     return store.put(
         evidence_directory,
@@ -105,6 +115,19 @@ class VerificationEventTests(unittest.TestCase):
         self.assertEqual(payload["verifier"]["status"], "fail")
         self.assertIn(
             "feature feature:test control was not caught",
+            payload["verifier"]["failures"],
+        )
+
+    def test_failed_static_gate_cannot_be_masked_by_declared_ci(self) -> None:
+        payload = verification_event_payload(
+            packet=self.packet,
+            evidence=verified_evidence(self.root, static_status="fail"),
+            ci_status="pass",
+        )
+        self.assertEqual(payload["statuses"], {"ci": "fail"})
+        self.assertEqual(payload["verifier"]["status"], "fail")
+        self.assertIn(
+            "declared ci status 'pass' does not match derived status 'fail'",
             payload["verifier"]["failures"],
         )
 

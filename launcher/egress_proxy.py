@@ -133,9 +133,12 @@ class EgressHandler(BaseHTTPRequestHandler):
             host = self.authority.model_host
             port = self.authority.model_port
             origin_path = self.path
-        allowed, reason, _addresses = self.authority.decide(host, port)
+        allowed, reason, addresses = self.authority.decide(host, port)
         if not allowed:
             self.send_error(403, reason)
+            return
+        if not addresses:
+            self.send_error(502, "no_resolved_address")
             return
         length = int(self.headers.get("Content-Length", "0"))
         body = self.rfile.read(length) if length else None
@@ -150,10 +153,14 @@ class EgressHandler(BaseHTTPRequestHandler):
         if host == self.authority.model_host and self.authority.model_key:
             headers["Authorization"] = f"Bearer {self.authority.model_key}"
         try:
-            connection = http.client.HTTPConnection(host, port, timeout=30)
-            connection.request(method, origin_path, body=body, headers=headers)
-            response = connection.getresponse()
-            payload = response.read()
+            connection, response, payload = self._http_request(
+                addresses=addresses,
+                port=port,
+                method=method,
+                origin_path=origin_path,
+                body=body,
+                headers=headers,
+            )
         except OSError as error:
             self.send_error(502, f"connect_failed:{error}")
             return
@@ -168,6 +175,28 @@ class EgressHandler(BaseHTTPRequestHandler):
                 self.wfile.write(payload)
         finally:
             connection.close()
+
+    @staticmethod
+    def _http_request(
+        *,
+        addresses: tuple[str, ...],
+        port: int,
+        method: str,
+        origin_path: str,
+        body: bytes | None,
+        headers: dict[str, str],
+    ) -> tuple[http.client.HTTPConnection, http.client.HTTPResponse, bytes]:
+        connect_error: OSError | None = None
+        for address in addresses:
+            connection = http.client.HTTPConnection(address, port, timeout=30)
+            try:
+                connection.request(method, origin_path, body=body, headers=headers)
+                response = connection.getresponse()
+                return connection, response, response.read()
+            except OSError as error:
+                connect_error = error
+                connection.close()
+        raise connect_error or OSError("no authorized addresses")
 
     def _split_authority(self, value: str, default_port: int) -> tuple[str, int]:
         authority = value.removeprefix("//")

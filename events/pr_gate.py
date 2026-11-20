@@ -139,16 +139,23 @@ def deployment_decision(
     commit: str,
     main_results: list[dict[str, Any]],
 ) -> dict[str, Any]:
-    matching = [
-        result
-        for result in main_results
-        if result.get("commit") == commit and result.get("passed") is True
-    ]
+    matching: list[dict[str, Any]] = []
+    for result in main_results:
+        auto_revert = result.get("auto_revert")
+        if (
+            isinstance(result, dict)
+            and result.get("commit") == commit
+            and result.get("passed") is True
+            and result.get("deployment_eligible") is True
+            and result.get("failures") == []
+            and not (isinstance(auto_revert, dict) and auto_revert.get("required") is True)
+        ):
+            matching.append(result)
     if not matching:
         return {
             "commit": commit,
             "eligible": False,
-            "reason": "no passing post-merge result for exact commit",
+            "reason": "no valid passing post-merge result for exact commit",
         }
     return {
         "commit": commit,

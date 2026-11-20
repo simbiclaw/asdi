@@ -432,6 +432,15 @@ class EventsCliTests(unittest.TestCase):
             json.dumps(verification_result)
         )
         (evidence_source / "output.txt").write_text("observed\n")
+        (evidence_source / ".asdi-evidence").mkdir()
+        (evidence_source / ".asdi-evidence" / "static-gates.json").write_text(
+            json.dumps({
+                "run_id": "r-pr-gate",
+                "checks": [
+                    {"id": "static:test", "status": "pass", "blocking": True}
+                ],
+            })
+        )
         evidence = EvidenceStore(self.root / "evidence-store").put(
             evidence_source,
             verification_result,
@@ -553,6 +562,15 @@ class EventsCliTests(unittest.TestCase):
             json.dumps(verification_result)
         )
         (evidence_source / "output.txt").write_text("observed\n")
+        (evidence_source / ".asdi-evidence").mkdir()
+        (evidence_source / ".asdi-evidence" / "static-gates.json").write_text(
+            json.dumps({
+                "run_id": "r-main-evidence",
+                "checks": [
+                    {"id": "static:main", "status": "pass", "blocking": True}
+                ],
+            })
+        )
         evidence = EvidenceStore(self.root / "main-evidence-store").put(
             evidence_source,
             verification_result,
@@ -690,6 +708,15 @@ class EventsCliTests(unittest.TestCase):
         }
         (source / "result.json").write_text(json.dumps(result))
         (source / "output.txt").write_text("observed\n")
+        (source / ".asdi-evidence").mkdir()
+        (source / ".asdi-evidence" / "static-gates.json").write_text(
+            json.dumps({
+                "run_id": f"r-{head[:8]}-{control}",
+                "checks": [
+                    {"id": "static:pipeline", "status": "pass", "blocking": True}
+                ],
+            })
+        )
         evidence = EvidenceStore(self.root / "evidence-store").put(
             source,
             result,
@@ -862,7 +889,7 @@ class EventsCliTests(unittest.TestCase):
             "head, output = sys.argv[1], Path(sys.argv[2])\n"
             "report = {\n"
             "    'schema_version': 'asdi.verifier-only-result/v1',\n"
-            "    'run_id': 'rv-command',\n"
+            "    'run_id': 'r-vcommand',\n"
             "    'status': 'succeeded',\n"
             "    'revision': head,\n"
             "    'commit': head,\n"
@@ -873,11 +900,15 @@ class EventsCliTests(unittest.TestCase):
             "        'manifest_id': 'm-command',\n"
             "        'statement': {\n"
             "            'subject': [{'digest': {'gitCommit': head}}],\n"
-            "            'predicate': {'source': 'pr-head'},\n"
+            "            'predicate': {'source': 'pr-head',\n"
+            "                          'static_checks': {'run_id': 'r-vcommand',\n"
+            "                            'checks': [{'id': 'static:test',\n"
+            "                                        'status': 'pass',\n"
+            "                                        'blocking': True}]}},\n"
             "        },\n"
             "        'result': {\n"
             "            'schema': 2,\n"
-            "            'run_id': 'rv-command',\n"
+            "            'run_id': 'r-vcommand',\n"
             "            'commit': head,\n"
             "            'features': [{\n"
             "                'id': 'feature:test',\n"
@@ -974,22 +1005,26 @@ class EventsCliTests(unittest.TestCase):
             "commit, output = sys.argv[1], Path(sys.argv[2])\n"
             "report = {\n"
             "    'schema_version': 'asdi.verifier-only-result/v1',\n"
-            "    'run_id': 'rv-main-command',\n"
+            "    'run_id': 'r-vmaincommand',\n"
             "    'status': '<<STATUS>>',\n"
             "    'revision': commit,\n"
             "    'commit': commit,\n"
             "    'source': 'main',\n"
-            "    'checks': [{'id': 'static:test', 'status': 'pass'}],\n"
+            "    'checks': [{'id': 'static:main', 'status': 'pass'}],\n"
             "    'evidence': {\n"
             "        'valid': True,\n"
             "        'manifest_id': 'm-main-command',\n"
             "        'statement': {\n"
             "            'subject': [{'digest': {'gitCommit': commit}}],\n"
-            "            'predicate': {'source': 'main'},\n"
+            "            'predicate': {'source': 'main',\n"
+            "                          'static_checks': {'run_id': 'r-vmaincommand',\n"
+            "                            'checks': [{'id': 'static:main',\n"
+            "                                        'status': 'pass',\n"
+            "                                        'blocking': True}]}},\n"
             "        },\n"
             "        'result': {\n"
             "            'schema': 2,\n"
-            "            'run_id': 'rv-main-command',\n"
+            "            'run_id': 'r-vmaincommand',\n"
             "            'commit': commit,\n"
             "            'features': [{\n"
             "                'id': 'feature:main',\n"

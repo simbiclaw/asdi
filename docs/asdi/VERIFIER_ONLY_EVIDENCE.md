@@ -80,6 +80,8 @@ Verifier-command results now derive `ci` solely from named `static:*` checks rat
 
 Full suite after CI derivation: **190 tests, OK, 4 expected socket/TCP skips**.
 
+The same rule now applies to evidence files. `EvidenceStore` requires `.asdi-evidence/static-gates.json`, binds those checks into `predicate.static_checks`, verifies their run ID and schema, accepts real gate diagnostics plus the non-static `verify:` check, and requires at least one named `static:` gate. PR-head and exact-`main` event mapping derive `ci` from those bound checks and reject a declared status that disagrees. A failed blocking static gate therefore cannot be promoted by `record-verification`, `record-main-verification`, or a verifier command. Full suite: **191 tests, OK, 4 expected socket/TCP skips**. This is builder-side verification only; no new live Docker run followed this change.
+
 ## Status boundary
 
 | Claim | Status |
