@@ -23,6 +23,32 @@ VERIFICATION_SOURCES = {"pr-head", "main"}
 FORBIDDEN_TOKEN_MARKERS = ("api_key", "authorization", "password", "secret", "token")
 
 
+def ci_status_from_checks(checks: Any) -> str:
+    """Derive the immutable ``ci`` result from named static-gate checks."""
+
+    if not isinstance(checks, list):
+        return "error"
+    static_checks = [
+        check
+        for check in checks
+        if isinstance(check, dict) and str(check.get("id", "")).startswith("static:")
+    ]
+    if not static_checks:
+        return "error"
+    if any(check.get("status") in {"error", "blocked"} for check in static_checks):
+        return "error"
+    if any(
+        check.get("blocking", True) is True and check.get("status") != "pass"
+        for check in static_checks
+    ):
+        return "fail"
+    if any(check.get("blocking", True) is False and check.get("status") == "fail" for check in static_checks):
+        return "pass"
+    if all(check.get("status") == "pass" for check in static_checks):
+        return "pass"
+    return "error"
+
+
 @dataclass(frozen=True)
 class VerificationCommand:
     """Absolute, shell-free verifier command with bounded execution."""
@@ -103,6 +129,11 @@ def validate_verifier_result(
     checks = report.get("checks")
     if not isinstance(checks, list) or not checks:
         failures.append("verifier checks must be a non-empty array")
+    elif not any(
+        isinstance(check, dict) and str(check.get("id", "")).startswith("static:")
+        for check in checks
+    ):
+        failures.append("verifier checks must include static-gate results")
     runtime = report.get("runtime")
     if not isinstance(runtime, dict):
         failures.append("verifier runtime evidence is missing")
@@ -216,6 +247,12 @@ def run_verification(
         if status == "succeeded" and exit_code != 0:
             validation_failures.append("successful verifier exited nonzero")
             status = "failed"
+        derived_ci = ci_status_from_checks(report_dict.get("checks", []))
+        if status == "succeeded" and derived_ci != "pass":
+            validation_failures.append(
+                f"successful verifier has derived ci status {derived_ci}"
+            )
+            status = "failed"
         evidence = report_dict.get("evidence")
         if not isinstance(evidence, dict):
             evidence = {"valid": False}
@@ -240,6 +277,7 @@ def run_verification(
             "commit": head_sha,
             "source": command.source,
             "checks": report_dict.get("checks", []),
+            "ci_status": derived_ci,
             "evidence": evidence,
             "runtime": runtime,
             "execution": {
@@ -273,6 +311,14 @@ def verification_execution_event_payload(
     if result.get("commit") != head_sha:
         raise ValueError("verification execution is not bound to target commit")
     evidence = result.get("evidence")
+    derived_ci = result.get("ci_status")
+    if derived_ci not in {"pass", "fail", "blocked", "error"}:
+        derived_ci = "error"
+    mismatches: list[str] = []
+    if ci_status != derived_ci:
+        mismatches.append(
+            f"declared ci status {ci_status!r} does not match derived status {derived_ci!r}"
+        )
     if isinstance(evidence, dict) and evidence.get("valid") is True:
         try:
             if source == "pr-head":
@@ -290,8 +336,13 @@ def verification_execution_event_payload(
             if result.get("status") != "succeeded":
                 payload["verifier"]["status"] = "fail"
                 payload["verifier"]["failures"] = [
-                    "verifier execution status is not succeeded"
+                    "verifier execution status is not succeeded",
+                    *mismatches,
                 ]
+            elif mismatches:
+                payload["verifier"]["status"] = "fail"
+                payload["verifier"]["failures"] = mismatches
+            payload["statuses"]["ci"] = derived_ci
             return payload
         except ValueError:
             pass
@@ -310,7 +361,7 @@ def verification_execution_event_payload(
         return {
             "pr_number": packet["pr_number"],
             "head_sha": head_sha,
-            "statuses": {"ci": ci_status},
+            "statuses": {"ci": derived_ci},
             "verifier": {
                 "candidate_commit": head_sha,
                 "status": "fail",
@@ -321,7 +372,7 @@ def verification_execution_event_payload(
         }
     return {
         "commit": head_sha,
-        "statuses": {"ci": ci_status},
+        "statuses": {"ci": derived_ci},
         "verifier": {
             "candidate_commit": head_sha,
             "status": "fail",

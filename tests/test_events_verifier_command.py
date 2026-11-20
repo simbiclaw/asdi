@@ -9,6 +9,7 @@ import unittest
 from pathlib import Path
 
 from events.verifier_command import (
+    ci_status_from_checks,
     VerificationCommand,
     run_verification,
     verification_execution_event_payload,
@@ -186,6 +187,105 @@ class VerificationCommandTests(unittest.TestCase):
         self.assertIn(
             "verifier execution status is not succeeded",
             payload["verifier"]["failures"],
+        )
+
+    def test_ci_status_is_derived_from_static_checks(self) -> None:
+        self.assertEqual(
+            ci_status_from_checks([
+                {"id": "static:one", "status": "pass", "blocking": True},
+                {"id": "static:two", "status": "pass", "blocking": True},
+            ]),
+            "pass",
+        )
+        self.assertEqual(
+            ci_status_from_checks([
+                {"id": "static:one", "status": "pass", "blocking": True},
+                {"id": "static:two", "status": "fail", "blocking": True},
+            ]),
+            "fail",
+        )
+        self.assertEqual(
+            ci_status_from_checks([
+                {"id": "static:one", "status": "pass", "blocking": True},
+                {"id": "verify:base", "status": "fail"},
+            ]),
+            "pass",
+        )
+        self.assertEqual(
+            ci_status_from_checks([
+                {"id": "static:one", "status": "error", "blocking": True},
+            ]),
+            "error",
+        )
+        self.assertEqual(ci_status_from_checks([]), "error")
+
+    def test_failed_static_check_cannot_be_masked_by_declared_ci(self) -> None:
+        command = self.command()
+        failed = self.root / "failed-static-verifier"
+        failed.write_text(
+            "#!/usr/bin/env python3\n"
+            "import json, sys\n"
+            "from pathlib import Path\n"
+            "head, output = sys.argv[1], Path(sys.argv[2])\n"
+            "report = {\n"
+            "    'schema_version': 'asdi.verifier-only-result/v1',\n"
+            "    'run_id': 'rv-command',\n"
+            "    'status': 'succeeded',\n"
+            "    'revision': head,\n"
+            "    'commit': head,\n"
+            "    'source': 'pr-head',\n"
+            "    'checks': [\n"
+            "        {'id': 'static:compile', 'status': 'fail', 'blocking': True},\n"
+            "    ],\n"
+            "    'evidence': {\n"
+            "        'valid': True,\n"
+            "        'manifest_id': 'm-verifier',\n"
+            "        'statement': {\n"
+            "            'subject': [{'digest': {'gitCommit': head}}],\n"
+            "            'predicate': {'source': 'pr-head'},\n"
+            "        },\n"
+            "        'result': {\n"
+            "            'schema': 2,\n"
+            "            'run_id': 'rv-command',\n"
+            "            'commit': head,\n"
+            "            'features': [{\n"
+            "                'id': 'feature:test',\n"
+            "                'status': 'pass',\n"
+            "                'control': 'caught',\n"
+            "                'evidence': [],\n"
+            "                'limits': [],\n"
+            "            }],\n"
+            "        },\n"
+            "    },\n"
+            "    'runtime': {\n"
+            "        'network': 'none',\n"
+            "        'socket_mounted': False,\n"
+            "        'secrets_mounted': False,\n"
+            "        'agent_started': False,\n"
+            "    },\n"
+            "}\n"
+            "output.write_text(json.dumps(report))\n"
+        )
+        failed.chmod(failed.stat().st_mode | stat.S_IXUSR)
+        command = VerificationCommand(
+            name="failed-static",
+            argv=("/usr/bin/python3", str(failed), "{head}", "{output}"),
+            timeout_seconds=10,
+        )
+        result = run_verification(command=command, head_sha=HEAD)
+        payload = verification_execution_event_payload(
+            packet={"pr_number": 7, "head_sha": HEAD},
+            result=result,
+            ci_status="pass",
+        )
+
+        self.assertEqual(result["status"], "failed")
+        self.assertEqual(result["ci_status"], "fail")
+        self.assertEqual(payload["statuses"]["ci"], "fail")
+        self.assertEqual(payload["verifier"]["status"], "fail")
+        self.assertIn(
+            "successful verifier has derived ci status fail",
+            result["execution"]["validation_failures"],
         )
 
     def test_rejects_credentials_and_relative_commands(self) -> None:

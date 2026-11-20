@@ -74,6 +74,12 @@ The pipeline appends normalized `github.main_verification_completed` evidence, d
 
 Main-only pipelines fail closed if they encounter a PR event without a PR workflow: poller state records the failed event and cursor, so the PR event remains pending instead of being skipped. Full suite after exact-main integration and mixed-event preservation: **188 tests, OK, 4 expected socket/TCP skips**.
 
+## Derived CI authority
+
+Verifier-command results now derive `ci` solely from named `static:*` checks rather than accepting a caller label. A successful verifier requires at least one static check, all blocking static checks passing, no static error, and no nonzero exit. A failed blocking static check becomes verifier failure even if embedded feature evidence appears green. Declared and derived CI mismatches are retained as failures, and the durable event records the derived status.
+
+Full suite after CI derivation: **190 tests, OK, 4 expected socket/TCP skips**.
+
 ## Status boundary
 
 | Claim | Status |
