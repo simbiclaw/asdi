@@ -1,0 +1,9 @@
+.git
+__pycache__/
+*.py[cod]
+verify/
+*.sqlite3
+*.sqlite3-journal
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/

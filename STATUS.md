@@ -2,7 +2,7 @@
 
 **Revision set:** REV K
 **Current pass:** Pass 1
-**Current phase:** Phase 1 — launcher and verifier (Loop A fresh builder cycle; verifier mechanism escalation)
+**Current phase:** Phase 7 builder-side layer complete; first-light checkpoint pending owner merge
 
 ## Completed
 
@@ -14,6 +14,18 @@
 - [x] JSON Schemas added for Phase 0 artifacts.
 - [x] Provisional configuration, identities, policy stub, and judgment-path protection added.
 - [x] Machine-checked schema/config/merge-policy suite added.
+- [x] Toy-notes Phase 3 pilot harness added and builder-side self-tested.
+- [x] Phase 7 builder-side CI/build, deploy/rollback, backup/restore, exposure,
+      error-tracker and Prometheus seams added. No registry push, production
+      deployment, exposure or phase acceptance is claimed.
+
+## First-light checkpoint
+
+The REV K first-light sequence remains open: a human must merge a passing PR,
+then the post-merge check, CI build, deployment and serving must be observed.
+The deliberately bad change and rollback must also be observed. Builder-side
+tests and the cloud Claude verify-then-review gate do not replace either
+observation.
 
 ## Exit-test status
 

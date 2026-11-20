@@ -379,8 +379,7 @@ def _relay(client: socket.socket, remote: socket.socket) -> int:
     selector.register(client, selectors.EVENT_READ, remote)
     selector.register(remote, selectors.EVENT_READ, client)
     total = 0
-    open_sockets = 2
-    while open_sockets:
+    while True:
         for key, _ in selector.select(timeout=1):
             source: socket.socket = key.fileobj  # type: ignore[assignment]
             target: socket.socket = key.data
@@ -388,16 +387,16 @@ def _relay(client: socket.socket, remote: socket.socket) -> int:
                 data = source.recv(65_536)
             except (BlockingIOError, InterruptedError):
                 continue
-            except ConnectionError:
-                source.close()
-                selector.unregister(source)
-                open_sockets -= 1
-                continue
+            except OSError:
+                selector.close()
+                client.close()
+                remote.close()
+                return total
             if not data:
-                source.close()
-                selector.unregister(source)
-                open_sockets -= 1
-                continue
+                selector.close()
+                client.close()
+                remote.close()
+                return total
             total += len(data)
             offset = 0
             while offset < len(data):
