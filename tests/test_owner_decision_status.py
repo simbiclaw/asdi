@@ -45,19 +45,32 @@ class OwnerDecisionStatusTests(unittest.TestCase):
         self.record("independent_verifier", "owner_invoked_audit")
         self.record("phase3_pilot", "defer_phase3")
         status = self.log.status()
-        self.assertTrue(status["ready_for_next_phase"])
+        self.assertFalse(status["ready_for_next_phase"])
+        self.assertEqual(status["blocking"], ["phase3_pilot"])
         self.assertFalse(
             status["decisions"]["phase3_pilot"]["phase3_can_start"]
         )
 
     def test_synthetic_approval_enables_phase3(self) -> None:
-        self.record("independent_verifier", "readonly_audit_wrapper")
+        self.record(
+            "independent_verifier",
+            "readonly_audit_wrapper",
+            runtime_command=["/usr/bin/true", "--audit"],
+        )
         self.record("phase3_pilot", "approve_synthetic_toy_notes")
         status = self.log.status()
         self.assertTrue(status["ready_for_next_phase"])
+        self.assertEqual(status["blocking"], [])
         self.assertTrue(
             status["decisions"]["phase3_pilot"]["phase3_can_start"]
         )
+
+    def test_wrapper_choice_without_runtime_command_blocks(self) -> None:
+        self.record("independent_verifier", "readonly_audit_wrapper")
+        self.record("phase3_pilot", "approve_synthetic_toy_notes")
+        status = self.log.status()
+        self.assertFalse(status["ready_for_next_phase"])
+        self.assertEqual(status["blocking"], ["independent_verifier"])
 
     def test_existing_pilot_requires_existing_absolute_directory(self) -> None:
         with self.assertRaisesRegex(ValueError, "existing absolute directory"):

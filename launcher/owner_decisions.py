@@ -171,17 +171,36 @@ class OwnerDecisionLog:
             "select_existing_pilot",
             "approve_synthetic_toy_notes",
         }
+        verifier_record = self.latest("independent_verifier")
+        verifier_choice = decisions["independent_verifier"]["choice"]
+        decisions["independent_verifier"]["ready"] = (
+            verifier_choice == "owner_invoked_audit"
+            or (
+                verifier_choice in {"readonly_audit_wrapper", "other_enforced_runtime"}
+                and bool(verifier_record and verifier_record.get("runtime_command"))
+            )
+        )
         return {
             "log_valid": verification["valid"],
             "verification": verification,
             "decisions": decisions,
-            "ready_for_next_phase": verification["valid"] and all(
-                item["recorded"] for item in decisions.values()
-            ),
+            "ready_for_next_phase": verification["valid"]
+            and decisions["phase3_pilot"]["phase3_can_start"]
+            and decisions["independent_verifier"]["ready"],
             "pending": [
                 decision_type
                 for decision_type, item in decisions.items()
                 if not item["recorded"]
+            ],
+            "blocking": [
+                decision_type
+                for decision_type, item in decisions.items()
+                if item["recorded"]
+                and not (
+                    item.get("phase3_can_start")
+                    if decision_type == "phase3_pilot"
+                    else item.get("ready")
+                )
             ],
         }
 
