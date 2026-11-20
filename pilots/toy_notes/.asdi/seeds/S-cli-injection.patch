@@ -1,6 +1,6 @@
 --- a/src/toy_notes/store.py
 +++ b/src/toy_notes/store.py
-@@
+@@ -76,1 +76,1 @@
 -        if self.defect_active():
 +        if True or self.defect_active():
              raise NoteCreationError("defect injection: note creation disabled")

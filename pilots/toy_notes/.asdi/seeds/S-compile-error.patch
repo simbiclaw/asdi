@@ -1,5 +1,5 @@
 --- a/src/toy_notes/cli.py
 +++ b/src/toy_notes/cli.py
-@@
+@@ -13,1 +13,1 @@
 -def build_parser() -> argparse.ArgumentParser:
 +def build_parser() -> argparse.ArgumentParser(:

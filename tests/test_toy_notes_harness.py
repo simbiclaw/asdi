@@ -127,6 +127,38 @@ class ToyNotesHarnessContractTest(unittest.TestCase):
                 f"{relative} has no feature path glob",
             )
 
+    def test_seed_patches_are_valid_unified_diffs(self) -> None:
+        hunk = re.compile(r"^@@ -\d+(?:,\d+)? \+\d+(?:,\d+)? @@$")
+        with tempfile.TemporaryDirectory() as temporary:
+            target_root = Path(temporary)
+            for patch_path in sorted((PRODUCT_ROOT / ".asdi" / "seeds").glob("*.patch")):
+                text = patch_path.read_text(encoding="utf-8")
+                headers = [line for line in text.splitlines() if line.startswith("@@")]
+                self.assertTrue(headers, f"{patch_path.name} has no hunk header")
+                for header in headers:
+                    self.assertRegex(header, hunk)
+                source = next(
+                    line.removeprefix("--- a/")
+                    for line in text.splitlines()
+                    if line.startswith("--- a/")
+                )
+                source_root = ROOT if source.startswith("config/") else PRODUCT_ROOT
+                destination = target_root / source
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(source_root / source, destination)
+                completed = subprocess.run(
+                    ["patch", "--dry-run", "-p1", "-d", str(target_root)],
+                    input=text,
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+                self.assertEqual(
+                    completed.returncode,
+                    0,
+                    f"{patch_path.name} does not apply: {completed.stderr or completed.stdout}",
+                )
+
     def test_harness_self_test_passes(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             environment = os.environ.copy()

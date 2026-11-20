@@ -90,6 +90,20 @@ The new test suite copies the product into a temporary head, changes one source 
 - `ui-note-list`: forcing the UI route off produces `status=fail`, `control=caught`.
 - An unmapped changed source path makes `drive --changed <base>..<head>` exit 2 without authorizing a feature.
 
+## Seeded-defect patch format
+
+The four `.asdi/seeds/*.patch` files originally contained bare `@@` hunk
+markers and could not be applied by `patch`. They now contain valid line-numbered
+unified-diff hunks. A live check applied all four patches successfully:
+
+- `S-cli-injection`: harness self-test exits 1 with `cli-notes` `status=fail`, `control=caught`.
+- `S-compile-error`: `compileall` exits 1 with a syntax error.
+- `S-flag-default`: the config loader rejects `production-target`.
+- `S-hidden-flag-policy`: patch applies; the expected catch remains human review.
+
+A regression test in `tests/test_toy_notes_harness.py` validates the hunk headers
+and dry-runs every seed patch against its source file.
+
 ## Limits
 
 - This run used local processes and loopback ports; no containerized ASDI verifier, launcher, static-gate runner or evidence store was exercised.
