@@ -18,6 +18,9 @@
 - [x] Phase 7 builder-side CI/build, deploy/rollback, backup/restore, exposure,
       error-tracker and Prometheus seams added. No registry push, production
       deployment, exposure or phase acceptance is claimed.
+- [x] Real Docker verifier preflight passed on `facc481` with valid
+      content-addressed evidence; two evidence-layout defects found by the
+      live run were fixed and covered by a regression test.
 
 ## First-light checkpoint
 

@@ -520,3 +520,88 @@ class REVKRunnerTests(unittest.TestCase):
             self.assertIn(state["workspace_volume"], runtime.removed_volumes)
             self.assertIn(state["base_volume"], runtime.removed_volumes)
             self.assertFalse(runtime.started)
+
+
+class VerifyEvidenceLayoutTests(unittest.TestCase):
+    def test_verify_head_writes_static_checks_to_required_evidence_path(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            product = root / "product"
+            product.mkdir()
+            evidence_stage = root / "evidence"
+            evidence_stage.mkdir()
+            run_id = "r-verify-layout"
+            commit = "a" * 40
+            verify_result = {
+                "schema": 2,
+                "run_id": run_id,
+                "commit": commit,
+                "features": [
+                    {
+                        "id": "layout-check",
+                        "status": "pass",
+                        "control": "caught",
+                        "evidence": [f"layout-check/{run_id}/observed.json"],
+                        "limits": ["fixture"],
+                    }
+                ],
+            }
+            runtime = FakeRuntime(root / "workspace", root / "fake-evidence")
+            runtime.verify_result = verify_result
+            runtime.docker = "docker"
+
+            original_copy_volume = runtime.copy_volume
+
+            def copy_volume(volume: str, destination: Path, image: str) -> None:
+                original_copy_volume(volume, destination, image)
+                feature_evidence = destination / ".asdi-evidence" / "layout-check" / run_id
+                feature_evidence.mkdir(parents=True, exist_ok=True)
+                (feature_evidence / "observed.json").write_text("{}\n")
+
+            runtime.copy_volume = copy_volume
+            launcher = REVKLauncher(
+                root=root / "asdi",
+                product_root=product,
+                runtime=runtime,
+            )
+
+            def export_tree(_reference: str, destination: Path) -> None:
+                gates = destination / ".asdi"
+                gates.mkdir(parents=True, exist_ok=True)
+                (gates / "static-gates.yaml").write_text("version: 1\nchecks: []\n")
+
+            launcher._export_tree = export_tree
+            checks = [
+                {"id": "static:compile", "status": "pass", "exit_code": 0},
+                {"id": "static:secret-scan", "status": "pass", "exit_code": 0},
+            ]
+            with patch(
+                "launcher.runner.run_container_checks", return_value=checks
+            ), patch.object(
+                launcher,
+                "_run_base_verify",
+                return_value={"id": "verify:base-harness", "status": "pass"},
+            ):
+                produced = launcher._verify_head(
+                    run_id=run_id,
+                    workspace=root / "workspace-export",
+                    workspace_volume="asdi-verify-workspace-layout",
+                    base_volume="asdi-verify-base-layout",
+                    evidence_stage=evidence_stage,
+                    verifier_result={},
+                    commit=commit,
+                )
+
+            self.assertEqual(len(produced), 3)
+            nested = evidence_stage / ".asdi-evidence" / "static-gates.json"
+            self.assertTrue(nested.is_file())
+            recorded = json.loads(nested.read_text())
+            self.assertEqual(recorded["run_id"], run_id)
+            self.assertEqual(
+                [check["id"] for check in recorded["checks"]],
+                ["static:compile", "static:secret-scan", "verify:base-harness"],
+            )
+            self.assertTrue((evidence_stage / "static-gates.json").is_file())
+            self.assertTrue(
+                (evidence_stage / "layout-check" / run_id / "observed.json").is_file()
+            )

@@ -967,9 +967,22 @@ class REVKLauncher:
             )
             workspace_evidence = workspace_inspect / ".asdi-evidence"
             if workspace_evidence.is_dir():
-                for evidence_file in sorted(workspace_evidence.glob("*")):
-                    if evidence_file.is_file() and evidence_file.name != "result.json":
-                        shutil.copy2(evidence_file, evidence_stage / evidence_file.name)
+                for evidence_entry in sorted(workspace_evidence.iterdir()):
+                    if evidence_entry.name == "result.json":
+                        continue
+                    destination = evidence_stage / evidence_entry.name
+                    if evidence_entry.is_dir():
+                        shutil.copytree(
+                            evidence_entry, destination, dirs_exist_ok=True
+                        )
+                    elif evidence_entry.is_file():
+                        shutil.copy2(evidence_entry, destination)
+            nested_evidence = evidence_stage / ".asdi-evidence"
+            nested_evidence.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(
+                workspace_evidence / "static-gates.json",
+                nested_evidence / "static-gates.json",
+            )
             return checks
 
     @staticmethod

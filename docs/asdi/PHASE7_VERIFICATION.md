@@ -64,6 +64,40 @@ could delay the callback past the test's deadline. The relay in
 which makes the decision prompt and preserves the existing egress decisions.
 After that correction, the full suite passed as shown above.
 
+## Real Docker verifier preflight
+
+A live, verifier-only launcher run was executed against revision `facc481`
+with the local cached `safeclaw:cc-2.1.283` image. Because `main` does not yet
+contain the toy harness, `--base-branch revk/pass1` was used as a builder-side
+preflight; this is **not** the authoritative PR-head gate.
+
+The first two live attempts exposed two real defects that mocked tests had
+hidden:
+
+1. `_verify_head` wrote `static-gates.json` to the evidence root while the
+   evidence store requires `.asdi-evidence/static-gates.json`.
+2. It copied only top-level evidence files, so nested feature evidence paths
+   such as `cli-notes/<run-id>/observed.json` were absent from the store.
+
+Both were fixed at the producer in `launcher/runner.py`, with a regression test
+in `tests/test_revk_runner.py`. The third live attempt succeeded:
+
+```text
+status: succeeded
+run_id: r-v93e3eda136404a728a1bb16ba5baee62
+manifest_id: m-172a45b1a023b72906e57a34
+commit: facc4815d9573d4156a3a247ae6d606406b4593e
+evidence.valid: true
+checks: four static gates pass; verify:base-harness pass
+features: cli-notes, http-notes, ui-note-list all pass
+controls: cli-notes, http-notes, ui-note-list all caught
+runtime: network none, no socket, no secret, no agent
+```
+
+This proves the verifier and evidence path work in a real container on this
+Mac Studio. It does not prove Phase 7 acceptance or replace the owner merge,
+post-merge check, production serving observation, or cloud audit.
+
 ## What the tests prove locally
 
 - Stale, failed, and unapproved main decisions are refused by both build and deploy before Docker commands run.
