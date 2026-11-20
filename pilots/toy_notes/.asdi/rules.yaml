@@ -1,0 +1,40 @@
+rules:
+  - id: R-TN-001
+    statement: "A note create proof must observe the stored row, not only the command exit code."
+    class: project-hard
+    scope: ["src/toy_notes/store.py", "src/toy_notes/cli.py", "src/toy_notes/server.py"]
+    enforcement:
+      layer: 3
+      mechanism: "verify/drivers/harness.py create proofs read SQLite and public responses"
+      check: "python3 verify/bin/verify drive cli-notes http-notes ui-note-list"
+    negative_test: ".asdi/seeds/S-cli-injection.patch"
+    owner: human
+    introduced_by: "Phase 3 toy-notes harness"
+    recurrences: 0
+    status: active
+  - id: R-TN-002
+    statement: "The UI flag may change only the UI route response."
+    class: project-hard
+    scope: ["src/toy_notes/server.py"]
+    enforcement:
+      layer: 3
+      mechanism: "tests/test_toy_notes_ui.py compares non-UI endpoints with the flag off and on"
+      check: "PYTHONPATH=.:src python3 -m unittest tests.test_toy_notes_ui -v"
+    negative_test: ".asdi/seeds/S-hidden-flag-policy.patch"
+    owner: human
+    introduced_by: "Phase 3 toy-notes harness"
+    recurrences: 0
+    status: active
+  - id: R-TN-003
+    statement: "Use run-owned ports and data paths; never write evidence outside ASDI_EVIDENCE_DIR."
+    class: convention
+    scope: ["verify/**", "src/toy_notes/server.py"]
+    enforcement:
+      layer: 4
+      mechanism: "AGENTS.md and the verify skill make the boundary explicit"
+      check: "python3 verify/tools/secret_scan.py"
+    negative_test: null
+    owner: human
+    introduced_by: "Phase 3 toy-notes harness"
+    recurrences: 0
+    status: active

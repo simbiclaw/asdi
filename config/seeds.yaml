@@ -1,0 +1,7 @@
+version: 1
+required_layers:
+  - static
+  - review
+  - verify
+required_policy_seed: true
+require_all_caught_before_t1: true

@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://asdi.local/schemas/rules.schema.json",
+  "title": "ASDI product rule registry",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["rules"],
+  "properties": {
+    "rules": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "statement", "class", "scope", "enforcement", "negative_test", "owner", "recurrences", "status"],
+        "properties": {
+          "id": { "type": "string" },
+          "statement": { "type": "string" },
+          "class": { "enum": ["project-hard", "convention"] },
+          "scope": { "type": "array", "items": { "type": "string" } },
+          "enforcement": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["layer", "mechanism", "check"],
+            "properties": {
+              "layer": { "enum": [1, 2, 3, 4] },
+              "mechanism": { "type": "string" },
+              "check": { "type": "string" }
+            }
+          },
+          "negative_test": { "type": ["string", "null"] },
+          "owner": { "type": "string" },
+          "introduced_by": { "type": "string" },
+          "recurrences": { "type": "integer", "minimum": 0 },
+          "status": { "enum": ["active", "candidate", "retired"] }
+        }
+      }
+    }
+  }
+}

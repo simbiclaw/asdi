@@ -1,0 +1,10 @@
+version: 1
+approved_images:
+  db:
+    image: docker.cangqian.uk/postgres:16
+    networks: []
+    environment_from: run
+  cache:
+    image: docker.cangqian.uk/redis:7
+    networks: []
+approved_services: [db, cache]

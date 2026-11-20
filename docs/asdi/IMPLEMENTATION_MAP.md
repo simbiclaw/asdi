@@ -1,9 +1,9 @@
 # ASDI Implementation Map
 
-**Audit date:** 2026-11-13  
-**Audited path:** `/Users/russell/workspace/ASDI`  
-**Ticket:** ASDI-000  
-**Baseline document:** [`ASDI_Codex_Implementation_Backlog_REV_H_G.md`](../../ASDI_Codex_Implementation_Backlog_REV_H_G.md)
+**Audit date:** 2026-11-13
+**Audited path:** `/Users/russell/workspace/ASDI`
+**Ticket:** ASDI-000
+**Historical baseline document:** [`reference/archive/ASDI_Codex_Implementation_Backlog_REV_H_G.md`](../../reference/archive/ASDI_Codex_Implementation_Backlog_REV_H_G.md). This audit is retained for provenance; the current authority is the four-document REV K set in [`reference/AUTHORITY.md`](../../reference/AUTHORITY.md).
 
 ## Repository inventory
 
@@ -11,7 +11,7 @@ The inspected working directory contained exactly one regular file:
 
 | Path | Existing capability | Evidence |
 |---|---|---|
-| [`ASDI_Codex_Implementation_Backlog_REV_H_G.md`](../../ASDI_Codex_Implementation_Backlog_REV_H_G.md) | Execution backlog for ASDI Design REV H and ASDI Stack REV G, including tickets, dependencies, seven hard rules, D-9 compatibility tests, and open decisions. | Full-file review; lines 1–900. |
+| [`reference/archive/ASDI_Codex_Implementation_Backlog_REV_H_G.md`](../../reference/archive/ASDI_Codex_Implementation_Backlog_REV_H_G.md) | Historical execution backlog for ASDI Design REV H and ASDI Stack REV G, including tickets, dependencies, seven hard rules, D-9 compatibility tests, and open decisions. | Full-file review; lines 1–900. |
 
 There was no `.git` directory when the audit was performed. Consequently, there was no Git history, branch configuration, remote, checked-in state, or protected baseline.
 
@@ -27,7 +27,7 @@ There was no `.git` directory when the audit was performed. Consequently, there 
 | Hooks or structural checks | Missing | No Git hooks, task hooks, scripts, validators, policy checks, or preflight checks. |
 | CI | Missing | No CI workflow, job definition, runner configuration, or test entry point. |
 | Tests | Missing | No test files, fixtures, runners, or expected-results directory. |
-| Documentation | Backlog only | The backlog is authoritative for execution order and acceptance criteria; no system documentation existed before this audit. |
+| Documentation | Historical backlog only | The backlog was then treated as authoritative for execution order and acceptance criteria; it is now archived and superseded by the four REV K specifications. |
 
 ## Security-sensitive surface
 
@@ -53,15 +53,21 @@ There was no `.git` directory when the audit was performed. Consequently, there 
 
 | Ticket | Dependency | Existing support | Missing or conflicting capability | Relevant path |
 |---|---|---|---|---|
-| ASDI-010 | ASDI-000 | Backlog defines authored fields, defaults, validation examples, and provenance. | Implemented through 2026-11-13: dependency-free schema builder, strict validator, provisional central defaults, provenance checks, fixtures, and tests. No launcher exists yet, so no run can be launched from an invalid contract. | [`src/asdi/run_contract.py`](../../src/asdi/run_contract.py), [`fixtures/run_contracts/`](../../fixtures/run_contracts/), [`tests/test_run_contract.py`](../../tests/test_run_contract.py) |
-| ASDI-011 | ASDI-010 | Backlog defines runtime lifecycle and adapter requirements for Claude Code, Codex, and Hermes. | No launcher, adapter interface, cancellation, event stream, durable state, usage collection, or `done_check` enforcement. | Future runtime/launcher module |
-| ASDI-012 | ASDI-011 | Hard rule H3 requires container-per-run isolation and egress control. | No container runtime integration, workspace isolation, egress allowlist, secret boundary, or cleanup mechanism. | Future sandbox adapter |
-| ASDI-013 | ASDI-010, ASDI-011, ASDI-012 | H2 and H5 define `done_check`, turn, spend, and wall-clock requirements. | No guardrail evaluator, failure transitions, or per-run enforcement tests. | Future guardrail/enforcement module |
-| ASDI-014 | ASDI-011 | Backlog defines structured events and evidence. | No event schema, log writer, evidence record, or persistence boundary. | Future event/evidence module |
+| ASDI-010 | ASDI-000 | Backlog defines authored fields, defaults, validation examples, and provenance. | Implemented and reverified through 2026-11-13: dependency-free schema builder, strict validator, provisional central defaults, provenance checks, fixtures, and tests. The ASDI-011 launcher revalidates before launch. | [`src/asdi/run_contract.py`](../../src/asdi/run_contract.py), [`fixtures/run_contracts/`](../../fixtures/run_contracts/), [`tests/test_run_contract.py`](../../tests/test_run_contract.py) |
+| ASDI-011 | ASDI-010 | Backlog defines runtime lifecycle and adapter requirements for Claude Code, Codex, and Hermes. | Implemented through 2026-11-13: board-neutral durable run store, Claude/Codex/Hermes adapters, structured event collection, actual child-process cancellation, usage capture, launcher `done_check` recheck, missing/runtime/host-restart failures, and fail-closed refusal without ASDI-012 isolation. Vendor CLI invocation and guardrail consumption remain unimplemented/unverified. | [`src/asdi/runtime.py`](../../src/asdi/runtime.py), [`tests/test_run_launcher.py`](../../tests/test_run_launcher.py), [`tests/test_runtime_adapters.py`](../../tests/test_runtime_adapters.py), [`docs/asdi/GATE_011_EVIDENCE.md`](GATE_011_EVIDENCE.md) |
+| ASDI-012 | ASDI-011 | Hard rule H3 requires container-per-run isolation and egress control. | In progress and **not accepted**: hardened no-network container launch/cancellation/workspace/environment/setup-failure evidence exists; host-side HTTP/SOCKS allowlist works, but Docker Desktop cannot mount its Unix socket into the container. An owner-approved `development_open` bridge profile permits noncompliant flow bring-up only. | [`src/asdi/sandbox.py`](../../src/asdi/sandbox.py), [`src/asdi/egress.py`](../../src/asdi/egress.py), [`tests/test_sandbox.py`](../../tests/test_sandbox.py), [`docs/asdi/GATE_012_EVIDENCE.md`](GATE_012_EVIDENCE.md), [`docs/asdi/DEV_FLOW_EVIDENCE.md`](DEV_FLOW_EVIDENCE.md) |
+| ASDI-013 | ASDI-010, ASDI-011, ASDI-012 | H2 and H5 define `done_check`, turn, spend, and wall-clock requirements. | Local prototype guardrails and failure transitions are implemented and tested. Live runtime billing and production acceptance remain unfinished. | [`src/asdi/lifecycle.py`](../../src/asdi/lifecycle.py), [`tests/test_lifecycle.py`](../../tests/test_lifecycle.py), [`docs/asdi/ADAPTER_GUARDRAILS_EVIDENCE.md`](ADAPTER_GUARDRAILS_EVIDENCE.md) |
+| ASDI-014 | ASDI-011 | Backlog defines structured events and evidence. | Durable missions/events, usage, external-reference indexing, and reset/closure records exist locally. Queryable API, retention/redaction policy, and production observability interface remain. | [`src/asdi/lifecycle.py`](../../src/asdi/lifecycle.py), [`tests/test_lifecycle.py`](../../tests/test_lifecycle.py) |
+
+### Integrated company lifecycle
+
+| Capability | Dependency | Current support | Remaining boundary | Relevant path |
+|---|---|---|---|---|
+| Integrated lifecycle | ASDI-010/011 and ADR-0008 | **Local prototype verified; production autonomy not accepted.** Admission, brief, decomposition, fixture/live execution, scoped checks, bounded repair, work-reference indexing, brief-v2 reset, classification, T0-governed local merge, autonomous mission runner, monitored self-healing repair, local deployment/rollback, default-off flag, controlled exposure, monitoring, triage, verification, closure, learning, exact TRM transitions, and paired metrics run as one vertical slice. Explicit shell-free command adapter, local turn/spend/wall-clock guardrails, durable JSON operations CLI, and local Qwen live execution are verified. | Remote merge, production deployment, strict egress acceptance, independent model-family reviews, and production-grade guardrails remain unfinished. | [`src/asdi/lifecycle.py`](../../src/asdi/lifecycle.py), [`src/asdi/governance.py`](../../src/asdi/governance.py), [`scripts/company_cli.py`](../../scripts/company_cli.py), [`scripts/codex_lifecycle_adapter.py`](../../scripts/codex_lifecycle_adapter.py), [`docs/asdi/LIVE_QWEN_EVIDENCE.md`](LIVE_QWEN_EVIDENCE.md), [`docs/asdi/TRM_METRICS_EVIDENCE.md`](TRM_METRICS_EVIDENCE.md) |
 
 ### Gates 2–6
 
-All later tickets depend on Gate 0 and Gate 1 capabilities that are absent. In particular, the current repository has no board adapter, Archon workflow engine, GitHub poller, review system, policy classifier, recovery controller, learning ledger, production admission, local CI/signing registry, experiment system, telemetry stack, defect pipeline, autonomy rollout controls, or human attention surface.
+Board, remote merge, production admission, deployment, and enterprise observability still depend on Gate 0 owner decisions and production hardening. The integrated local prototype now contains a policy classifier, recovery/repair loop, learning ledger, local experiment system, local deployment/rollback, defect pipeline, and local monitoring surface, but these are explicitly prototype controls rather than accepted production autonomy.
 
 There is no conflicting implementation to preserve. The primary conflict is against intent, not existing code: the backlog describes a runnable, locally governed system while the inspected repository contains only the plan.
 
@@ -71,7 +77,7 @@ There is no conflicting implementation to preserve. The primary conflict is agai
 2. Complete ASDI-001 ADRs and the D-9 evidence/test plan.
 3. Complete ASDI-002 pilot-service selection: designate a pilot repository/service or approve a synthetic reference service; `simbiclaw/asdi` is the ASDI control repository, not yet the pilot product.
 4. ASDI-003 remains incomplete by owner decision: GitHub-native branch enforcement is deferred, no scoped identities exist, and all execution/merge paths stay disabled.
-5. ASDI-010 may proceed only as board-neutral, non-executing contract validation. ASDI-011 and every later execution path remain blocked by ADR-0004 and by their own dependencies.
+5. ASDI-010 provides the launch preflight. ASDI-011 passed at process-kernel level. ASDI-012 remains failed until container-side egress is proven; the local lifecycle may run with fixture agents and T0-governed local merge only. Vendor production runtimes and autonomous remote merge/deployment remain disabled.
 
 ## ASDI-000 result
 

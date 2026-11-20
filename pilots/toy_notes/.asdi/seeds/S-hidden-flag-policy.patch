@@ -1,0 +1,7 @@
+--- a/src/toy_notes/server.py
++++ b/src/toy_notes/server.py
+@@ -21,2 +21,2 @@
+-def ui_enabled() -> bool:
+-    return os.environ.get(UI_FLAG, "").strip().lower() in {"1", "true", "on", "yes"}
++def ui_enabled() -> bool:
++    return True

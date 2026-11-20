@@ -1,0 +1,15 @@
+{
+  "contract_version": 3,
+  "task_type": "feature.cli",
+  "product": "toy-notes",
+  "objective": "Add CSV export to the notes CLI",
+  "why": "Users currently copy reports by hand",
+  "constraints": ["no new runtime dependencies"],
+  "out_of_scope": ["JSON export"],
+  "done_check": { "command": ["notes", "export", "--format", "csv", "--out", "/tmp/out.csv"] },
+  "services": [],
+  "verify": { "features": ["export-csv"], "changed": false },
+  "evidence": { "required": true },
+  "resume": { "from": null },
+  "guardrails": { "turns": 200, "spend_usd": null, "minutes": 90, "tokens": null }
+}

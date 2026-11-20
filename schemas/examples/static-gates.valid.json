@@ -1,0 +1,8 @@
+{
+  "version": 1,
+  "checks": [
+    { "id": "unit-tests", "command": ["python3", "-m", "pytest", "-q"], "blocking": true, "timeout_seconds": 300, "applies_to": ["src/**/*.py"] },
+    { "id": "secret-scan", "command": ["scripts/secret-scan.sh"], "blocking": true, "timeout_seconds": 120 }
+  ],
+  "policy": { "new_violations": "reject", "legacy_findings": "track_without_expanding" }
+}

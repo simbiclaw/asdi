@@ -1,0 +1,21 @@
+version: 1
+judgment_paths:
+  - "src/auth/**"
+  - "src/security/**"
+  - "src/secrets/**"
+  - "migrations/**"
+  - "public-api/**"
+  - "pricing/**"
+  - "ci/**"
+  - "tests/rules/**"
+  - ".asdi/static-gates.yaml"
+  - ".asdi/rules.yaml"
+  - "verify/verify.yaml"
+  - "verify/bin/verify"
+agent_mergeable_paths:
+  - "tests/**"
+  - "docs/**"
+  - "src/**/*.py"
+uncovered_product_path_class: judgment
+unsure_class: judgment
+verification_path_product_mix: reject

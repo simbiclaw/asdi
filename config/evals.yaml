@@ -1,0 +1,8 @@
+version: 1
+paired_runs: 5
+require_no_regression: true
+require_targeted_improvement: true
+blind: true
+models:
+  - local-qwen
+  - external-alternative

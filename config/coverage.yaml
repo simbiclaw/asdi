@@ -1,0 +1,7 @@
+version: 1
+minimum_source_coverage: 1.0
+documentation_exempt: true
+t0_promotion_requires:
+  harness_self_test: pass
+  all_seeds_caught: true
+  no_blocked_touched_feature_last_runs: 3

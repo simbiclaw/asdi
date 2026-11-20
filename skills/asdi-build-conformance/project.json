@@ -1,0 +1,22 @@
+{
+  "schema": 1,
+  "scope": "ASDI repository implementation, infrastructure, launcher, verifier, policies, evidence, deployment, and build-slice/phase conformance",
+  "not_scope": [
+    "REV K toy-product runtime verification",
+    "product-specific H-1 verify skill",
+    "agent-authored verification claims"
+  ],
+  "repo": ".",
+  "base": "main",
+  "phase": "Pass 1 / Phase 1",
+  "spec_revision": "REV K",
+  "spec_paths": {
+    "design": "reference/ASDI Design doc-REV K.html",
+    "stack": "reference/ASDI Stack doc.html",
+    "build_guide": "reference/ASDI-BUILD-GUIDE.md",
+    "trust_handbook": "reference/ASDI-TRUST-HANDBOOK.html",
+    "archive": "reference/asdi-build-conformance.zip"
+  },
+  "source_warning": "The owner-approved REV K sources are synchronized. Historical rev-2/frozen references describe an earlier state, not current authority. Verify executed sources against reference/AUTHORITY.md before claiming four-document conformance.",
+  "read_only": true
+}

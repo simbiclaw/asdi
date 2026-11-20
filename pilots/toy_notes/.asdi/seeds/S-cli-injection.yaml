@@ -1,0 +1,5 @@
+id: S-cli-injection
+patch: S-cli-injection.patch
+layer: 5
+expect_caught_by: [verify]
+unit_tests_stay_green: true

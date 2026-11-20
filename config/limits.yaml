@@ -1,0 +1,15 @@
+version: 1
+zones:
+  agent:
+    cpus: "2"
+    memory: 4g
+  run:
+    cpus: "2"
+    memory: 4g
+  verifier:
+    cpus: "2"
+    memory: 4g
+  prod:
+    cpus: "4"
+    memory: 8g
+    oom_score_adj: -500

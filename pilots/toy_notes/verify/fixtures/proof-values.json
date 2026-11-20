@@ -1,0 +1,9 @@
+{
+  "cli_title": "cli-proof",
+  "http_title": "http-proof",
+  "ui_title": "ui-proof",
+  "ui_seed_title": "ui-seed",
+  "control_title": "control",
+  "form_marker": "<form",
+  "fixed_created_at": "2026-11-20T00:00:00+00:00"
+}

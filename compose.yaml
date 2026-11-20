@@ -1,0 +1,54 @@
+x-zone-policy:
+  description: REV K Docker network policy. Agent and run networks never join prod.
+
+networks:
+  prod:
+    name: asdi-prod
+    internal: true
+  agent:
+    name: asdi-agent
+    internal: true
+  staging:
+    name: asdi-staging
+    internal: true
+  ops:
+    name: asdi-ops
+    internal: true
+  egress:
+    name: asdi-egress
+
+services:
+  prod-canary:
+    image: ubuntu:noble
+    command: ["sleep", "infinity"]
+    networks: [prod]
+    restart: "no"
+    profiles: ["scaffold"]
+
+  agent-canary:
+    image: ubuntu:noble
+    command: ["sleep", "infinity"]
+    networks: [agent]
+    restart: "no"
+    profiles: ["scaffold"]
+
+  ops-canary:
+    image: ubuntu:noble
+    command: ["sleep", "infinity"]
+    networks: [ops]
+    restart: "no"
+    profiles: ["scaffold"]
+
+  staging-canary:
+    image: ubuntu:noble
+    command: ["sleep", "infinity"]
+    networks: [staging]
+    restart: "no"
+    profiles: ["scaffold"]
+
+  egress-proxy:
+    image: ubuntu:noble
+    command: ["sleep", "infinity"]
+    networks: [agent, egress]
+    restart: "no"
+    profiles: ["scaffold"]

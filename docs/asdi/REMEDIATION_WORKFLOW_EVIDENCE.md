@@ -1,0 +1,210 @@
+# Remediation and specification-escalation workflow evidence
+
+**Date:** 2026-11-18
+**Result:** **Initial audit failed; cycle 2 verifier unavailable; Phase 1 hardening continuing**
+
+## Implemented behavior
+
+- [`launcher/remediation.py`](../../launcher/remediation.py) persists workflow state, candidate revisions, verifier findings, remediation cycles, specification hashes, hold state, feedback reports and owner decisions.
+- [`launcher/remediation_cli.py`](../../launcher/remediation_cli.py) exposes `audit`, `remediate`, `status`, `report` and `owner-decision`.
+- The initial audit is separate from remediation accounting.
+- A failed implementation audit may run no more than two builder cycles.
+- Every cycle writes a separate verification report and records its exact candidate revision.
+- The controller reports a stale worktree as a distinct candidate using `<commit>+worktree:<tree-id>`.
+- A verifier can trigger immediate specification escalation through `spec_feedback.required`, top-level `spec_defect`, a `SPEC_*` blocked reason, or a finding marked `spec_defect`/`spec_conflict`.
+- Builder edits to configured authoritative specification paths trigger immediate escalation and are preserved in cycle evidence.
+- Two failed remediation cycles trigger persistent-failure escalation.
+- Escalation writes a durable Specification Feedback Report and blocks further affected controller work until an explicit owner decision is recorded.
+
+## Local execution evidence
+
+Focused suite:
+
+```sh
+PYTHONPATH=src:. python3 -m unittest tests.test_remediation_controller -v
+```
+
+Observed result:
+
+```text
+Ran 7 tests in 2.589s
+OK
+```
+
+The tests cover:
+
+- initial-pass acceptance with zero remediation cycles;
+- one fresh candidate plus fresh verifier invocation;
+- persistent failure after exactly two cycles;
+- immediate specification-defect hold;
+- immediate specification-mutation hold;
+- explicit owner decision and hold release;
+- CLI audit plus durable status retrieval.
+
+## Verification and escalation boundary
+
+The controller mechanically enforces report parsing, pass predicates, two-cycle accounting, candidate identity, durable escalation and owner-decision recording. It does not itself construct the container boundary. Builder and verifier commands must be wrapped by the ASDI launcher/container path when used for enforcement-class work; the current direct subprocess support is a local workflow control-plane implementation and must not be described as run-sandbox evidence.
+
+## Independent initial audit
+
+- Candidate: `df21e4e`
+- Verifier: independent `asdi-build-conformance` agent
+- Result: `FAIL`
+- Remediation cycles consumed by the initial audit: `0`
+
+Primary implementation findings repaired in cycle 1:
+
+1. The remediation CLI could override the ceiling above two cycles.
+2. Specification mutation detection was post-hoc only and could miss a transient edit.
+3. Builder/verifier timeouts were caught but never supplied to `subprocess.run`.
+4. The verifier referenced a base volume that was never populated and did not run the base-branch verify entrypoint.
+5. Evidence identity collided across runs and lacked producer/environment/input metadata.
+6. Turn guardrail counted polling iterations rather than structured runtime turns, spend/token events were not enforced externally, and CLI guardrail overrides were discarded.
+
+The audit also reported `SPEC_SYNC_CONFLICT` for Design REV K versus the Handbook/Build Guide metadata. That historical issue was subsequently resolved by owner-approved specification reconciliation recorded in [`docs/asdi/SPEC_FEEDBACK_HANDBOOK_SYNC.md`](SPEC_FEEDBACK_HANDBOOK_SYNC.md); it did not count as an implementation remediation cycle.
+
+## Remediation cycle 1
+
+Implemented:
+
+- hard remediation ceiling of two cycles in the controller and CLI;
+- read-only specification protection plus content/mode mutation escalation;
+- configured builder/verifier subprocess timeouts;
+- populated base volume and execution of base `verify/bin/verify` after static gates;
+- unique content-addressed evidence identity with verifier/run image, base harness, gate-manifest and product-profile bindings;
+- structured `turn` and `usage` events, external token/spend/turn enforcement, and persisted usage evidence;
+- validated launcher CLI override contract and explicit local-agent cost.
+
+Focused execution:
+
+```sh
+PYTHONPATH=src:. python3 -m unittest tests.test_remediation_controller tests.test_revk_phase1 tests.test_revk_runner tests.test_revk_verifier_authority tests.test_revk_guardrails tests.test_launcher_cli
+```
+
+Observed:
+
+```text
+Ran 20 tests in 3.389s
+OK
+```
+
+Full execution:
+
+```sh
+PYTHONPATH=.:src python3 -m unittest discover -s tests -v
+```
+
+Observed:
+
+```text
+Ran 89 tests in 10.735s
+OK (skipped=3)
+```
+
+## Cycle 2 verifier status and continued guardrail evidence
+
+The fresh cycle-2 verifier was launched for candidate `19e6e2d`, but stopped before auditing because the model provider returned a five-hour usage-limit error. No implementation verdict was produced. This is `verification_blocked`, not `pass` or `fail`; the candidate remains unaccepted.
+
+After that failed-closed verifier start, additional Phase 1 guardrail regressions were added without changing the launcher algorithm:
+
+- structured runtime token usage above the contract limit kills the container;
+- structured runtime spend above the contract limit kills the container;
+- external wall-clock enforcement kills a hanging container;
+- the verifier command is scanned and contains no `API_KEY` or token-like variable.
+
+Focused execution:
+
+```sh
+PYTHONPATH=src:. python3 -m unittest tests.test_revk_guardrails -v
+```
+
+Observed:
+
+```text
+Ran 6 tests in 1.034s
+OK
+```
+
+Current full execution:
+
+```sh
+PYTHONPATH=.:src python3 -m unittest discover -s tests -v
+```
+
+Observed:
+
+```text
+Ran 93 tests in 12.231s
+OK (skipped=3)
+```
+
+These additions are post-cycle-2 candidate work. They do not satisfy Loop A acceptance until a fresh independent verifier audits the resulting exact revision.
+
+## Strict structured verifier evidence
+
+After the guardrail additions, the base verifier was tightened further:
+
+- the launcher copies back the head workspace volume;
+- a zero-exit verifier without valid `result.json` becomes `error`;
+- result `run_id` and commit must exactly match the launcher run;
+- feature controls must be `pass` and `caught`, with non-empty limits;
+- launcher-stored evidence uses the verifier-collected features rather than a generic success claim;
+- the verifier receives the exact head commit through `ASDI_COMMIT`.
+
+Two live Docker executions used the actual CLI path, `safeclaw:cc-2.1.283`, one internal run network, workspace/evidence volumes, non-root execution, and no Docker socket or mounted secrets.
+
+Negative live run `r-3fc589fe-74b0-497f-9300-1ee2daaa19ec`:
+
+```text
+static:compile=pass
+verify:base-harness=fail
+status=failed
+evidence=m-26fb9dc672a6f941160b4910 valid=true
+```
+
+The first fixture verifier incorrectly treated the exported head as a Git repository. The launcher correctly kept the run red and stored a valid fail statement.
+
+Positive live run `r-49d8a0a6-5bc4-4981-a558-cf61d8375cee`:
+
+```text
+static:compile=pass
+verify:base-harness=pass
+feature=generated-module control=caught
+status=succeeded
+evidence=m-e4e4479b58045d884320029b valid=true
+```
+
+Both manifests were reloaded after teardown and passed SHA-256 verification. Usage was externally recorded as one turn, one token, and `$0.00` local spend.
+
+## Per-run egress proxy and key injection
+
+Implemented a simple IP-network proxy boundary, replacing the rejected host Unix-socket transport:
+
+- the launcher ensures `asdi-egress` exists, starts one proxy container on it, and attaches that proxy to the run's internal network;
+- the agent receives only `HTTP_PROXY`/`HTTPS_PROXY` URLs, no LiteLLM key;
+- the proxy authorizes an explicit CONNECT allowlist and rejects private, loopback, link-local, reserved and unresolved destinations;
+- only the configured local model endpoint can receive the model key, injected inside the proxy process;
+- the proxy uses no Docker socket, no host port, and drops all Linux capabilities;
+- the proxy is stopped and removed with the run.
+
+The proxy image is the already-local `safeclaw-us-egress:cc-2.1.283`, used only as a Python-capable container base with its vendor entrypoint overridden. It was not treated as a trust authority; enforcement is the launcher-supplied Python proxy.
+
+Live isolated launcher run `r-85e11bdb-59ee-4014-85e5-9a6aa124e5bd`:
+
+```text
+status=succeeded
+egress_mode=allowlist_proxy
+socket_mounted=false
+secrets_mounted=false
+evidence=m-6a964b9f57d0d3d771c40d0a valid=true
+```
+
+Afterwards, no agent, proxy, run network, or volumes with that run ID remained.
+
+Separate local Docker proxy proof returned:
+
+```json
+{"authorization": "Bearer proxy-injected-test-key"}
+```
+
+The same authority denied an unlisted destination without forwarding it. This demonstrates the proxy/key boundary, but does not yet exercise a live coding CLI's Git, package and model traffic through it.

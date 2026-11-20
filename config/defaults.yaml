@@ -1,0 +1,20 @@
+version: 1
+work_in_progress_limit: 3
+diff_budget_lines: 400
+evidence_retention_days_after_pr_close: 30
+experiment_expiry_days: 14
+experiment_wip_limit: 3
+production_verification_hours: 72
+repair_attempts: 2
+poller_interval_seconds: 60
+poller_stale_after_seconds: 300
+review_timeout_seconds: 600
+verifier_timeout_seconds: 900
+github_reconciler_timeout_seconds: 20
+remediation_timeout_seconds: 3600
+readonly_audit_timeout_seconds: 1800
+guardrails:
+  turns: 200
+  spend_usd: 8
+  minutes: 90
+  tokens: null

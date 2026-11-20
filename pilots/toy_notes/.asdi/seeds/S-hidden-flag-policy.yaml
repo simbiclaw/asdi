@@ -1,0 +1,5 @@
+id: S-hidden-flag-policy
+patch: S-hidden-flag-policy.patch
+layer: 4
+expect_caught_by: ["review:human"]
+unit_tests_stay_green: true

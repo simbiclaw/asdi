@@ -1,0 +1,97 @@
+# REV K Phase 1 progress
+
+**Date:** 2026-11-16
+**Status:** **In progress — core verifier/evidence primitives implemented**
+
+## Implemented
+
+* `launcher/contract.py` validates the REV K contract schema subset and fails closed on missing `done_check`.
+* `launcher/evidence.py` implements the Pass 1 evidence store:
+  * content-addressed manifest ID;
+  * write-once read-only objects;
+  * unsigned in-toto statement;
+  * SHA-256 integrity verification;
+  * survival after launcher/process exit;
+  * tamper detection.
+* `launcher/static_gates.py` models the verifier static-gate runner:
+  * each declared command runs in a container;
+  * no network;
+  * capabilities dropped;
+  * no-new-privileges;
+  * read-only root with writable `/tmp`;
+  * timeout maps to `error`, never pass.
+
+## Verification
+
+```sh
+PYTHONPATH=src:. python3 -m unittest tests.test_revk_phase1 -v
+PYTHONPATH=.:src python3 -m unittest discover -s tests -v
+git diff --check
+```
+
+The REV K Phase 1 tests prove valid/missing `done_check`, evidence retention, hash validation, and tamper detection.
+
+## Negative evidence completed
+
+* per-run network/container lifecycle;
+* agent adapter running inside the container;
+* outside-process guardrail kill;
+* base-branch harness checkout and overlay;
+* live negative tests for a red verifier, weakened proof, and each guardrail limit.
+
+Implemented and verified:
+
+* an agent exit 0 cannot overturn a forced red verifier;
+* `_fresh_export` restores base-branch harness content after an agent weakens it;
+* turn guardrail kills a hanging isolated agent;
+* runtime key/token names are absent.
+
+## Still required for Phase 1 exit
+
+* durable `launcher status`/`kill` surface;
+* spend reporting or explicit local-model token/wall-clock-only evidence;
+* live Docker negative tests for each guardrail and weakened harness.
+
+## Update
+
+Implemented and verified with Docker:
+
+* one internal per-run network;
+* one workspace volume and one evidence volume;
+* non-root isolated agent execution;
+* clean base export;
+* verifier static checks over the named head volume;
+* unsigned content-addressed evidence statement;
+* evidence hash verification after teardown;
+* turn guardrail kill with a hanging agent.
+
+Negative evidence completed: red verifier, weakened harness proof, spend limit, turn guardrail, and explicit key/token absence.
+
+Durable operations added: `run`, `status`, `list`, and `kill`.
+
+## Update — 2026-11-17
+
+Added the user-directed verification remediation and specification-escalation control plane. It durably distinguishes the initial audit, two fresh remediation cycles, immediate specification-defect holds, builder specification mutation, persistent failure, owner decisions and hold release. Local controller/CLI tests pass; the slice remains pending independent conformance audit.
+
+## Independent audit response — 2026-11-17
+
+The initial audit failed candidate `df21e4e` without consuming a remediation cycle. Cycle 1 repairs the cited verifier base-volume/verify execution path, evidence provenance, external usage guardrails, CLI override validation, remediation ceiling, specification mutation boundary and subprocess timeout. Focused and full suites pass. A fresh independent audit is required before acceptance.
+## Loop A recovery — 2026-11-18
+
+The owner selected Option 3 with Option 2 preservation mechanics. The verifier-authored live coding-CLI slice and hardening are rejected from the active branch and retained on the preservation branch. Fresh builder work must reconstruct required functionality under the revised role boundary.
+
+## Fresh builder slice — 2026-11-18
+
+Rebuilt builder-owned fixes for valid read-only base mounting, stronger evidence integrity checks, blocking/advisory static-gate semantics, terminal durable failures and complete resource cleanup. Full suite: **100 tests, OK, 4 expected skips**. Independent read-only audit remains required.
+
+Live Docker recovery run `r-e8707e74-fcbf-4f95-8dd2-dd95ba720716` succeeded with static and base-harness checks passing. Evidence manifest `m-c9c1d54e0ac4ee31ff13b5d5` remained valid after teardown; no socket or secrets were mounted. Independent read-only audit remains required.
+
+## Fresh builder-owned Claude adapter — 2026-11-18
+
+Added an explicit adapter registry and a dedicated Claude Code stream-JSON adapter with Stop-hook observation, contract-derived prompt context, external guardrails and proxy-origin model routing. Live run `r-5fc95790-5990-4b1b-bca2-842d6fe6e367` succeeded against local LiteLLM with 5 turns, 6,303 tokens and $0.027948 spend. Static and base-harness checks passed; no socket/secrets were mounted; manifest `m-6ab537ce486a96d903aa7039` remained valid after teardown. Independent audit remains required.
+
+The fresh builder-owned adapter is no longer missing; it is implemented and builder-tested on the active branch. Independent verification remains outstanding.
+
+## Phase 1 readiness — 2026-11-18
+
+All Build Guide V4 Phase 1 criteria are mapped to implementation and reproducible builder-side evidence in [`PHASE1_EXIT_READINESS.md`](PHASE1_EXIT_READINESS.md). Status: **builder-tested, independently unverified, not accepted**.
