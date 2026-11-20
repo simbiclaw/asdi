@@ -6,7 +6,24 @@ from pathlib import Path
 
 import yaml
 
+from events.classifier import load_mapping
 from events.config import load_pilot_config
+
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
+class DefaultFeatureMapTests(unittest.TestCase):
+    def test_repository_default_feature_map_loads(self) -> None:
+        value = yaml.safe_load((ROOT / "config" / "features.yaml").read_text())
+        mapping = load_mapping(value)
+        self.assertEqual(set(mapping), {"cli-notes", "http-notes", "ui-note-list"})
+        self.assertTrue(
+            any(path.endswith("toy_notes/cli.py") for path in mapping["cli-notes"])
+        )
+        self.assertTrue(
+            any(path.endswith("toy_notes/server.py") for path in mapping["http-notes"])
+        )
 
 
 class PilotConfigTests(unittest.TestCase):

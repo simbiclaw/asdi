@@ -1,0 +1,8 @@
+cli-notes:
+  - "pilots/toy_notes/src/toy_notes/cli.py"
+  - "pilots/toy_notes/src/toy_notes/store.py"
+http-notes:
+  - "pilots/toy_notes/src/toy_notes/server.py"
+  - "pilots/toy_notes/src/toy_notes/store.py"
+ui-note-list:
+  - "pilots/toy_notes/src/toy_notes/server.py"

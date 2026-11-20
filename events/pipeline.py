@@ -136,7 +136,7 @@ def run_pr_gate_pipeline(
     ):
         raise ValueError("PR pipeline did not produce both verifier and review evidence")
     packet = workflow.packet(pr_number, head_sha)
-    decision_log = OwnerDecisionLog(root_path / "owner-decisions.jsonl")
+    decision_log = OwnerDecisionLog(root_path)
     independent_verifier = decision_log.latest("independent_verifier")
     if independent_verifier and independent_verifier.get("choice") == "owner_invoked_audit":
         audit_store = IndependentAuditStore(root_path)

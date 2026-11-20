@@ -1288,7 +1288,7 @@ class EventsCliTests(unittest.TestCase):
             str(initial),
         ])
         self.assertEqual(exit_code, 0)
-        decision_log = OwnerDecisionLog(self.root / "owner-decisions.jsonl")
+        decision_log = OwnerDecisionLog(self.root)
         decision = decision_log.record(
             decision_type="independent_verifier",
             choice="owner_invoked_audit",

@@ -68,7 +68,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--feature-map",
         type=Path,
-        default=Path("config/coverage.yaml"),
+        default=Path("config/features.yaml"),
     )
     parser.add_argument(
         "--identities",
@@ -490,18 +490,18 @@ def main(argv: list[str] | None = None) -> int:
     elif arguments.command == "record-independent-audit":
         result = IndependentAuditStore(root).ingest(
             load_json(arguments.report),
-            decision_log=OwnerDecisionLog(root / "owner-decisions.jsonl"),
+            decision_log=OwnerDecisionLog(root),
         )
         write_json(root / "latest-independent-audit-ingestion.json", result)
     elif arguments.command == "show-independent-audit":
         result = IndependentAuditStore(root).load(
             pr_number=arguments.pr_number,
             head_sha=arguments.head_sha,
-            decision_log=OwnerDecisionLog(root / "owner-decisions.jsonl"),
+            decision_log=OwnerDecisionLog(root),
         )
     elif arguments.command == "audit-template":
         result = build_independent_audit_template(
-            decision_log=OwnerDecisionLog(root / "owner-decisions.jsonl"),
+            decision_log=OwnerDecisionLog(root),
             pr_number=arguments.pr_number,
             head_sha=arguments.head_sha,
         )

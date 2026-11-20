@@ -129,3 +129,39 @@ This is reusable control-plane infrastructure. It is not Phase 4 exit evidence, 
 Explicit verifier commands and evidence-file ingestion now share one derived-CI rule. Static-gate output is bound into the evidence statement, so `record-verification` and `record-main-verification` reject a caller-declared CI status that disagrees with the named checks. The validator preserves real gate diagnostics and the non-static `verify:` check, while command/evidence comparison normalizes optional `blocking` fields. No live Docker or independent acceptance evidence was produced by this slice.
 
 The first read-only GitHub reconciler slice is now implemented and builder-tested in [`events/github_reconciler.py`](../../events/github_reconciler.py). It normalizes exact PR heads and `main` commits into the existing journal, deduplicates current-state facts, uses a bounded shell-free `gh` command and minimal proxy environment, and fails closed without appends on command errors. The real authenticated probe remains blocked by an invalid host GitHub token; see [`GITHUB_RECONCILER_EVIDENCE.md`](GITHUB_RECONCILER_EVIDENCE.md).
+
+## Live rehearsal on the current branch
+
+A local rehearsal of `run-pr-gate` used the real PR-head evidence manifest
+`m-1b048a893f174465d875ff3b` for head `80fa15b`, the actual
+`main...80fa15b` diff, and a process-isolated fixture reviewer. It exposed
+three real defects, now fixed:
+
+1. `events.cli` defaulted `--feature-map` to `config/coverage.yaml`, which is
+   a metrics configuration and cannot be parsed as a feature map. The new
+   `config/features.yaml` maps the three toy-notes features to repository
+   paths and is now the default.
+2. `events.pipeline` and the independent-audit CLI commands passed a decision
+   file path where `OwnerDecisionLog` expects a root directory, crashing when
+   the ledger file already existed.
+3. A test used the same incorrect constructor form and masked the defect.
+
+After the fixes, the rehearsal completed with:
+
+```text
+head_sha: 80fa15b153d884788a71a9cfec84b6716e87b474
+independent_audit_enforced: true
+independent_audit.status: missing
+independent_audit.failures: independent audit is pending
+base_policy_decision: split_required
+classification: split_required
+packet_policy: blocked
+merge_decision: blocked
+merge_executed: false
+```
+
+The `split_required` result reflects the real broad PR mixing protected
+configuration/verification paths with product paths. It is recorded honestly
+and is not converted to a pass. The rehearsal proves that the gate now runs,
+binds exact-head evidence, enforces the pending cloud Claude audit, and never
+executes a merge.
