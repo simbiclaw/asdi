@@ -11,6 +11,7 @@ import yaml
 
 from launcher.cli import main
 from launcher.runner import RunResult
+from launcher.state import atomic_json
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -57,6 +58,8 @@ class FakeDocker:
 
     def __init__(self, docker: str) -> None:
         self.killed = []
+        self.paused = []
+        self.unpaused = []
         self.stopped_proxies = []
         self.removed_containers = []
         self.removed_networks = []
@@ -65,6 +68,12 @@ class FakeDocker:
 
     def kill(self, name: str) -> None:
         self.killed.append(name)
+
+    def pause(self, name: str) -> None:
+        self.paused.append(name)
+
+    def unpause(self, name: str) -> None:
+        self.unpaused.append(name)
 
     def stop_proxy(self, name: str) -> None:
         self.stopped_proxies.append(name)
@@ -110,6 +119,39 @@ class LauncherCliTests(unittest.TestCase):
         self.assertEqual(result, 0)
         self.assertEqual(FakeLauncher.instances[-1].contract_path.suffix, ".yaml")
         self.assertTrue((self.root / ".current-contract.yaml").is_file())
+
+    def test_pause_and_resume_persist_checkpoint_state(self) -> None:
+        run_root = self.root / "runs" / "r-clitest"
+        state_path = run_root / "launcher-state.json"
+        atomic_json(
+            state_path,
+            {
+                "run_id": "r-clitest",
+                "status": "running",
+                "container": "fake-container",
+            },
+        )
+        common = [
+            "--root",
+            str(self.root),
+            "--product-root",
+            str(self.root / "product"),
+        ]
+        with patch("launcher.cli.DockerRuntime", FakeDocker):
+            self.assertEqual(
+                main([*common, "pause", "--run-id", "r-clitest"]), 0
+            )
+            paused = json.loads(state_path.read_text())
+            self.assertEqual(paused["status"], "paused")
+            self.assertEqual(paused["pause_checkpoint"], "r-clitest")
+            self.assertEqual(FakeDocker.instances[-1].paused, ["fake-container"])
+            self.assertEqual(
+                main([*common, "resume", "--checkpoint", "r-clitest"]), 0
+            )
+            resumed = json.loads(state_path.read_text())
+            self.assertEqual(resumed["status"], "running")
+            self.assertNotIn("paused_at", resumed)
+            self.assertEqual(FakeDocker.instances[-1].unpaused, ["fake-container"])
 
     def test_run_status_and_kill_use_durable_state(self) -> None:
         with patch("launcher.cli.REVKLauncher", FakeLauncher), patch(

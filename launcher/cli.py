@@ -7,6 +7,7 @@ import argparse
 import json
 import os
 import signal
+import time
 from pathlib import Path
 
 import yaml
@@ -15,7 +16,7 @@ from asdi.governance import TRMLedger, paired_metrics
 from asdi.lifecycle import LifecycleStore, MissionGuardrails, MergeAuthorization, ProductOps
 from launcher.contract import load_contract
 from launcher.runner import DockerRuntime, REVKLauncher
-from launcher.state import load_run_state, list_run_states
+from launcher.state import atomic_json, load_run_state, list_run_states
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -54,6 +55,10 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--agent-cost-usd", type=float, default=0.0)
     status = commands.add_parser("status", help="Show a launcher run")
     status.add_argument("--run-id", required=True)
+    pause = commands.add_parser("pause", help="Pause a running launcher run")
+    pause.add_argument("--run-id", required=True)
+    resume = commands.add_parser("resume", help="Resume a paused launcher checkpoint")
+    resume.add_argument("--checkpoint", required=True)
     listing = commands.add_parser("list", help="List launcher runs")
     kill = commands.add_parser("kill", help="Kill a running launcher process/container")
     kill.add_argument("--run-id", required=True)
@@ -129,6 +134,44 @@ def main(argv: list[str] | None = None) -> int:
         state = load_run_state(runs_root, args.run_id)
         print(json.dumps(state, indent=2, sort_keys=True))
         return 0
+    if args.command == "pause":
+        state = load_run_state(runs_root, args.run_id)
+        if state.get("status") != "running":
+            parser.error(f"run {args.run_id} is not running")
+        pid = state.get("pid")
+        if isinstance(pid, int):
+            try:
+                os.kill(pid, signal.SIGSTOP)
+            except ProcessLookupError:
+                pass
+        container = state.get("container")
+        if container:
+            DockerRuntime(args.docker).pause(container)
+        state["status"] = "paused"
+        state["paused_at"] = time.time()
+        state["pause_checkpoint"] = args.run_id
+        atomic_json(runs_root / args.run_id / "launcher-state.json", state)
+        print(json.dumps(state, indent=2, sort_keys=True))
+        return 0
+    if args.command == "resume":
+        state = load_run_state(runs_root, args.checkpoint)
+        if state.get("status") != "paused":
+            parser.error(f"checkpoint {args.checkpoint} is not paused")
+        pid = state.get("pid")
+        if isinstance(pid, int):
+            try:
+                os.kill(pid, signal.SIGCONT)
+            except ProcessLookupError:
+                pass
+        container = state.get("container")
+        if container:
+            DockerRuntime(args.docker).unpause(container)
+        state["status"] = "running"
+        state["resumed_at"] = time.time()
+        state.pop("paused_at", None)
+        atomic_json(runs_root / args.checkpoint / "launcher-state.json", state)
+        print(json.dumps(state, indent=2, sort_keys=True))
+        return 0
     if args.command == "list":
         print(json.dumps(list_run_states(runs_root), indent=2, sort_keys=True))
         return 0
@@ -159,9 +202,7 @@ def main(argv: list[str] | None = None) -> int:
                 else:
                     runtime.remove_volume(name)
         state["status"] = "killed"
-        state["killed_at"] = __import__("time").time()
-        from launcher.state import atomic_json
-
+        state["killed_at"] = time.time()
         atomic_json(runs_root / args.run_id / "launcher-state.json", state)
         print(json.dumps(state, indent=2, sort_keys=True))
         return 0

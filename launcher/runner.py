@@ -190,6 +190,16 @@ class DockerRuntime:
     def kill(self, name: str) -> None:
         self._run(["kill", name], timeout=10)
 
+    def pause(self, name: str) -> None:
+        result = self._run(["pause", name], timeout=10)
+        if result.returncode != 0:
+            raise RuntimeError(f"cannot pause run container: {result.stderr}")
+
+    def unpause(self, name: str) -> None:
+        result = self._run(["unpause", name], timeout=10)
+        if result.returncode != 0:
+            raise RuntimeError(f"cannot resume run container: {result.stderr}")
+
     def remove_container(self, name: str) -> None:
         self._run(["rm", "-f", name], timeout=10)
 
