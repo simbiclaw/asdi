@@ -128,6 +128,23 @@ class PrCheckTests(unittest.TestCase):
         record = self.f.check(self.f.commit("inject"))
         self.assertTrue(next(r for r in record["results"] if r["id"] == "ST-INJECT-1")["needs_confirmation"])
 
+    def test_loopback_works_but_external_network_does_not(self) -> None:
+        self.f.write("tests/test_net.py", (
+            "import socket, threading, unittest\n\n\nclass N(unittest.TestCase):\n"
+            "    def test_loopback_server(self):\n"
+            "        srv = socket.socket(); srv.bind(('127.0.0.1', 0)); srv.listen(1)\n"
+            "        threading.Thread(target=lambda: srv.accept()[0].sendall(b'ok'), daemon=True).start()\n"
+            "        c = socket.create_connection(srv.getsockname(), timeout=5)\n"
+            "        self.assertEqual(c.recv(2), b'ok')\n\n"
+            "    def test_no_external_route(self):\n"
+            "        with self.assertRaises(OSError):\n"
+            "            socket.create_connection(('1.1.1.1', 53), timeout=3)\n"))
+        record = self.f.check(self.f.commit("net"))
+        row = next(r for r in record["results"] if r["id"] == "PR-TEST-1")
+        if "loopback only" not in " ".join(row["limits"]):
+            self.skipTest("unshare is not available on this host")
+        self.assertEqual(row["status"], "pass", row["observed"])
+
     def test_working_tree_is_untouched(self) -> None:
         self.f.write("src/app.py", "VALUE = 4\n")
         head = self.f.commit("x")

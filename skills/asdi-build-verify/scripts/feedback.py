@@ -45,7 +45,7 @@ def render_issue(v, slug, pr, head_ref):
                 "|---|---|---|---|---|"]
         for r in v["failed"]:
             out.append("| %s | %s | %s | %s | %s |" % (r["id"], cell(r["statement"]), cell(r["source"]),
-                       cell(r["observed"]), cell("; ".join(r["leads"] or r["evidence"]) or "none")))
+                       cell(r["observed"]), cell("; ".join(r["evidence"] or r["leads"]) or "none")))
         out.append("")
     if v["blocked"]:
         out += ["## Could not be checked", "",
@@ -67,7 +67,7 @@ def render_issue(v, slug, pr, head_ref):
         "schema": 1, "repo": slug, "pr": pr, "head_ref": head_ref, "head_sha": sha, "base_sha": v.get("base"),
         "verdict": v["verdict"],
         "must_fix": [{"row": r["id"], "requirement": r["statement"], "source": r["source"],
-                      "observed": r["observed"], "where": r["leads"] or r["evidence"]} for r in v["failed"]],
+                      "observed": r["observed"], "where": r["evidence"] or r["leads"]} for r in v["failed"]],
         "cannot_check": [{"row": r["id"], "needs": r["needs"], "observed": r["observed"]} for r in v["blocked"]],
         "rules": ["Fix on the PR branch and push a new commit; verification and review re-run automatically.",
                   "Do not edit reference/, reference/AUTHORITY.md, skills/asdi-build-verify/ or verification/.",

@@ -63,6 +63,9 @@ def sandboxed(cmd, cwd, timeout):
     prefix = []
     if shutil.which("unshare") and subprocess.run(["unshare", "-rn", "true"], capture_output=True).returncode == 0:
         prefix = ["unshare", "-rn"]
+        # A new network namespace starts with loopback down; tests that serve on 127.0.0.1
+        # would fail for the sandbox's reason, not the PR's. Bring lo up (no external network).
+        cmd = "%s -I %s; %s" % (sys.executable, os.path.join(HERE, "lo_up.py"), cmd)
     start = time.time()
     try:
         p = subprocess.run(prefix + ["sh", "-c", cmd], cwd=cwd, env=env, capture_output=True, text=True, timeout=timeout)
@@ -315,7 +318,7 @@ def main(argv=None):
         bad = lambda o: {t for t, v in o.items() if v in ("FAIL", "ERROR")}
         newly = sorted(t for t in bad(oh) if t in ob and ob[t] not in ("FAIL", "ERROR"))
         new_tests_failing = sorted(t for t in bad(oh) if t not in ob)
-        lims = ["Network isolated: %s. Empty environment." % ("yes" if isolated else "no (unshare unavailable)"),
+        lims = ["Network isolated: %s. Empty environment." % ("yes (loopback only)" if isolated else "no (unshare unavailable)"),
                 "Base %.0fs, head %.0fs." % (tb, th)]
         if rh is None:
             settle("PR-TEST-1", "error", "The test run at the head timed out after %ds." % a.test_timeout, [eh], control, lims)
