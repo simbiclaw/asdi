@@ -72,7 +72,7 @@ The same command adapter now supports `source: main`. [`events/main_pipeline.py`
 
 The pipeline appends normalized `github.main_verification_completed` evidence, dispatches it to the existing durable post-merge workflow, and computes deployment eligibility from only that exact passing result. A missed negative control, failed verifier status, nonzero success exit, malformed result or timeout stays red and records the auto-revert requirement. Existing verification is replayed without invoking the verifier again. The pipeline never deploys.
 
-Full suite after exact-main integration: **187 tests, OK, 4 expected socket/TCP skips**.
+Main-only pipelines fail closed if they encounter a PR event without a PR workflow: poller state records the failed event and cursor, so the PR event remains pending instead of being skipped. Full suite after exact-main integration and mixed-event preservation: **188 tests, OK, 4 expected socket/TCP skips**.
 
 ## Status boundary
 

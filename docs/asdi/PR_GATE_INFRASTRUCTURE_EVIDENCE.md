@@ -114,7 +114,7 @@ PYTHONPATH=.:src python3 -m unittest tests.test_events_pr_gate -v
 PYTHONPATH=.:src python3 -m unittest discover -s tests -v
 ```
 
-Observed latest full suite after live PR/main verifier-command integration: **187 tests, OK, 4 expected AF_UNIX/socket-binding skips**. Focused evidence covered pending verification/review states, stale and orphan rejection, malformed payloads, new-head invalidation, separate durable packets, evidence-derived PR-head verifier status, evidence-derived exact-main verifier status, missed negative controls, wrong-source rejection, explicit reviewer execution, explicit PR/main verifier-command execution, exact-main deployment eligibility, failed-main auto-revert planning, idempotent main verification replay, stale-main rejection, and the integrated PR verifier → review → policy → T0 merge-dry-run sequence.
+Observed latest full suite after live PR/main verifier-command integration: **188 tests, OK, 4 expected AF_UNIX/socket-binding skips**. Focused evidence covered pending verification/review states, stale and orphan rejection, malformed payloads, new-head invalidation, separate durable packets, evidence-derived PR-head verifier status, evidence-derived exact-main verifier status, missed negative controls, wrong-source rejection, explicit reviewer execution, explicit PR/main verifier-command execution, exact-main deployment eligibility, failed-main auto-revert planning, idempotent main verification replay, mixed-journal cursor preservation, stale-main rejection, and the integrated PR verifier → review → policy → T0 merge-dry-run sequence.
 
 ## Limits
 

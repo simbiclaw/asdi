@@ -7,6 +7,7 @@ import unittest
 from pathlib import Path
 
 from events.cli import main
+from events.main_workflow import MainWorkflowStore
 from launcher.evidence import EvidenceStore
 
 
@@ -1118,3 +1119,61 @@ class EventsCliTests(unittest.TestCase):
             result["post_merge"]["auto_revert"]["reverted_commit"],
             commit,
         )
+
+    def test_main_only_pipeline_preserves_cursor_on_pr_event(self) -> None:
+        pr_path = self.root / "main-only-pr-event.json"
+        self.write_json(
+            pr_path,
+            {
+                "pr_number": 20,
+                "head_sha": "4" * 40,
+                "base_ref": "main",
+                "changed_paths": ["src/feature.py"],
+            },
+        )
+        exit_code = main([
+            *self.common,
+            "append-event",
+            "--event-type",
+            "github.pull_request",
+            "--payload",
+            str(pr_path),
+        ])
+        self.assertEqual(exit_code, 0)
+        commit = "5" * 40
+        push_path = self.root / "main-only-push.json"
+        self.write_json(
+            push_path,
+            {"branch": "main", "commit": commit},
+        )
+        exit_code = main([
+            *self.common,
+            "append-event",
+            "--event-type",
+            "github.push",
+            "--payload",
+            str(push_path),
+        ])
+        self.assertEqual(exit_code, 0)
+        main_workflow = MainWorkflowStore(self.root / "main-workflow")
+        main_workflow.apply({
+            "event_id": 99,
+            "event_type": "github.push",
+            "payload": {"branch": "main", "commit": commit},
+        })
+        verifier = self.main_verifier_executable(
+            self.root / "main-only-verifier",
+            commit,
+        )
+        with self.assertRaises(ValueError) as caught:
+            self.run_main_pipeline(commit, verifier)
+
+        self.assertIn(
+            "PR event cannot be consumed",
+            str(caught.exception),
+        )
+        state = json.loads((self.root / "state/poller-state.json").read_text())
+        self.assertEqual(state["cursor"], 0)
+        self.assertFalse(state["healthy"])
+        self.assertEqual(state["alert"], "handler_failed")
+        self.assertEqual(state["failed_event_id"], 1)

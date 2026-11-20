@@ -44,7 +44,10 @@ class EventDispatcher:
             "github.review_completed",
         }:
             if self.workflow is None:
-                return None
+                raise ValueError(
+                    "PR event cannot be consumed without a PR workflow; "
+                    "poller cursor remains unchanged"
+                )
             result = self.workflow.apply(event)
             self._write(
                 self.root / "workflow-results" / f"event-{event['event_id']}.json",
