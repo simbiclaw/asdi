@@ -1,11 +1,11 @@
 # Phase 3 synthetic pilot proposal — owner decision required
 
 **Date:** 2026-11-18  
-**Status:** **Awaiting owner selection/approval; no pilot-dependent implementation started**
+**Status:** **`toy-notes` approved on 2026-11-20 as a reversible provisional pilot by owner directive to continue autonomously toward the complete lifecycle. Implementation behind `config/pilot.yaml` may proceed. Phase 3 exit remains unproven until the product harness passes.**
 
 ## Decision required
 
-Select an existing pilot repository/service or approve the smallest synthetic reference service proposed below. The pilot must use synthetic/test data only.
+The owner selected the smallest synthetic reference service proposed below; the pilot must use synthetic/test data only. The recorded decision is in `state/owner-decisions.jsonl` with decision id `owner_decision_732eca91-f156-46e9-a4b7-224e2ae8dc4b`. A later owner decision can replace the provisional selection.
 
 ## Recommendation: `toy-notes`
 
