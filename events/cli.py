@@ -13,6 +13,7 @@ import yaml
 
 from .journal import EventJournal, LocalPoller, PollerState
 from .main_workflow import MainWorkflowStore
+from .main_pipeline import run_main_verification_pipeline
 from .merge_gate import evaluate_merge_packet
 from .pr_workflow import PRWorkflowStore
 from .pr_gate import PRGate, deployment_decision, post_merge_check
@@ -183,6 +184,21 @@ def build_parser() -> argparse.ArgumentParser:
     pipeline.add_argument("--verifier-name")
     pipeline.add_argument("--verifier-timeout-seconds", type=float, default=900.0)
     pipeline.add_argument("--verifier-result-output")
+    main_pipeline = commands.add_parser("run-main-verification")
+    main_pipeline.add_argument("--commit")
+    main_pipeline.add_argument(
+        "--ci-status",
+        choices=("pass", "fail", "blocked", "error"),
+        required=True,
+    )
+    main_pipeline.add_argument("--verifier", action="append", required=True)
+    main_pipeline.add_argument("--verifier-name", required=True)
+    main_pipeline.add_argument(
+        "--verifier-timeout-seconds",
+        type=float,
+        default=900.0,
+    )
+    main_pipeline.add_argument("--verifier-result-output", required=True)
     return parser
 
 
@@ -403,6 +419,24 @@ def main(argv: list[str] | None = None) -> int:
             actor=arguments.actor,
             trm_level=arguments.trm_level,
             review_result_path=arguments.review_result_output,
+        )
+    elif arguments.command == "run-main-verification":
+        main_workflow = MainWorkflowStore(root / "main-workflow")
+        verification_command = VerificationCommand(
+            name=arguments.verifier_name,
+            argv=tuple(arguments.verifier),
+            timeout_seconds=arguments.verifier_timeout_seconds,
+            source="main",
+        )
+        result = run_main_verification_pipeline(
+            root=root,
+            journal=journal,
+            poller_state=state,
+            main_workflow=main_workflow,
+            verification_command=verification_command,
+            ci_status=arguments.ci_status,
+            verification_result_path=arguments.verifier_result_output,
+            commit=arguments.commit,
         )
     elif arguments.command == "comment-gate":
         identities = yaml.safe_load(arguments.identities.read_text())

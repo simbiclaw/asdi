@@ -66,6 +66,14 @@ The adapter validates the exact PR head, result schema, source, checks, Evidence
 
 Full suite after this integration: **185 tests, OK, 4 expected socket/TCP skips**.
 
+## Exact-main verifier-command integration
+
+The same command adapter now supports `source: main`. [`events/main_pipeline.py`](../../events/main_pipeline.py) and `events.cli run-main-verification` use it to verify the durable exact landed `main` commit. The command is absolute, shell-free, bounded and environment-restricted; its result must bind the manifest subject/result to that exact commit, use `source: main`, and prove the verifier-only runtime boundary.
+
+The pipeline appends normalized `github.main_verification_completed` evidence, dispatches it to the existing durable post-merge workflow, and computes deployment eligibility from only that exact passing result. A missed negative control, failed verifier status, nonzero success exit, malformed result or timeout stays red and records the auto-revert requirement. Existing verification is replayed without invoking the verifier again. The pipeline never deploys.
+
+Full suite after exact-main integration: **187 tests, OK, 4 expected socket/TCP skips**.
+
 ## Status boundary
 
 | Claim | Status |

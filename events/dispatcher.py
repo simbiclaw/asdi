@@ -18,7 +18,7 @@ class EventDispatcher:
         self,
         *,
         root: str | Path,
-        workflow: PRWorkflowStore,
+        workflow: PRWorkflowStore | None,
         main_workflow: MainWorkflowStore,
     ) -> None:
         self.root = Path(root).resolve()
@@ -43,6 +43,8 @@ class EventDispatcher:
             "github.verification_completed",
             "github.review_completed",
         }:
+            if self.workflow is None:
+                return None
             result = self.workflow.apply(event)
             self._write(
                 self.root / "workflow-results" / f"event-{event['event_id']}.json",

@@ -97,6 +97,8 @@ The state machine is fresh-head safe: a new PR head creates a new pending state 
 
 `record-main-verification` accepts only evidence whose manifest source is `main`, binds the manifest subject and result to the exact landed commit, checks every feature and negative control, and appends `github.main_verification_completed`. The complete evidence record remains external to the event payload.
 
+`run-main-verification` now executes an explicit source-main verifier command and connects it to this post-merge workflow. The adapter enforces the same exact-commit evidence, runtime boundary and fail-closed status rules as the PR verifier command. The pipeline persists complete execution separately, appends normalized post-merge evidence, computes exact-commit deployment eligibility, records the auto-revert requirement on red, and never deploys or re-executes already-recorded verification.
+
 ### Integrated PR-gate pipeline
 
 [`events/pipeline.py`](../../events/pipeline.py) connects the separate control-plane slices into one operational sequence. `run-pr-gate` consumes an already verified evidence manifest, maps it to the current durable PR head, executes the explicit fresh-context reviewer, persists the complete review result separately, appends only normalized review evidence, dispatches events through [`events/dispatcher.py`](../../events/dispatcher.py), assembles the packet, and invokes the existing merge dry-run.
@@ -112,7 +114,7 @@ PYTHONPATH=.:src python3 -m unittest tests.test_events_pr_gate -v
 PYTHONPATH=.:src python3 -m unittest discover -s tests -v
 ```
 
-Observed latest full suite after live verifier-command integration: **185 tests, OK, 4 expected AF_UNIX/socket-binding skips**. Focused evidence covered pending verification/review states, stale and orphan rejection, malformed payloads, new-head invalidation, separate durable packets, evidence-derived PR-head verifier status, evidence-derived exact-main verifier status, missed negative controls, wrong-source rejection, explicit reviewer execution, explicit verifier-command execution, exact-main deployment eligibility, failed-main auto-revert planning, stale-main rejection, and the integrated PR verifier → review → policy → T0 merge-dry-run sequence.
+Observed latest full suite after live PR/main verifier-command integration: **187 tests, OK, 4 expected AF_UNIX/socket-binding skips**. Focused evidence covered pending verification/review states, stale and orphan rejection, malformed payloads, new-head invalidation, separate durable packets, evidence-derived PR-head verifier status, evidence-derived exact-main verifier status, missed negative controls, wrong-source rejection, explicit reviewer execution, explicit PR/main verifier-command execution, exact-main deployment eligibility, failed-main auto-revert planning, idempotent main verification replay, stale-main rejection, and the integrated PR verifier → review → policy → T0 merge-dry-run sequence.
 
 ## Limits
 

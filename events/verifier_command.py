@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Explicit-command adapter for verifier-only PR-head verification."""
+"""Explicit-command adapter for verifier-only PR/main verification."""
 
 from __future__ import annotations
 
@@ -14,11 +14,12 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from .verification import verification_event_payload
+from .verification import main_verification_event_payload, verification_event_payload
 
 
 FULL_SHA = re.compile(r"^[0-9a-f]{40}$")
 VERIFIER_STATUSES = {"succeeded", "failed"}
+VERIFICATION_SOURCES = {"pr-head", "main"}
 FORBIDDEN_TOKEN_MARKERS = ("api_key", "authorization", "password", "secret", "token")
 
 
@@ -29,6 +30,7 @@ class VerificationCommand:
     name: str
     argv: tuple[str, ...]
     timeout_seconds: float = 900.0
+    source: str = "pr-head"
 
     def __post_init__(self) -> None:
         if not self.argv or not Path(self.argv[0]).is_absolute():
@@ -43,6 +45,8 @@ class VerificationCommand:
             for marker in FORBIDDEN_TOKEN_MARKERS
         ):
             raise ValueError("verifier command may not contain credential-like names")
+        if self.source not in VERIFICATION_SOURCES:
+            raise ValueError("verification source must be pr-head or main")
 
     def build(self, *, head_sha: str, output: Path) -> tuple[list[str], dict[str, str]]:
         placeholders = {"head": head_sha, "output": str(output)}
@@ -58,11 +62,17 @@ class VerificationCommand:
             "PATH": "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin",
             "TMPDIR": "/tmp",
             "ASDI_VERIFICATION_MODE": "verifier_only",
+            "ASDI_VERIFICATION_SOURCE": self.source,
         }
         return command, environment
 
 
-def validate_verifier_result(report: Any, head_sha: str) -> list[str]:
+def validate_verifier_result(
+    report: Any,
+    head_sha: str,
+    *,
+    source: str = "pr-head",
+) -> list[str]:
     """Validate a launcher verifier-only result without trusting its status."""
 
     failures: list[str] = []
@@ -87,9 +97,9 @@ def validate_verifier_result(report: Any, head_sha: str) -> list[str]:
     if report.get("status") not in VERIFIER_STATUSES:
         failures.append("verifier status is invalid")
     if report.get("commit") != head_sha or report.get("revision") != head_sha:
-        failures.append("verifier result is not bound to PR head")
-    if report.get("source") != "pr-head":
-        failures.append("PR gate requires verifier source pr-head")
+        failures.append("verifier result is not bound to target commit")
+    if report.get("source") != source:
+        failures.append(f"verification requires source {source}")
     checks = report.get("checks")
     if not isinstance(checks, list) or not checks:
         failures.append("verifier checks must be a non-empty array")
@@ -98,13 +108,13 @@ def validate_verifier_result(report: Any, head_sha: str) -> list[str]:
         failures.append("verifier runtime evidence is missing")
     else:
         if runtime.get("network") != "none":
-            failures.append("PR verification requires runtime network none")
+            failures.append("verification requires runtime network none")
         if runtime.get("socket_mounted") is not False:
-            failures.append("PR verification forbids a Docker socket mount")
+            failures.append("verification forbids a Docker socket mount")
         if runtime.get("secrets_mounted") is not False:
-            failures.append("PR verification forbids mounted secrets")
+            failures.append("verification forbids mounted secrets")
         if runtime.get("agent_started") is not False:
-            failures.append("PR verification forbids starting an agent")
+            failures.append("verification forbids starting an agent")
 
     evidence = report.get("evidence")
     if not isinstance(evidence, dict):
@@ -121,7 +131,7 @@ def validate_verifier_result(report: Any, head_sha: str) -> list[str]:
     if result.get("schema") != 2:
         failures.append("verifier evidence result schema must be 2")
     if result.get("commit") != head_sha:
-        failures.append("verifier evidence result is not bound to PR head")
+        failures.append("verifier evidence result is not bound to target commit")
     if result.get("run_id") != report.get("run_id"):
         failures.append("verifier evidence run_id does not match result")
     features = result.get("features")
@@ -138,9 +148,9 @@ def validate_verifier_result(report: Any, head_sha: str) -> list[str]:
         or not isinstance(subject[0], dict)
         or subject[0].get("digest", {}).get("gitCommit") != head_sha
     ):
-        failures.append("verifier evidence subject is not bound to PR head")
-    if statement.get("predicate", {}).get("source") != "pr-head":
-        failures.append("PR gate requires evidence statement source pr-head")
+        failures.append("verifier evidence subject is not bound to target commit")
+    if statement.get("predicate", {}).get("source") != source:
+        failures.append(f"verification requires evidence statement source {source}")
     return failures
 
 
@@ -185,7 +195,11 @@ def run_verification(
             report = None
             stderr = f"{stderr}\ninvalid verifier JSON: {error}".strip()
 
-        validation_failures = validate_verifier_result(report, head_sha)
+        validation_failures = validate_verifier_result(
+            report,
+            head_sha,
+            source=command.source,
+        )
         report_dict = report if isinstance(report, dict) else {}
         report_run_id = report_dict.get("run_id")
         run_id = (
@@ -224,7 +238,7 @@ def run_verification(
             "status": status,
             "revision": head_sha,
             "commit": head_sha,
-            "source": "pr-head",
+            "source": command.source,
             "checks": report_dict.get("checks", []),
             "evidence": evidence,
             "runtime": runtime,
@@ -248,21 +262,31 @@ def verification_execution_event_payload(
     result: dict[str, Any],
     ci_status: str,
 ) -> dict[str, Any]:
-    """Map an executed verifier result into the durable PR-gate contract."""
+    """Map an executed verifier result into the durable verification contract."""
 
     head_sha = packet.get("head_sha")
     if result.get("schema_version") != "asdi.verification-execution/v1":
         raise ValueError("unsupported verification execution schema")
-    if result.get("commit") != head_sha or result.get("source") != "pr-head":
-        raise ValueError("verification execution is not bound to PR head")
+    source = result.get("source")
+    if source not in VERIFICATION_SOURCES:
+        raise ValueError("verification execution has invalid source")
+    if result.get("commit") != head_sha:
+        raise ValueError("verification execution is not bound to target commit")
     evidence = result.get("evidence")
     if isinstance(evidence, dict) and evidence.get("valid") is True:
         try:
-            payload = verification_event_payload(
-                packet=packet,
-                evidence=evidence,
-                ci_status=ci_status,
-            )
+            if source == "pr-head":
+                payload = verification_event_payload(
+                    packet=packet,
+                    evidence=evidence,
+                    ci_status=ci_status,
+                )
+            else:
+                payload = main_verification_event_payload(
+                    commit=head_sha,
+                    evidence=evidence,
+                    ci_status=ci_status,
+                )
             if result.get("status") != "succeeded":
                 payload["verifier"]["status"] = "fail"
                 payload["verifier"]["failures"] = [
@@ -274,7 +298,7 @@ def verification_execution_event_payload(
 
     failures = list(result.get("execution", {}).get("validation_failures", []))
     if not failures:
-        failures = ["verifier command did not produce valid PR-head evidence"]
+        failures = ["verifier command did not produce valid target evidence"]
     manifest_id = (
         evidence.get("manifest_id")
         if isinstance(evidence, dict)
@@ -282,9 +306,21 @@ def verification_execution_event_payload(
         and evidence["manifest_id"]
         else "m-unavailable-" + hashlib.sha256(head_sha.encode()).hexdigest()[:16]
     )
+    if source == "pr-head":
+        return {
+            "pr_number": packet["pr_number"],
+            "head_sha": head_sha,
+            "statuses": {"ci": ci_status},
+            "verifier": {
+                "candidate_commit": head_sha,
+                "status": "fail",
+                "manifest_id": manifest_id,
+                "run_id": result["run_id"],
+                "failures": failures,
+            },
+        }
     return {
-        "pr_number": packet["pr_number"],
-        "head_sha": head_sha,
+        "commit": head_sha,
         "statuses": {"ci": ci_status},
         "verifier": {
             "candidate_commit": head_sha,

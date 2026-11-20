@@ -956,3 +956,165 @@ class EventsCliTests(unittest.TestCase):
         self.assertEqual(result["packet"]["verifier"]["manifest_id"], "m-command")
         self.assertTrue(verification_path.is_file())
         self.assertTrue(review_path.is_file())
+
+    def main_verifier_executable(
+        self,
+        path: Path,
+        commit: str,
+        *,
+        control: str = "caught",
+    ) -> Path:
+        status = "succeeded" if control == "caught" else "failed"
+        exit_code = 0 if control == "caught" else 3
+        path.write_text(
+            "#!/usr/bin/env python3\n"
+            "import json, sys\n"
+            "from pathlib import Path\n"
+            "commit, output = sys.argv[1], Path(sys.argv[2])\n"
+            "report = {\n"
+            "    'schema_version': 'asdi.verifier-only-result/v1',\n"
+            "    'run_id': 'rv-main-command',\n"
+            "    'status': '<<STATUS>>',\n"
+            "    'revision': commit,\n"
+            "    'commit': commit,\n"
+            "    'source': 'main',\n"
+            "    'checks': [{'id': 'static:test', 'status': 'pass'}],\n"
+            "    'evidence': {\n"
+            "        'valid': True,\n"
+            "        'manifest_id': 'm-main-command',\n"
+            "        'statement': {\n"
+            "            'subject': [{'digest': {'gitCommit': commit}}],\n"
+            "            'predicate': {'source': 'main'},\n"
+            "        },\n"
+            "        'result': {\n"
+            "            'schema': 2,\n"
+            "            'run_id': 'rv-main-command',\n"
+            "            'commit': commit,\n"
+            "            'features': [{\n"
+            "                'id': 'feature:main',\n"
+            "                'status': 'pass',\n"
+            "                'control': '<<CONTROL>>',\n"
+            "                'evidence': [],\n"
+            "                'limits': [],\n"
+            "            }],\n"
+            "        },\n"
+            "    },\n"
+            "    'runtime': {\n"
+            "        'network': 'none',\n"
+            "        'socket_mounted': False,\n"
+            "        'secrets_mounted': False,\n"
+            "        'agent_started': False,\n"
+            "    },\n"
+            "}\n"
+            "output.write_text(json.dumps(report))\n"
+            f"raise SystemExit({exit_code})\n".replace("<<STATUS>>", status).replace(
+                "<<CONTROL>>",
+                control,
+            )
+        )
+        path.chmod(path.stat().st_mode | stat.S_IXUSR)
+        return path
+
+    def run_main_pipeline(
+        self,
+        commit: str,
+        verifier_path: Path,
+    ) -> dict:
+        result_path = self.root / f"main-verification-{commit[:8]}.json"
+        exit_code = main([
+            *self.common,
+            "run-main-verification",
+            "--commit",
+            commit,
+            "--ci-status",
+            "pass",
+            "--verifier",
+            "/usr/bin/python3",
+            "--verifier",
+            str(verifier_path),
+            "--verifier",
+            "{head}",
+            "--verifier",
+            "{output}",
+            "--verifier-name",
+            "main-verifier",
+            "--verifier-timeout-seconds",
+            "20",
+            "--verifier-result-output",
+            str(result_path),
+        ])
+        self.assertEqual(exit_code, 0)
+        return json.loads(
+            (self.root / "latest-main-verification-pipeline.json").read_text()
+        )
+
+    def test_main_verifier_command_reaches_deployment_eligibility(self) -> None:
+        commit = "2" * 40
+        push_path = self.root / "main-command-push.json"
+        self.write_json(
+            push_path,
+            {"branch": "main", "commit": commit},
+        )
+        exit_code = main([
+            *self.common,
+            "append-event",
+            "--event-type",
+            "github.push",
+            "--payload",
+            str(push_path),
+        ])
+        self.assertEqual(exit_code, 0)
+        exit_code = main([*self.common, "catch-up", "--now", "800"])
+        self.assertEqual(exit_code, 0)
+
+        verifier = self.main_verifier_executable(
+            self.root / "main-verifier-success",
+            commit,
+        )
+        result = self.run_main_pipeline(commit, verifier)
+        self.assertEqual(result["action"], "verification_executed")
+        self.assertTrue(result["post_merge"]["deployment_eligible"])
+        self.assertTrue(result["deployment"]["eligible"])
+        self.assertFalse(result["deployed"])
+        self.assertEqual(len(result["appended_event_ids"]), 1)
+        latest = json.loads(
+            (self.root / "latest-main-workflow.json").read_text()
+        )
+        self.assertEqual(latest["action"], "verification_recorded")
+
+        replay = self.run_main_pipeline(commit, verifier)
+        self.assertEqual(replay["action"], "verification_already_recorded")
+        self.assertEqual(replay["appended_event_ids"], [])
+        self.assertTrue(replay["deployment"]["eligible"])
+
+    def test_failed_main_verifier_blocks_deployment(self) -> None:
+        commit = "3" * 40
+        push_path = self.root / "failed-main-command-push.json"
+        self.write_json(
+            push_path,
+            {"branch": "main", "commit": commit},
+        )
+        main([
+            *self.common,
+            "append-event",
+            "--event-type",
+            "github.push",
+            "--payload",
+            str(push_path),
+        ])
+        main([*self.common, "catch-up", "--now", "900"])
+        verifier = self.main_verifier_executable(
+            self.root / "main-verifier-failed",
+            commit,
+            control="missed",
+        )
+        result = self.run_main_pipeline(commit, verifier)
+
+        self.assertEqual(result["action"], "verification_executed")
+        self.assertFalse(result["post_merge"]["deployment_eligible"])
+        self.assertFalse(result["deployment"]["eligible"])
+        self.assertFalse(result["deployed"])
+        self.assertEqual(
+            result["post_merge"]["auto_revert"]["reverted_commit"],
+            commit,
+        )
