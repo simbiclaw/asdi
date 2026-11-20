@@ -137,7 +137,7 @@ class IndependentAuditTests(unittest.TestCase):
 
     def test_template_is_bound_to_owner_decision_and_head(self) -> None:
         template = audit_template(
-            decision_record=self.record,
+            decision_log=self.log,
             pr_number=7,
             head_sha=HEAD,
         )

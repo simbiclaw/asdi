@@ -24,6 +24,23 @@ AUDIT_STATUSES = {"pass", "fail", "blocked"}
 FINDING_BUCKETS = {"act", "consider", "noted", "dismissed"}
 
 
+def active_owner_invoked_record(
+    decision_log: OwnerDecisionLog,
+) -> dict[str, Any]:
+    """Return the latest verifier decision only after ledger-chain validation."""
+
+    verification = decision_log.verify()
+    if not verification.get("valid"):
+        raise ValueError(
+            "owner decision ledger is invalid: "
+            + "; ".join(verification.get("failures", []))
+        )
+    record = decision_log.latest("independent_verifier")
+    if record is None or record.get("choice") != "owner_invoked_audit":
+        raise ValueError("no active owner_invoked_audit decision")
+    return record
+
+
 def validate_independent_audit(
     report: Any,
     *,
@@ -143,9 +160,7 @@ class IndependentAuditStore:
         *,
         decision_log: OwnerDecisionLog,
     ) -> dict[str, Any]:
-        record = decision_log.latest("independent_verifier")
-        if record is None or record.get("choice") != "owner_invoked_audit":
-            raise ValueError("no active owner_invoked_audit decision")
+        record = active_owner_invoked_record(decision_log)
         failures = validate_independent_audit(report, decision_record=record)
         if failures:
             raise ValueError("invalid independent audit: " + "; ".join(failures))
@@ -168,9 +183,7 @@ class IndependentAuditStore:
         head_sha: str,
         decision_log: OwnerDecisionLog,
     ) -> dict[str, Any]:
-        record = decision_log.latest("independent_verifier")
-        if record is None or record.get("choice") != "owner_invoked_audit":
-            raise ValueError("no active owner_invoked_audit decision")
+        record = active_owner_invoked_record(decision_log)
         path = self.path(pr_number=pr_number, head_sha=head_sha)
         if not path.is_file():
             raise FileNotFoundError(f"independent audit is pending: {path}")
@@ -238,7 +251,7 @@ def audit_for_packet(
 
 def audit_template(
     *,
-    decision_record: dict[str, Any],
+    decision_log: OwnerDecisionLog,
     pr_number: int,
     head_sha: str,
 ) -> dict[str, Any]:
@@ -248,8 +261,7 @@ def audit_template(
         raise ValueError("pr_number must be a positive integer")
     if not isinstance(head_sha, str) or not FULL_SHA.fullmatch(head_sha):
         raise ValueError("head_sha must be a 40-character lowercase SHA")
-    if decision_record.get("choice") != "owner_invoked_audit":
-        raise ValueError("active decision is not owner_invoked_audit")
+    decision_record = active_owner_invoked_record(decision_log)
     timestamp = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
     audit_id = f"ia-cloud-claude-{uuid.uuid4().hex[:12]}"
     return {

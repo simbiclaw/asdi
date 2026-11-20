@@ -500,13 +500,8 @@ def main(argv: list[str] | None = None) -> int:
             decision_log=OwnerDecisionLog(root / "owner-decisions.jsonl"),
         )
     elif arguments.command == "audit-template":
-        decision_record = OwnerDecisionLog(root / "owner-decisions.jsonl").latest(
-            "independent_verifier"
-        )
-        if decision_record is None:
-            raise ValueError("no independent verifier owner decision is recorded")
         result = build_independent_audit_template(
-            decision_record=decision_record,
+            decision_log=OwnerDecisionLog(root / "owner-decisions.jsonl"),
             pr_number=arguments.pr_number,
             head_sha=arguments.head_sha,
         )
