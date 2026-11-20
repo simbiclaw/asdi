@@ -30,6 +30,7 @@ from .github_reconciler import (
     default_github_environment,
 )
 from .independent_audit import IndependentAuditStore
+from .independent_audit import audit_template as build_independent_audit_template
 from launcher.owner_decisions import OwnerDecisionLog
 from .pipeline import run_pr_gate_pipeline
 
@@ -198,6 +199,10 @@ def build_parser() -> argparse.ArgumentParser:
     audit_show = commands.add_parser("show-independent-audit")
     audit_show.add_argument("--pr-number", type=int, required=True)
     audit_show.add_argument("--head-sha", required=True)
+    audit_template = commands.add_parser("audit-template")
+    audit_template.add_argument("--pr-number", type=int, required=True)
+    audit_template.add_argument("--head-sha", required=True)
+    audit_template.add_argument("--output", required=True)
     pipeline.add_argument("--verifier", action="append")
     pipeline.add_argument("--verifier-name")
     pipeline.add_argument("--verifier-timeout-seconds", type=float, default=None)
@@ -494,6 +499,18 @@ def main(argv: list[str] | None = None) -> int:
             head_sha=arguments.head_sha,
             decision_log=OwnerDecisionLog(root / "owner-decisions.jsonl"),
         )
+    elif arguments.command == "audit-template":
+        decision_record = OwnerDecisionLog(root / "owner-decisions.jsonl").latest(
+            "independent_verifier"
+        )
+        if decision_record is None:
+            raise ValueError("no independent verifier owner decision is recorded")
+        result = build_independent_audit_template(
+            decision_record=decision_record,
+            pr_number=arguments.pr_number,
+            head_sha=arguments.head_sha,
+        )
+        write_json(Path(arguments.output), result)
     elif arguments.command == "comment-gate":
         identities = yaml.safe_load(arguments.identities.read_text())
         result = classify_comment(

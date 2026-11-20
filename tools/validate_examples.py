@@ -47,6 +47,7 @@ def main() -> int:
         ("feature.schema.json", "feature.valid.md", "frontmatter"),
         ("result.schema.json", "result.valid.json", "json"),
         ("statement.schema.json", "statement.valid.json", "json"),
+        ("independent-audit.schema.json", "independent-audit.valid.json", "json"),
         ("pass.schema.json", "pass.valid.json", "json"),
         ("static-gates.schema.json", "static-gates.valid.json", "json"),
         ("rules.schema.json", "rules.valid.yaml", "yaml"),

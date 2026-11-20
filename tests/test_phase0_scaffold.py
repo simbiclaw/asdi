@@ -23,7 +23,7 @@ class Phase0ScaffoldTests(unittest.TestCase):
             text=True,
         )
         self.assertEqual(result.returncode, 0, result.stderr + result.stdout)
-        self.assertIn("validated 11 REV K examples", result.stdout)
+        self.assertIn("validated 12 REV K examples", result.stdout)
 
     def test_invalid_run_contract_fails_closed(self) -> None:
         value = json.loads((ROOT / "schemas/examples/run-contract.valid.json").read_text())

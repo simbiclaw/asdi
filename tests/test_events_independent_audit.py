@@ -10,8 +10,10 @@ from pathlib import Path
 from events.independent_audit import (
     IndependentAuditStore,
     apply_independent_audit,
+    audit_template,
     validate_independent_audit,
 )
+from tools.validate_examples import io_result
 from launcher.owner_decisions import OwnerDecisionLog
 
 
@@ -122,3 +124,48 @@ class IndependentAuditTests(unittest.TestCase):
         self.assertEqual(enriched["policy_decision"], "eligible")
         self.assertEqual(enriched["independent_audit"]["status"], "pass")
         self.assertTrue(enriched["independent_audit"]["required"])
+
+    def test_schema_example_is_valid(self) -> None:
+        root = Path(__file__).resolve().parents[1]
+        self.assertEqual(
+            io_result(
+                "independent-audit.schema.json",
+                (root / "schemas/examples/independent-audit.valid.json").read_text(),
+            ),
+            0,
+        )
+
+    def test_template_is_bound_to_owner_decision_and_head(self) -> None:
+        template = audit_template(
+            decision_record=self.record,
+            pr_number=7,
+            head_sha=HEAD,
+        )
+
+        self.assertEqual(template["pr_number"], 7)
+        self.assertEqual(template["head_sha"], HEAD)
+        self.assertEqual(
+            template["owner_decision_id"],
+            self.record["decision_id"],
+        )
+        self.assertEqual(template["operator"], self.record["decided_by"])
+        self.assertEqual(template["gate_status"], "blocked")
+        self.assertEqual(template["verifier"]["status"], "blocked")
+        self.assertEqual(template["review"]["status"], "blocked")
+
+        failures = validate_independent_audit(
+            template,
+            decision_record=self.record,
+        )
+        self.assertEqual(failures, [])
+
+    def test_gate_pass_cannot_be_inconsistent_with_subaudits(self) -> None:
+        self.value["verifier"]["status"] = "blocked"
+        failures = validate_independent_audit(
+            self.value,
+            decision_record=self.record,
+        )
+        self.assertIn(
+            "gate_status pass is inconsistent with verifier audit",
+            failures,
+        )

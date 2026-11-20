@@ -5,6 +5,8 @@ from __future__ import annotations
 
 import json
 import re
+import time
+import uuid
 from pathlib import Path
 from typing import Any
 
@@ -232,5 +234,44 @@ def audit_for_packet(
         ), []
     except (FileNotFoundError, ValueError, json.JSONDecodeError) as error:
         return None, [str(error)]
+
+
+def audit_template(
+    *,
+    decision_record: dict[str, Any],
+    pr_number: int,
+    head_sha: str,
+) -> dict[str, Any]:
+    """Create a prefilled owner template for the selected exact PR head."""
+
+    if not isinstance(pr_number, int) or isinstance(pr_number, bool) or pr_number <= 0:
+        raise ValueError("pr_number must be a positive integer")
+    if not isinstance(head_sha, str) or not FULL_SHA.fullmatch(head_sha):
+        raise ValueError("head_sha must be a 40-character lowercase SHA")
+    if decision_record.get("choice") != "owner_invoked_audit":
+        raise ValueError("active decision is not owner_invoked_audit")
+    timestamp = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    audit_id = f"ia-cloud-claude-{uuid.uuid4().hex[:12]}"
+    return {
+        "schema_version": "asdi.independent-pr-audit/v1",
+        "audit_id": audit_id,
+        "source": "cloud_claude",
+        "pr_number": pr_number,
+        "head_sha": head_sha,
+        "owner_decision_id": decision_record.get("decision_id"),
+        "operator": decision_record.get("decided_by"),
+        "completed_at": timestamp,
+        "gate_status": "blocked",
+        "verifier": {
+            "status": "blocked",
+            "evidence": ["<replace with exact-head verification evidence>"],
+        },
+        "review": {
+            "status": "blocked",
+            "model": "cloud-claude",
+            "independent_context": True,
+        },
+        "findings": [],
+    }
 
 

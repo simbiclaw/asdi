@@ -1,0 +1,24 @@
+{
+  "schema_version": "asdi.independent-pr-audit/v1",
+  "audit_id": "ia-cloud-claude-example",
+  "source": "cloud_claude",
+  "pr_number": 2,
+  "head_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "owner_decision_id": "owner_decision_00000000-0000-4000-8000-000000000000",
+  "operator": "repository_owner",
+  "completed_at": "2026-11-20T00:00:00Z",
+  "gate_status": "pass",
+  "verifier": {
+    "status": "pass",
+    "evidence": [
+      "static checks passed on the exact candidate head",
+      "all feature negative controls were caught"
+    ]
+  },
+  "review": {
+    "status": "pass",
+    "model": "cloud-claude",
+    "independent_context": true
+  },
+  "findings": []
+}
