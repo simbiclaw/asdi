@@ -20,6 +20,8 @@ import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
 
+from events.config import load_operational_defaults
+
 
 ALLOWED_OVERALL_RESULTS = {"PASS", "FAIL", "BLOCKED", "CONFORMS_WITH_GAPS"}
 REQUIRED_REPORT_FIELDS = {
@@ -242,7 +244,11 @@ def main(argv: list[str] | None = None) -> int:
         "--report-name",
         default="conformance-report.json",
     )
-    parser.add_argument("--timeout-seconds", type=float, default=1800.0)
+    parser.add_argument(
+        "--timeout-seconds",
+        type=float,
+        default=load_operational_defaults().readonly_audit_timeout_seconds,
+    )
     parser.add_argument(
         "auditor",
         nargs=argparse.REMAINDER,

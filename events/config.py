@@ -47,6 +47,7 @@ class OperationalDefaults:
     verifier_timeout_seconds: float
     github_reconciler_timeout_seconds: float
     remediation_timeout_seconds: float
+    readonly_audit_timeout_seconds: float
     guardrails: GuardrailDefaults
 
 
@@ -108,6 +109,10 @@ def load_operational_defaults(
         remediation_timeout_seconds=_positive_float(
             value.get("remediation_timeout_seconds"),
             "remediation_timeout_seconds",
+        ),
+        readonly_audit_timeout_seconds=_positive_float(
+            value.get("readonly_audit_timeout_seconds"),
+            "readonly_audit_timeout_seconds",
         ),
         guardrails=GuardrailDefaults(
             turns=_positive_int(guardrails.get("turns"), "guardrails.turns"),

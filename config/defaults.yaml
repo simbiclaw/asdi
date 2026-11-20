@@ -12,6 +12,7 @@ review_timeout_seconds: 600
 verifier_timeout_seconds: 900
 github_reconciler_timeout_seconds: 20
 remediation_timeout_seconds: 3600
+readonly_audit_timeout_seconds: 1800
 guardrails:
   turns: 200
   spend_usd: 8
