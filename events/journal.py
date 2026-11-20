@@ -104,7 +104,7 @@ class LocalPoller:
         *,
         journal: EventJournal,
         state: PollerState,
-        stale_after_seconds: int = 300,
+        stale_after_seconds: int,
     ) -> None:
         self.journal = journal
         self.state_store = state

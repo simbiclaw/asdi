@@ -137,6 +137,34 @@ class EventsCliTests(unittest.TestCase):
         self.assertEqual(exit_code, 0)
         self.assertTrue(health_path.is_file())
 
+    def test_health_uses_configured_stale_window(self) -> None:
+        defaults = self.root / "defaults.yaml"
+        defaults.write_text("version: 1\npoller_stale_after_seconds: 17\n")
+        exit_code = main(
+            [
+                *self.common,
+                "--defaults",
+                str(defaults),
+                "health",
+            ]
+        )
+        self.assertEqual(exit_code, 0)
+        health = json.loads((self.root / "poller-health.json").read_text())
+        self.assertEqual(health["stale_after_seconds"], 17)
+
+    def test_invalid_defaults_fail_closed(self) -> None:
+        defaults = self.root / "defaults.yaml"
+        defaults.write_text("version: 1\n")
+        with self.assertRaises(ValueError):
+            main(
+                [
+                    *self.common,
+                    "--defaults",
+                    str(defaults),
+                    "health",
+                ]
+            )
+
     def test_post_merge_and_deployment_commands_persist_decisions(self) -> None:
         commit = "b" * 40
         payload = self.root / "post-merge.json"

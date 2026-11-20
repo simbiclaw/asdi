@@ -11,6 +11,7 @@ from typing import Any
 
 import yaml
 
+from .config import load_defaults
 from .journal import EventJournal, LocalPoller, PollerState
 from .main_workflow import MainWorkflowStore
 from .main_pipeline import run_main_verification_pipeline
@@ -70,6 +71,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--identities",
         type=Path,
         default=Path("config/identities.yaml"),
+    )
+    parser.add_argument(
+        "--defaults",
+        type=Path,
+        default=Path(__file__).resolve().parents[1] / "config/defaults.yaml",
     )
     commands = parser.add_subparsers(dest="command", required=True)
 
@@ -212,6 +218,8 @@ def main(argv: list[str] | None = None) -> int:
     arguments = parser.parse_args(argv)
     root = arguments.root.resolve()
     root.mkdir(parents=True, exist_ok=True)
+    defaults = load_defaults(arguments.defaults)
+    stale_after_seconds = defaults["poller_stale_after_seconds"]
     journal = EventJournal(root / "journal")
     state = PollerState(root / "state")
 
@@ -239,6 +247,7 @@ def main(argv: list[str] | None = None) -> int:
         result = LocalPoller(
             journal=journal,
             state=state,
+            stale_after_seconds=stale_after_seconds,
         ).catch_up(handler=dispatcher.handle, now=arguments.now)
         if not isinstance(result, dict):
             raise ValueError("catch-up returned no result")
@@ -285,6 +294,7 @@ def main(argv: list[str] | None = None) -> int:
         result = LocalPoller(
             journal=journal,
             state=state,
+            stale_after_seconds=stale_after_seconds,
         ).health(now=time.time())
         write_json(root / "poller-health.json", result)
     elif arguments.command == "gate":
@@ -418,6 +428,7 @@ def main(argv: list[str] | None = None) -> int:
             root=root,
             journal=journal,
             poller_state=state,
+            stale_after_seconds=stale_after_seconds,
             workflow=workflow,
             main_workflow=main_workflow,
             pr_number=arguments.pr_number,
@@ -447,6 +458,7 @@ def main(argv: list[str] | None = None) -> int:
             root=root,
             journal=journal,
             poller_state=state,
+            stale_after_seconds=stale_after_seconds,
             main_workflow=main_workflow,
             verification_command=verification_command,
             ci_status=arguments.ci_status,

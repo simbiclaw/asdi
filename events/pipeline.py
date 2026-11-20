@@ -25,6 +25,7 @@ def run_pr_gate_pipeline(
     root: str | Path,
     journal: EventJournal,
     poller_state: PollerState,
+    stale_after_seconds: int,
     workflow: PRWorkflowStore,
     main_workflow: MainWorkflowStore,
     pr_number: int,
@@ -115,7 +116,11 @@ def run_pr_gate_pipeline(
         workflow=workflow,
         main_workflow=main_workflow,
     )
-    catch_up = LocalPoller(journal=journal, state=poller_state).catch_up(
+    catch_up = LocalPoller(
+        journal=journal,
+        state=poller_state,
+        stale_after_seconds=stale_after_seconds,
+    ).catch_up(
         handler=dispatcher.handle,
     )
     final_state = workflow.current_state(pr_number) or {}

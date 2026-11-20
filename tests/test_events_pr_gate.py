@@ -7,10 +7,15 @@ import unittest
 from pathlib import Path
 
 from events.classifier import classify_changed_paths
+from events.config import load_defaults
 from events.journal import EventJournal, LocalPoller, PollerState
 from events.pr_gate import PRGate, deployment_decision, post_merge_check
 
 
+ROOT = Path(__file__).resolve().parents[1]
+STALE_AFTER_SECONDS = load_defaults(ROOT / "config/defaults.yaml")[
+    "poller_stale_after_seconds"
+]
 CLASS_CONFIG = {
     "judgment_paths": ["src/auth/**"],
     "agent_mergeable_paths": ["src/**"],
@@ -26,7 +31,11 @@ class PollerTests(unittest.TestCase):
             root = Path(temporary)
             journal = EventJournal(root)
             state = PollerState(root)
-            poller = LocalPoller(journal=journal, state=state)
+            poller = LocalPoller(
+                journal=journal,
+                state=state,
+                stale_after_seconds=STALE_AFTER_SECONDS,
+            )
             processed: list[int] = []
 
             first = poller.catch_up(

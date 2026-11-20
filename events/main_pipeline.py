@@ -22,6 +22,7 @@ def run_main_verification_pipeline(
     root: str | Path,
     journal: EventJournal,
     poller_state: PollerState,
+    stale_after_seconds: int,
     main_workflow: MainWorkflowStore,
     verification_command: VerificationCommand,
     ci_status: str,
@@ -76,7 +77,11 @@ def run_main_verification_pipeline(
         workflow=None,
         main_workflow=main_workflow,
     )
-    catch_up = LocalPoller(journal=journal, state=poller_state).catch_up(
+    catch_up = LocalPoller(
+        journal=journal,
+        state=poller_state,
+        stale_after_seconds=stale_after_seconds,
+    ).catch_up(
         handler=dispatcher.handle,
     )
     final_state = main_workflow.current_state(landed_commit) or {}
