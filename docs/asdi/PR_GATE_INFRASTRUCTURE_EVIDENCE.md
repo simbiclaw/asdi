@@ -103,6 +103,8 @@ The state machine is fresh-head safe: a new PR head creates a new pending state 
 
 The pipeline never merges, pushes, posts to GitHub, deploys, or executes an agent. It accepts only evidence already produced by the verifier boundary. With a passing manifest and caught negative control, a T0 pipeline reports the gate `eligible` and merge authority `human_required`; with a missed negative control, it reports `blocked` and refuses merge authorization. Reviewer execution provenance remains in the separate full review result, not in normalized workflow state.
 
+The pipeline can now execute an explicit verifier command itself through [`events/verifier_command.py`](../../events/verifier_command.py). This adapter is absolute, shell-free, timeout-bounded and environment-restricted. It validates exact-head evidence, EvidenceStore binding, negative controls and verifier-only runtime boundaries; missing, stale, failed or nonzero-exit results become a red verifier. The complete verification execution remains separate from normalized journal state.
+
 ## Builder-side execution
 
 ```sh
@@ -110,7 +112,7 @@ PYTHONPATH=.:src python3 -m unittest tests.test_events_pr_gate -v
 PYTHONPATH=.:src python3 -m unittest discover -s tests -v
 ```
 
-Observed latest full suite after pipeline integration: **175 tests, OK, 4 expected AF_UNIX/socket-binding skips**. Focused evidence covered pending verification/review states, stale and orphan rejection, malformed payloads, new-head invalidation, separate durable packets, evidence-derived PR-head verifier status, evidence-derived exact-main verifier status, missed negative controls, wrong-source rejection, explicit reviewer execution, exact-main deployment eligibility, failed-main auto-revert planning, stale-main rejection, and the integrated PR evidence → review → policy → T0 merge-dry-run sequence.
+Observed latest full suite after live verifier-command integration: **185 tests, OK, 4 expected AF_UNIX/socket-binding skips**. Focused evidence covered pending verification/review states, stale and orphan rejection, malformed payloads, new-head invalidation, separate durable packets, evidence-derived PR-head verifier status, evidence-derived exact-main verifier status, missed negative controls, wrong-source rejection, explicit reviewer execution, explicit verifier-command execution, exact-main deployment eligibility, failed-main auto-revert planning, stale-main rejection, and the integrated PR verifier → review → policy → T0 merge-dry-run sequence.
 
 ## Limits
 

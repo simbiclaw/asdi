@@ -56,6 +56,16 @@ Focused tests prove both paths:
 
 Full suite after this hardening: **179 tests, OK, 4 expected socket/TCP skips**.
 
+## Explicit verifier-command integration
+
+[`events/verifier_command.py`](../../events/verifier_command.py) connects this verifier-only result to the PR gate pipeline through an explicit command boundary. The command must use an absolute executable, receives `{head}` and `{output}` placeholders, runs shell-free with a timeout and a fixed minimal environment, and rejects credential-like command text. It does not inherit the caller environment.
+
+The adapter validates the exact PR head, result schema, source, checks, EvidenceStore binding, subject binding, feature results and runtime boundary (`network: none`; no socket, secrets or agent). It also rejects a nonzero exit from a claimed-success result and refuses to promote a `failed` verifier status even if embedded evidence appears green. Missing, malformed, stale or timed-out output becomes a durable red verifier with execution provenance.
+
+`events.cli run-pr-gate` now accepts either `--evidence` or an explicit `--verifier` command. In command mode it persists the complete verification execution separately, appends only normalized gate fields to the durable journal, then runs review, packet assembly and the existing T0 merge dry-run. The command remains a prototype integration: it invokes the configured verifier command, but live acceptance still requires a real pilot and independent verification.
+
+Full suite after this integration: **185 tests, OK, 4 expected socket/TCP skips**.
+
 ## Status boundary
 
 | Claim | Status |

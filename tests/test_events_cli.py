@@ -828,3 +828,131 @@ class EventsCliTests(unittest.TestCase):
             result["packet"]["statuses"]["asdi/policy"],
             "fail",
         )
+
+    def test_verifier_command_pipeline_connects_review_and_policy(self) -> None:
+        head = "6" * 40
+        initial = self.root / "verifier-pipeline-pull-request.json"
+        self.write_json(
+            initial,
+            {
+                "pr_number": 14,
+                "head_sha": head,
+                "base_ref": "main",
+                "changed_paths": ["src/feature.py"],
+            },
+        )
+        exit_code = main([
+            *self.common,
+            "append-event",
+            "--event-type",
+            "github.pull_request",
+            "--payload",
+            str(initial),
+        ])
+        self.assertEqual(exit_code, 0)
+        exit_code = main([*self.common, "catch-up", "--now", "700"])
+        self.assertEqual(exit_code, 0)
+
+        verifier = self.root / f"verifier-{head[:8]}"
+        verifier.write_text(
+            "#!/usr/bin/env python3\n"
+            "import json, sys\n"
+            "from pathlib import Path\n"
+            "head, output = sys.argv[1], Path(sys.argv[2])\n"
+            "report = {\n"
+            "    'schema_version': 'asdi.verifier-only-result/v1',\n"
+            "    'run_id': 'rv-command',\n"
+            "    'status': 'succeeded',\n"
+            "    'revision': head,\n"
+            "    'commit': head,\n"
+            "    'source': 'pr-head',\n"
+            "    'checks': [{'id': 'static:test', 'status': 'pass'}],\n"
+            "    'evidence': {\n"
+            "        'valid': True,\n"
+            "        'manifest_id': 'm-command',\n"
+            "        'statement': {\n"
+            "            'subject': [{'digest': {'gitCommit': head}}],\n"
+            "            'predicate': {'source': 'pr-head'},\n"
+            "        },\n"
+            "        'result': {\n"
+            "            'schema': 2,\n"
+            "            'run_id': 'rv-command',\n"
+            "            'commit': head,\n"
+            "            'features': [{\n"
+            "                'id': 'feature:test',\n"
+            "                'status': 'pass',\n"
+            "                'control': 'caught',\n"
+            "                'evidence': [],\n"
+            "                'limits': [],\n"
+            "            }],\n"
+            "        },\n"
+            "    },\n"
+            "    'runtime': {\n"
+            "        'network': 'none',\n"
+            "        'socket_mounted': False,\n"
+            "        'secrets_mounted': False,\n"
+            "        'agent_started': False,\n"
+            "    },\n"
+            "}\n"
+            "output.write_text(json.dumps(report))\n"
+        )
+        verifier.chmod(verifier.stat().st_mode | stat.S_IXUSR)
+        diff_path = self.root / "verifier-changed.diff"
+        diff_path.write_text("changed\n")
+        reviewer = self.reviewer_executable(self.root / f"reviewer-{head[:8]}")
+        verification_path = self.root / f"verification-{head[:8]}.json"
+        review_path = self.root / f"review-{head[:8]}.json"
+        exit_code = main([
+            *self.common,
+            "run-pr-gate",
+            "--pr-number",
+            "14",
+            "--ci-status",
+            "pass",
+            "--verifier",
+            "/usr/bin/python3",
+            "--verifier",
+            str(verifier),
+            "--verifier",
+            "{head}",
+            "--verifier",
+            "{output}",
+            "--verifier-name",
+            "local-verifier",
+            "--verifier-timeout-seconds",
+            "20",
+            "--verifier-result-output",
+            str(verification_path),
+            "--diff",
+            str(diff_path),
+            "--reviewer",
+            "/usr/bin/python3",
+            "--reviewer",
+            str(reviewer),
+            "--reviewer",
+            "{packet}",
+            "--reviewer",
+            "{diff}",
+            "--reviewer",
+            "{output}",
+            "--name",
+            "local_review",
+            "--independent-family",
+            "false",
+            "--review-result-output",
+            str(review_path),
+            "--actor",
+            "merge-bot",
+            "--trm-level",
+            "T0",
+        ])
+        self.assertEqual(exit_code, 0)
+        result = json.loads(
+            (self.root / "latest-pr-gate-pipeline.json").read_text()
+        )
+        self.assertEqual(result["policy"], "eligible")
+        self.assertTrue(result["merge_dry_run"]["human_required"])
+        self.assertFalse(result["merge_executed"])
+        self.assertEqual(result["packet"]["verifier"]["manifest_id"], "m-command")
+        self.assertTrue(verification_path.is_file())
+        self.assertTrue(review_path.is_file())

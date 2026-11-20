@@ -13,6 +13,11 @@ from .merge_gate import evaluate_merge_packet
 from .pr_workflow import PRWorkflowStore
 from .review import ReviewCommand, review_event_payload, run_review
 from .verification import verification_event_payload
+from .verifier_command import (
+    VerificationCommand,
+    run_verification,
+    verification_execution_event_payload,
+)
 
 
 def run_pr_gate_pipeline(
@@ -23,7 +28,9 @@ def run_pr_gate_pipeline(
     workflow: PRWorkflowStore,
     main_workflow: MainWorkflowStore,
     pr_number: int,
-    evidence: dict[str, Any],
+    evidence: dict[str, Any] | None = None,
+    verification_command: VerificationCommand | None = None,
+    verification_result_path: str | Path | None = None,
     ci_status: str,
     diff: str,
     reviewer: ReviewCommand,
@@ -33,10 +40,11 @@ def run_pr_gate_pipeline(
 ) -> dict[str, Any]:
     """Verify, review, evaluate and dry-run one current PR without merging.
 
-    Verification must already exist as a launcher-produced evidence manifest.
-    The pipeline maps it into a durable event, executes an explicit fresh
-    reviewer, persists the full review result separately, appends only its
-    normalized verdict, and performs the existing fail-closed merge dry run.
+    Verification may be supplied as an already-produced evidence manifest or an
+    explicit verifier-only command.  The pipeline maps it into a durable event,
+    executes an explicit fresh reviewer, persists the full review result
+    separately, appends only its normalized verdict, and performs the existing
+    fail-closed merge dry run.
     """
 
     root_path = Path(root).resolve()
@@ -49,11 +57,29 @@ def run_pr_gate_pipeline(
 
     appended_events: list[dict[str, Any]] = []
     if state.get("verifier") is None:
-        verification_payload = verification_event_payload(
-            packet={"pr_number": pr_number, "head_sha": head_sha},
-            evidence=evidence,
-            ci_status=ci_status,
-        )
+        if verification_command is not None:
+            if verification_result_path is None:
+                raise ValueError("verifier command requires a result output path")
+            verification_result = run_verification(
+                command=verification_command,
+                head_sha=head_sha,
+            )
+            destination = Path(verification_result_path).resolve()
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            atomic_json(destination, verification_result)
+            verification_payload = verification_execution_event_payload(
+                packet={"pr_number": pr_number, "head_sha": head_sha},
+                result=verification_result,
+                ci_status=ci_status,
+            )
+        elif evidence is not None:
+            verification_payload = verification_event_payload(
+                packet={"pr_number": pr_number, "head_sha": head_sha},
+                evidence=evidence,
+                ci_status=ci_status,
+            )
+        else:
+            raise ValueError("PR gate requires evidence or an explicit verifier command")
         appended_events.append(
             journal.append(
                 event_type="github.verification_completed",
@@ -116,6 +142,8 @@ def run_pr_gate_pipeline(
         "catch_up": catch_up,
         "review_result_path": str(Path(review_result_path).resolve()),
     }
+    if verification_result_path is not None:
+        result["verification_result_path"] = str(Path(verification_result_path).resolve())
     atomic_json(root_path / "latest-pr-gate-pipeline.json", result)
     atomic_json(root_path / "latest-merge-dry-run.json", merge)
     return result

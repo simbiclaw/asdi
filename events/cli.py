@@ -20,6 +20,7 @@ from .review import ReviewCommand, review_event_payload, run_review
 from .comment_gate import agent_claims_block, classify_comment
 from .dispatcher import EventDispatcher
 from .verification import main_verification_event_payload, verification_event_payload
+from .verifier_command import VerificationCommand
 from .github_reconciler import (
     GitHubCommand,
     GitHubReconciler,
@@ -160,7 +161,7 @@ def build_parser() -> argparse.ArgumentParser:
     reconcile.add_argument("--timeout-seconds", type=float, default=20.0)
     pipeline = commands.add_parser("run-pr-gate")
     pipeline.add_argument("--pr-number", type=int, required=True)
-    pipeline.add_argument("--evidence", required=True)
+    pipeline.add_argument("--evidence")
     pipeline.add_argument(
         "--ci-status",
         choices=("pass", "fail", "blocked", "error"),
@@ -178,6 +179,10 @@ def build_parser() -> argparse.ArgumentParser:
     pipeline.add_argument("--review-result-output", required=True)
     pipeline.add_argument("--actor", required=True)
     pipeline.add_argument("--trm-level", default="T0")
+    pipeline.add_argument("--verifier", action="append")
+    pipeline.add_argument("--verifier-name")
+    pipeline.add_argument("--verifier-timeout-seconds", type=float, default=900.0)
+    pipeline.add_argument("--verifier-result-output")
     return parser
 
 
@@ -342,6 +347,16 @@ def main(argv: list[str] | None = None) -> int:
         result = event
     elif arguments.command == "run-pr-gate":
         class_config, feature_map = load_gate_config(arguments)
+        if arguments.evidence is not None and arguments.verifier:
+            parser.error("use either --evidence or --verifier, not both")
+        if arguments.evidence is None and not arguments.verifier:
+            parser.error("one of --evidence or --verifier is required")
+        if arguments.verifier and (
+            not arguments.verifier_name or not arguments.verifier_result_output
+        ):
+            parser.error(
+                "--verifier requires --verifier-name and --verifier-result-output"
+            )
         workflow = PRWorkflowStore(
             root / "pr-workflow",
             class_config=class_config,
@@ -361,6 +376,13 @@ def main(argv: list[str] | None = None) -> int:
                 else "unavailable"
             ),
         )
+        verification_command = None
+        if arguments.verifier:
+            verification_command = VerificationCommand(
+                name=arguments.verifier_name,
+                argv=tuple(arguments.verifier),
+                timeout_seconds=arguments.verifier_timeout_seconds,
+            )
         result = run_pr_gate_pipeline(
             root=root,
             journal=journal,
@@ -368,7 +390,13 @@ def main(argv: list[str] | None = None) -> int:
             workflow=workflow,
             main_workflow=main_workflow,
             pr_number=arguments.pr_number,
-            evidence=load_json(arguments.evidence),
+            evidence=(
+                load_json(arguments.evidence)
+                if arguments.evidence is not None
+                else None
+            ),
+            verification_command=verification_command,
+            verification_result_path=arguments.verifier_result_output,
             ci_status=arguments.ci_status,
             diff=Path(arguments.diff).read_text(),
             reviewer=reviewer,
