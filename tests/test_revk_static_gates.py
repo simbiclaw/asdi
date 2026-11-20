@@ -68,3 +68,45 @@ class StaticGateTests(unittest.TestCase):
         self.assertEqual(checks[0]["status"], "error")
         checks.append({"id": "static:required", "status": "pass", "blocking": True})
         self.assertFalse(gate_passes(checks))
+
+    def test_timeout_kills_and_removes_named_container(self) -> None:
+        timeout = subprocess.TimeoutExpired(cmd=[], timeout=1)
+        cleanup = subprocess.CompletedProcess([], 0, "", "")
+        with patch(
+            "launcher.static_gates.subprocess.run",
+            side_effect=[timeout, cleanup, cleanup],
+        ) as runner:
+            checks = run_checks(
+                docker="docker",
+                image="verifier",
+                manifest={
+                    "checks": [
+                        {
+                            "id": "hanging check",
+                            "command": ["/bin/sleep"],
+                            "blocking": True,
+                            "timeout_seconds": 1,
+                        }
+                    ]
+                },
+                run_id="r-test",
+                commit="c" * 40,
+                mounts=[],
+            )
+
+        check = checks[0]
+        self.assertEqual(check["status"], "error")
+        self.assertTrue(check["timeout_killed"])
+        self.assertEqual(len(check["timeout_cleanup"]), 2)
+        self.assertEqual(
+            runner.call_args_list[0].args[0][runner.call_args_list[0].args[0].index("--name") + 1],
+            "asdi-static-r-test-hanging-check",
+        )
+        self.assertEqual(
+            runner.call_args_list[1].args[0],
+            ["docker", "kill", "asdi-static-r-test-hanging-check"],
+        )
+        self.assertEqual(
+            runner.call_args_list[2].args[0],
+            ["docker", "rm", "-f", "asdi-static-r-test-hanging-check"],
+        )

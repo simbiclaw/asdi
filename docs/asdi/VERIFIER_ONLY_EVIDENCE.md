@@ -45,6 +45,17 @@ Focused tests in [`tests/test_revk_runner.py`](../../tests/test_revk_runner.py) 
 
 Existing verifier-authority tests still prove that the base harness runs on a separate base volume, binds `ASDI_COMMIT`, and rejects agent-weakened results. Full suite at this slice: **177 tests, OK, 4 expected socket/TCP skips**.
 
+## Timeout containment
+
+Static-gate and base-harness verifier containers now have deterministic names. If execution exceeds its configured timeout, ASDI invokes Docker `kill` followed by `rm -f`, records both cleanup commands and exit codes, and still reports `error` so the gate remains red. Cleanup failure cannot convert a timeout into success; it is retained in `timeout_cleanup` for operations. This prevents a hung verifier from outliving the launcher merely because the host-side Docker client process was terminated.
+
+Focused tests prove both paths:
+
+- static check timeout names the container, then executes `docker kill` and `docker rm -f`;
+- base-harness timeout names `asdi-verify-<short>`, then executes the same kill/remove sequence.
+
+Full suite after this hardening: **179 tests, OK, 4 expected socket/TCP skips**.
+
 ## Status boundary
 
 | Claim | Status |

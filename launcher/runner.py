@@ -23,6 +23,7 @@ from .contract import load_contract
 from .evidence import EvidenceStore
 from .agent_adapters import ADAPTERS, adapter_script
 from .static_gates import run_checks as run_container_checks
+from .static_gates import kill_and_remove
 from .state import atomic_json
 
 
@@ -1015,6 +1016,8 @@ class REVKLauncher:
 
         verify_path = base / "verify" / "bin" / "verify"
         started = time.time()
+        short = run_id.removeprefix("rv-").removeprefix("r-").replace("-", "")[:16]
+        container = f"asdi-verify-{short}"
         if not verify_path.is_file() or not os.access(verify_path, os.X_OK):
             return {
                 "id": "verify:base-harness",
@@ -1028,6 +1031,8 @@ class REVKLauncher:
             self.runtime.docker,
             "run",
             "--rm",
+            "--name",
+            container,
             "--network",
             "none",
             "--cap-drop",
@@ -1056,6 +1061,7 @@ class REVKLauncher:
             self.verifier_image,
             "/opt/base/verify/bin/verify",
         ]
+        timed_out = False
         try:
             completed = subprocess.run(
                 command,
@@ -1069,10 +1075,12 @@ class REVKLauncher:
             stdout = completed.stdout
             stderr = completed.stderr
         except subprocess.TimeoutExpired as error:
+            timed_out = True
             status = "error"
             exit_code = None
             stdout = error.stdout.decode() if isinstance(error.stdout, bytes) else str(error.stdout or "")
             stderr = error.stderr.decode() if isinstance(error.stderr, bytes) else str(error.stderr or "")
+            cleanup = kill_and_remove(self.runtime.docker, container)
         except OSError as error:
             status = "error"
             exit_code = None
@@ -1085,6 +1093,9 @@ class REVKLauncher:
             "duration_seconds": round(time.time() - started, 3),
             "stdout": stdout[-4000:],
             "stderr": stderr[-4000:],
+            "container": container,
+            "timeout_killed": timed_out,
+            "timeout_cleanup": cleanup if timed_out else [],
         }
 
     def _fresh_export(self, destination: Path, *, revision: str | None = None) -> None:

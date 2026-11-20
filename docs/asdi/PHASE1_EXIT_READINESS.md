@@ -25,7 +25,7 @@
 PYTHONPATH=.:src python3 -m unittest discover -s tests -v
 ```
 
-Latest implementation-suite result at the verifier-only slice: **177 tests, OK, 4 expected AF_UNIX/socket-binding skips**. This adds builder-tested verifier-only orchestration; it does not change the candidate's independently unverified/accepted status.
+Latest implementation-suite result after verifier timeout hardening: **179 tests, OK, 4 expected AF_UNIX/socket-binding skips**. This adds builder-tested verifier-only orchestration and deterministic timeout cleanup; it does not change the candidate's independently unverified/accepted status.
 
 ## Pending owner decisions
 

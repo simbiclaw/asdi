@@ -5,6 +5,7 @@ import os
 import subprocess
 import tempfile
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 
 from launcher.runner import DockerRuntime, REVKLauncher
@@ -96,6 +97,54 @@ class VerifierAuthorityTests(unittest.TestCase):
                     for line in invocations
                     if "asdi-base-fixture" in line
                 )
+            )
+
+    def test_base_verifier_timeout_kills_named_container(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            product = self.make_product(Path(temporary) / "product")
+            base = Path(temporary) / "base"
+            verify_dir = base / "verify" / "bin"
+            verify_dir.mkdir(parents=True)
+            verify = verify_dir / "verify"
+            verify.write_text("#!/bin/sh\nsleep 1000\n")
+            verify.chmod(0o755)
+            runtime = FakeRuntime(Path(temporary) / "workspace", Path(temporary) / "evidence")
+            runtime.docker = "docker"
+            launcher = REVKLauncher(
+                root=Path(temporary) / "asdi",
+                product_root=product,
+                runtime=runtime,
+                agent_script=AGENT,
+            )
+            timeout = subprocess.TimeoutExpired(cmd=[], timeout=900)
+            cleanup = subprocess.CompletedProcess([], 0, "", "")
+            with patch(
+                "launcher.runner.subprocess.run",
+                side_effect=[timeout, cleanup, cleanup],
+            ) as runner:
+                check = launcher._run_base_verify(
+                    run_id="r-fixture",
+                    base=base,
+                    workspace_volume="asdi-workspace-fixture",
+                    base_volume="asdi-base-fixture",
+                    commit="b" * 40,
+                )
+
+            self.assertEqual(check["status"], "error")
+            self.assertTrue(check["timeout_killed"])
+            self.assertEqual(len(check["timeout_cleanup"]), 2)
+            run_command = runner.call_args_list[0].args[0]
+            self.assertEqual(
+                run_command[run_command.index("--name") + 1],
+                "asdi-verify-fixture",
+            )
+            self.assertEqual(
+                runner.call_args_list[1].args[0],
+                ["docker", "kill", "asdi-verify-fixture"],
+            )
+            self.assertEqual(
+                runner.call_args_list[2].args[0],
+                ["docker", "rm", "-f", "asdi-verify-fixture"],
             )
 
     def test_green_verify_exit_requires_bound_caught_feature_result(self) -> None:
