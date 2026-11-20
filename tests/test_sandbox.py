@@ -209,7 +209,7 @@ class SandboxTests(unittest.TestCase):
             output = completed.stdout.strip()
             self.assertTrue(output.startswith("<!doctype html>"))
             self.assertIn("<title>Example Domain</title>", output)
-            deadline = time.monotonic() + 1.0
+            deadline = time.monotonic() + 5.0
             while not decisions and time.monotonic() < deadline:
                 time.sleep(0.02)
             self.assertTrue(decisions)

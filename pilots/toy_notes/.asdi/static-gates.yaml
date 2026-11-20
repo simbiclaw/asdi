@@ -1,0 +1,24 @@
+version: 1
+checks:
+  - id: compile-python
+    command: ["python3", "-m", "compileall", "-q", "src", "verify"]
+    blocking: true
+    timeout_seconds: 120
+    applies_to: ["src/**/*.py", "verify/**/*.py"]
+  - id: compile-verify-entrypoint
+    command: ["python3", "-m", "py_compile", "verify/bin/verify"]
+    blocking: true
+    timeout_seconds: 60
+    applies_to: ["verify/bin/verify"]
+  - id: harness-self-test
+    command: ["python3", "verify/self_test.py"]
+    blocking: true
+    timeout_seconds: 300
+    applies_to: ["src/**/*.py", "verify/**"]
+  - id: secret-scan
+    command: ["python3", "verify/tools/secret_scan.py"]
+    blocking: true
+    timeout_seconds: 60
+policy:
+  new_violations: reject
+  legacy_findings: track_without_expanding

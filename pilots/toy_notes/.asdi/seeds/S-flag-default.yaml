@@ -1,0 +1,5 @@
+id: S-flag-default
+patch: S-flag-default.patch
+layer: 5
+expect_caught_by: [policy]
+unit_tests_stay_green: true

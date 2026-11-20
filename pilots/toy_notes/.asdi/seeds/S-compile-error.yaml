@@ -1,0 +1,5 @@
+id: S-compile-error
+patch: S-compile-error.patch
+layer: 2
+expect_caught_by: [static]
+unit_tests_stay_green: true

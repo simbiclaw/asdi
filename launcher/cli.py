@@ -12,6 +12,8 @@ from pathlib import Path
 
 import yaml
 
+from events.config import load_pilot_config
+
 from asdi.governance import TRMLedger, paired_metrics
 from asdi.lifecycle import LifecycleStore, MissionGuardrails, MergeAuthorization, ProductOps
 from launcher.contract import load_contract
@@ -22,7 +24,7 @@ from launcher.state import atomic_json, load_run_state, list_run_states
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="ASDI REV K launcher")
     parser.add_argument("--root", required=True)
-    parser.add_argument("--product-root", required=True)
+    parser.add_argument("--product-root", default=None)
     parser.add_argument("--base-branch", default="main")
     parser.add_argument("--agent-image", default="safeclaw:cc-2.1.283")
     parser.add_argument(
@@ -75,6 +77,11 @@ def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
     root = Path(args.root).resolve()
+    product_root = (
+        Path(args.product_root).resolve()
+        if args.product_root
+        else load_pilot_config().product_root.resolve()
+    )
     runs_root = root / "runs"
     if args.command == "run":
         if args.contract and args.contract_option:
@@ -115,7 +122,7 @@ def main(argv: list[str] | None = None) -> int:
         runtime = DockerRuntime(args.docker)
         launcher = REVKLauncher(
             root=root,
-            product_root=Path(args.product_root),
+            product_root=product_root,
             base_branch=args.base_branch,
             agent_image=args.agent_image,
             agent_adapter=args.agent_adapter,
@@ -221,7 +228,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "verify":
         launcher = REVKLauncher(
             root=root,
-            product_root=Path(args.product_root),
+            product_root=product_root,
             base_branch=args.base_branch,
             verifier_image=args.verifier_image,
             runtime=DockerRuntime(args.docker),

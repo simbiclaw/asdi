@@ -10,6 +10,7 @@ import yaml
 
 
 DEFAULT_CONFIG_PATH = Path(__file__).resolve().parents[1] / "config" / "defaults.yaml"
+PILOT_CONFIG_PATH = Path(__file__).resolve().parents[1] / "config" / "pilot.yaml"
 
 
 def _positive_int(value: Any, name: str) -> int:
@@ -33,6 +34,13 @@ class GuardrailDefaults:
 
 
 @dataclass(frozen=True)
+class PilotSelection:
+    active: str
+    product_root: Path
+    run_image: str
+
+
+@dataclass(frozen=True)
 class OperationalDefaults:
     work_in_progress_limit: int
     diff_budget_lines: int
@@ -49,6 +57,32 @@ class OperationalDefaults:
     remediation_timeout_seconds: float
     readonly_audit_timeout_seconds: float
     guardrails: GuardrailDefaults
+
+
+def load_pilot_config(path: str | Path = PILOT_CONFIG_PATH) -> PilotSelection:
+    value = yaml.safe_load(Path(path).read_text())
+    if not isinstance(value, dict) or value.get("version") != 1:
+        raise ValueError("pilot config must be version 1")
+    active = value.get("active")
+    if not isinstance(active, str) or not active:
+        raise ValueError("pilot config has no active pilot")
+    pilots = value.get("pilots")
+    if not isinstance(pilots, dict):
+        raise ValueError("pilot config pilots must be an object")
+    selected = pilots.get(active)
+    if not isinstance(selected, dict):
+        raise ValueError(f"active pilot {active!r} has no configuration")
+    product_root = selected.get("product_root")
+    run_image = selected.get("run_image")
+    if not isinstance(product_root, str) or not product_root:
+        raise ValueError("active pilot product_root is required")
+    if not isinstance(run_image, str) or not run_image:
+        raise ValueError("active pilot run_image is required")
+    return PilotSelection(
+        active=active,
+        product_root=PILOT_CONFIG_PATH.parents[1] / product_root,
+        run_image=run_image,
+    )
 
 
 def load_defaults(path: str | Path) -> dict[str, Any]:

@@ -153,6 +153,24 @@ class LauncherCliTests(unittest.TestCase):
             self.assertNotIn("paused_at", resumed)
             self.assertEqual(FakeDocker.instances[-1].unpaused, ["fake-container"])
 
+    def test_product_root_defaults_to_active_pilot(self) -> None:
+        with patch("launcher.cli.REVKLauncher", FakeLauncher), patch(
+            "launcher.cli.DockerRuntime", FakeDocker
+        ):
+            result = main(
+                [
+                    "--root",
+                    str(self.root),
+                    "run",
+                    str(CONTRACT),
+                ]
+            )
+        self.assertEqual(result, 0)
+        self.assertEqual(
+            FakeLauncher.instances[-1].kwargs["product_root"],
+            ROOT / "pilots" / "toy_notes",
+        )
+
     def test_run_status_and_kill_use_durable_state(self) -> None:
         with patch("launcher.cli.REVKLauncher", FakeLauncher), patch(
             "launcher.cli.DockerRuntime", FakeDocker

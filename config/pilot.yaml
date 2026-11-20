@@ -1,0 +1,6 @@
+version: 1
+active: toy-notes
+pilots:
+  toy-notes:
+    product_root: pilots/toy_notes
+    run_image: asdi/toy-notes-run:latest

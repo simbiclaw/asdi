@@ -1,0 +1,5 @@
+--- a/config/pilot.yaml
++++ b/config/pilot.yaml
+@@
+-active: toy-notes
++active: production-target

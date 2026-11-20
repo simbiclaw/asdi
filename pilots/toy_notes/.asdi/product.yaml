@@ -1,0 +1,9 @@
+version: 1
+id: toy-notes
+run_image: asdi/toy-notes-run:latest
+services: []
+task_types:
+  - notes.create
+  - notes.http
+  - notes.ui
+architecture_baseline: "single Python process, standard-library HTTP server, SQLite file"
