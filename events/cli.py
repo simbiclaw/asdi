@@ -29,6 +29,8 @@ from .github_reconciler import (
     GitHubReconciler,
     default_github_environment,
 )
+from .independent_audit import IndependentAuditStore
+from launcher.owner_decisions import OwnerDecisionLog
 from .pipeline import run_pr_gate_pipeline
 
 
@@ -191,6 +193,11 @@ def build_parser() -> argparse.ArgumentParser:
     pipeline.add_argument("--review-result-output", required=True)
     pipeline.add_argument("--actor", required=True)
     pipeline.add_argument("--trm-level", default="T0")
+    audit_ingest = commands.add_parser("record-independent-audit")
+    audit_ingest.add_argument("--report", required=True)
+    audit_show = commands.add_parser("show-independent-audit")
+    audit_show.add_argument("--pr-number", type=int, required=True)
+    audit_show.add_argument("--head-sha", required=True)
     pipeline.add_argument("--verifier", action="append")
     pipeline.add_argument("--verifier-name")
     pipeline.add_argument("--verifier-timeout-seconds", type=float, default=None)
@@ -474,6 +481,18 @@ def main(argv: list[str] | None = None) -> int:
             ci_status=arguments.ci_status,
             verification_result_path=arguments.verifier_result_output,
             commit=arguments.commit,
+        )
+    elif arguments.command == "record-independent-audit":
+        result = IndependentAuditStore(root).ingest(
+            load_json(arguments.report),
+            decision_log=OwnerDecisionLog(root / "owner-decisions.jsonl"),
+        )
+        write_json(root / "latest-independent-audit-ingestion.json", result)
+    elif arguments.command == "show-independent-audit":
+        result = IndependentAuditStore(root).load(
+            pr_number=arguments.pr_number,
+            head_sha=arguments.head_sha,
+            decision_log=OwnerDecisionLog(root / "owner-decisions.jsonl"),
         )
     elif arguments.command == "comment-gate":
         identities = yaml.safe_load(arguments.identities.read_text())

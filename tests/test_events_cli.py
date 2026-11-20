@@ -11,6 +11,7 @@ import yaml
 from events.config import DEFAULT_CONFIG_PATH
 from events.cli import main
 from events.main_workflow import MainWorkflowStore
+from launcher.owner_decisions import OwnerDecisionLog
 from launcher.evidence import EvidenceStore
 
 
@@ -1245,3 +1246,183 @@ class EventsCliTests(unittest.TestCase):
         self.assertFalse(state["healthy"])
         self.assertEqual(state["alert"], "handler_failed")
         self.assertEqual(state["failed_event_id"], 1)
+
+    def independent_audit_report(self, *, head: str, decision_id: str) -> dict:
+        return {
+            "schema_version": "asdi.independent-pr-audit/v1",
+            "audit_id": "ia-cloud-claude-pipeline",
+            "source": "cloud_claude",
+            "pr_number": 14,
+            "head_sha": head,
+            "owner_decision_id": decision_id,
+            "operator": "repository_owner",
+            "completed_at": "2026-11-20T00:00:00Z",
+            "gate_status": "pass",
+            "verifier": {
+                "status": "pass",
+                "evidence": ["static checks passed; all negative controls caught"],
+            },
+            "review": {
+                "status": "pass",
+                "model": "cloud-claude",
+                "independent_context": True,
+            },
+            "findings": [],
+        }
+
+    def test_owner_invoked_audit_blocks_then_allows_pr_gate(self) -> None:
+        head = "7" * 40
+        initial = self.root / "audited-pull-request.json"
+        self.write_json(initial, {
+            "pr_number": 14,
+            "head_sha": head,
+            "base_ref": "main",
+            "changed_paths": ["src/feature.py"],
+        })
+        exit_code = main([
+            *self.common,
+            "append-event",
+            "--event-type",
+            "github.pull_request",
+            "--payload",
+            str(initial),
+        ])
+        self.assertEqual(exit_code, 0)
+        decision_log = OwnerDecisionLog(self.root / "owner-decisions.jsonl")
+        decision = decision_log.record(
+            decision_type="independent_verifier",
+            choice="owner_invoked_audit",
+            decided_by="repository_owner",
+            decision_reference="owner direction 2026-11-20",
+            direction="Use the cloud Claude verify-then-review gate.",
+        )
+        exit_code = main([*self.common, "catch-up", "--now", "1000"])
+        self.assertEqual(exit_code, 0)
+
+        verifier = self.root / "audited-verifier"
+        verifier.write_text(
+            "#!/usr/bin/env python3\n"
+            "import json, sys\n"
+            "from pathlib import Path\n"
+            "head, output = sys.argv[1], Path(sys.argv[2])\n"
+            "static_checks = {'run_id': 'r-vcommand', 'checks': [\n"
+            "    {'id': 'static:test', 'status': 'pass', 'blocking': True},\n"
+            "]}\n"
+            "features = [{'id': 'feature:test', 'status': 'pass',\n"
+            "             'control': 'caught', 'evidence': [], 'limits': []}]\n"
+            "report = {\n"
+            "    'schema_version': 'asdi.verifier-only-result/v1',\n"
+            "    'run_id': 'r-vcommand',\n"
+            "    'status': 'succeeded',\n"
+            "    'revision': head,\n"
+            "    'commit': head,\n"
+            "    'source': 'pr-head',\n"
+            "    'checks': static_checks['checks'],\n"
+            "    'ci_status': 'pass',\n"
+            "    'evidence': {\n"
+            "        'valid': True,\n"
+            "        'manifest_id': 'm-command',\n"
+            "        'statement': {\n"
+            "            'subject': [{'digest': {'gitCommit': head}}],\n"
+            "            'predicate': {'source': 'pr-head',\n"
+            '                          "static_checks": static_checks},\n'
+            "        },\n"
+            "        'result': {'schema': 2, 'run_id': 'r-vcommand',\n"
+            "                   'commit': head, 'features': features},\n"
+            "    },\n"
+            "    'runtime': {'network': 'none', 'socket_mounted': False,\n"
+            "                'secrets_mounted': False, 'agent_started': False},\n"
+            "}\n"
+            "output.write_text(json.dumps(report))\n"
+        )
+        verifier.chmod(verifier.stat().st_mode | 0o755)
+        diff_path = self.root / "audited.diff"
+        diff_path.write_text("changed\n")
+        reviewer = self.reviewer_executable(self.root / "audited-reviewer")
+        verification_path = self.root / "audited-verification.json"
+        review_path = self.root / "audited-review.json"
+
+        def run_gate() -> dict:
+            exit_code = main([
+                *self.common,
+                "run-pr-gate",
+                "--pr-number",
+                "14",
+                "--ci-status",
+                "pass",
+                "--verifier",
+                "/usr/bin/python3",
+                "--verifier",
+                str(verifier),
+                "--verifier",
+                "{head}",
+                "--verifier",
+                "{output}",
+                "--verifier-name",
+                "local-verifier",
+                "--verifier-timeout-seconds",
+                "20",
+                "--verifier-result-output",
+                str(verification_path),
+                "--diff",
+                str(diff_path),
+                "--reviewer",
+                "/usr/bin/python3",
+                "--reviewer",
+                str(reviewer),
+                "--reviewer",
+                "{packet}",
+                "--reviewer",
+                "{diff}",
+                "--reviewer",
+                "{output}",
+                "--name",
+                "local_review",
+                "--independent-family",
+                "false",
+                "--review-result-output",
+                str(review_path),
+                "--actor",
+                "merge-bot",
+                "--trm-level",
+                "T0",
+            ])
+            self.assertEqual(exit_code, 0)
+            return json.loads(
+                (self.root / "latest-pr-gate-pipeline.json").read_text()
+            )
+
+        blocked = run_gate()
+        self.assertTrue(blocked["independent_audit_enforced"])
+        self.assertEqual(blocked["packet_policy"], "blocked")
+        self.assertEqual(
+            blocked["packet"]["independent_audit"]["status"],
+            "missing",
+        )
+        self.assertEqual(blocked["merge_dry_run"]["decision"], "blocked")
+
+        audit = self.independent_audit_report(
+            head=head,
+            decision_id=decision["decision_id"],
+        )
+        audit_path = self.root / "independent-audit.json"
+        self.write_json(audit_path, audit)
+        exit_code = main([
+            *self.common,
+            "record-independent-audit",
+            "--report",
+            str(audit_path),
+        ])
+        self.assertEqual(exit_code, 0)
+
+        allowed = run_gate()
+        self.assertEqual(allowed["packet_policy"], "eligible")
+        self.assertEqual(
+            allowed["packet"]["independent_audit"]["status"],
+            "pass",
+        )
+        self.assertEqual(
+            allowed["packet"]["independent_audit"]["audit_id"],
+            "ia-cloud-claude-pipeline",
+        )
+        self.assertEqual(allowed["merge_dry_run"]["decision"], "human_required")

@@ -111,6 +111,8 @@ The pipeline never merges, pushes, posts to GitHub, deploys, or executes an agen
 
 The pipeline can now execute an explicit verifier command itself through [`events/verifier_command.py`](../../events/verifier_command.py). This adapter is absolute, shell-free, timeout-bounded and environment-restricted. It validates exact-head evidence, EvidenceStore binding, negative controls and verifier-only runtime boundaries; missing, stale, failed or nonzero-exit results become a red verifier. The complete verification execution remains separate from normalized journal state.
 
+The active `owner_invoked_audit` decision is now enforced by [`events/independent_audit.py`](../../events/independent_audit.py). When selected, a cloud Claude audit must be durably bound to the exact PR number/head and active owner decision before an otherwise green packet remains eligible. Missing, failed, stale or invalid audits downgrade the packet to blocked; the merge dry run remains non-executing and T0 remains human-governed. See [`INDEPENDENT_AUDIT_EVIDENCE.md`](INDEPENDENT_AUDIT_EVIDENCE.md).
+
 ## Builder-side execution
 
 ```sh
@@ -118,7 +120,7 @@ PYTHONPATH=.:src python3 -m unittest tests.test_events_pr_gate -v
 PYTHONPATH=.:src python3 -m unittest discover -s tests -v
 ```
 
-Observed latest full suite after derived-CI hardening, release-readiness, deployment-evidence validation, PR #2 review remediation and run-ID schema enforcement: **200 tests, OK, 4 expected AF_UNIX/socket-binding skips**. Focused evidence covered pending verification/review states, stale and orphan rejection, malformed payloads, new-head invalidation, separate durable packets, evidence-derived PR-head verifier status, evidence-derived exact-main verifier status, missed negative controls, wrong-source rejection, explicit reviewer execution, explicit PR/main verifier-command execution, static-check-derived CI status, exact-main deployment eligibility, forged passed-result rejection, failed-main auto-revert planning, idempotent main verification replay, mixed-journal cursor preservation, stale-main rejection, artifact-bound release readiness, setup-failure cleanup, invalid run-ID rejection, and the integrated PR verifier → review → policy → T0 merge-dry-run sequence.
+Observed latest full suite after derived-CI hardening, release-readiness, deployment-evidence validation, PR #2 review remediation, run-ID schema enforcement and owner-invoked audit enforcement: **217 tests, OK, 4 expected AF_UNIX/socket-binding skips**. Focused evidence covered pending verification/review states, stale and orphan rejection, malformed payloads, new-head invalidation, separate durable packets, evidence-derived PR-head verifier status, evidence-derived exact-main verifier status, missed negative controls, wrong-source rejection, explicit reviewer execution, explicit PR/main verifier-command execution, static-check-derived CI status, exact-main deployment eligibility, forged passed-result rejection, failed-main auto-revert planning, idempotent main verification replay, mixed-journal cursor preservation, stale-main rejection, artifact-bound release readiness, setup-failure cleanup, invalid run-ID rejection, cloud Claude audit binding/ingestion, and the integrated PR verifier → review → independent audit → policy → T0 merge-dry-run sequence.
 
 ## Limits
 

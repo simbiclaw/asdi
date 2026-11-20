@@ -7,7 +7,13 @@ from pathlib import Path
 from typing import Any
 
 from .dispatcher import EventDispatcher
+from launcher.owner_decisions import OwnerDecisionLog
 from .journal import EventJournal, LocalPoller, PollerState, atomic_json
+from .independent_audit import (
+    IndependentAuditStore,
+    apply_independent_audit,
+    audit_for_packet,
+)
 from .main_workflow import MainWorkflowStore
 from .merge_gate import evaluate_merge_packet
 from .pr_workflow import PRWorkflowStore
@@ -130,6 +136,33 @@ def run_pr_gate_pipeline(
     ):
         raise ValueError("PR pipeline did not produce both verifier and review evidence")
     packet = workflow.packet(pr_number, head_sha)
+    decision_log = OwnerDecisionLog(root_path / "owner-decisions.jsonl")
+    independent_verifier = decision_log.latest("independent_verifier")
+    if independent_verifier and independent_verifier.get("choice") == "owner_invoked_audit":
+        audit_store = IndependentAuditStore(root_path)
+        independent_audit, audit_failures = audit_for_packet(
+            store=audit_store,
+            decision_log=decision_log,
+            pr_number=pr_number,
+            head_sha=head_sha,
+        )
+        packet = apply_independent_audit(
+            packet,
+            audit=independent_audit,
+            failures=audit_failures,
+        )
+        packet_path = workflow.save_packet(
+            pr_number=pr_number,
+            head_sha=head_sha,
+            packet=packet,
+        )
+        atomic_json(root_path / "latest-independent-audit.json", packet["independent_audit"])
+        result_packet_path = packet_path
+    else:
+        result_packet_path = workflow.packet_path(
+            pr_number=pr_number,
+            head_sha=head_sha,
+        )
     merge = evaluate_merge_packet(
         packet,
         actor=actor,
@@ -140,15 +173,21 @@ def run_pr_gate_pipeline(
         "pr_number": pr_number,
         "head_sha": head_sha,
         "policy": final_state.get("gate_decision"),
+        "packet_policy": packet.get("policy_decision"),
         "packet": packet,
         "merge_dry_run": merge,
         "merge_executed": False,
         "appended_event_ids": [event["event_id"] for event in appended_events],
         "catch_up": catch_up,
         "review_result_path": str(Path(review_result_path).resolve()),
+        "independent_audit_enforced": bool(
+            independent_verifier
+            and independent_verifier.get("choice") == "owner_invoked_audit"
+        ),
     }
     if verification_result_path is not None:
         result["verification_result_path"] = str(Path(verification_result_path).resolve())
+    result["packet_path"] = str(result_packet_path)
     atomic_json(root_path / "latest-pr-gate-pipeline.json", result)
     atomic_json(root_path / "latest-merge-dry-run.json", merge)
     return result

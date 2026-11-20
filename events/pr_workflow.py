@@ -347,6 +347,18 @@ class PRWorkflowStore:
             raise FileNotFoundError(f"PR packet not found: {path}")
         return json.loads(path.read_text())  # type: ignore[no-any-return]
 
+    def packet_path(self, pr_number: int, head_sha: str) -> Path:
+        """Return the durable packet path for one exact PR head."""
+
+        return self._packet_path(int(pr_number), str(head_sha))
+
+    def save_packet(self, pr_number: int, head_sha: str, packet: dict[str, Any]) -> Path:
+        """Persist an updated packet after post-gate policy enrichment."""
+
+        path = self._packet_path(int(pr_number), str(head_sha))
+        atomic_json(path, packet)
+        return path
+
     def _validate_pull_request_payload(self, value: Any) -> list[str]:
         if not isinstance(value, dict):
             return ["pull request payload is not an object"]
