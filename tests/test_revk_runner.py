@@ -48,6 +48,7 @@ class FakeRuntime(DockerRuntime):
         self.started = False
         self.populated_volumes: list[str] = []
         self.populated_sources: dict[str, Path] = {}
+        self.removed_volumes: list[str] = []
         self.workspace_volume: str | None = None
         self.proxies: list[dict] = []
 
@@ -145,6 +146,7 @@ class FakeRuntime(DockerRuntime):
 
     def remove_volume(self, name: str) -> None:
         self.removed_volume = True
+        self.removed_volumes.append(name)
 
     def kill(self, name: str) -> None:
         self.killed = True
@@ -490,3 +492,31 @@ class REVKRunnerTests(unittest.TestCase):
             self.assertTrue(runtime.removed_network)
             self.assertTrue(runtime.removed_volume)
             self.assertEqual(runtime.stopped_proxy, "asdi-egress-" + state["run_id"][2:].replace("-", "")[:16])
+
+    def test_verifier_setup_failure_cleans_volumes_and_records_failure(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            product, commit = self.make_product(root)
+            runtime = FakeRuntime(root / "workspace", root / "evidence")
+
+            def fail_populate(*args, **kwargs) -> None:
+                raise RuntimeError("verifier populate failed")
+
+            runtime.populate_volume = fail_populate
+            launcher = REVKLauncher(
+                root=root / "asdi",
+                product_root=product,
+                runtime=runtime,
+            )
+            with self.assertRaisesRegex(RuntimeError, "verifier populate failed"):
+                launcher.verify_revision(commit)
+
+            state_paths = list((root / "asdi" / "runs").glob("*/launcher-state.json"))
+            self.assertEqual(len(state_paths), 1)
+            state = json.loads(state_paths[0].read_text())
+            self.assertEqual(state["status"], "failed")
+            self.assertEqual(state["failure"]["message"], "verifier populate failed")
+            self.assertIn("finished_at", state)
+            self.assertIn(state["workspace_volume"], runtime.removed_volumes)
+            self.assertIn(state["base_volume"], runtime.removed_volumes)
+            self.assertFalse(runtime.started)

@@ -8,6 +8,8 @@ import re
 from pathlib import Path
 from typing import Any
 
+import yaml
+
 ROOT = Path(__file__).resolve().parents[1]
 SCHEMA = ROOT / "schemas" / "run-contract.schema.json"
 
@@ -83,4 +85,11 @@ def validate(value: Any, schema: dict[str, Any] | None = None, *, path: str = "$
 
 
 def load_contract(path: str | Path) -> dict[str, Any]:
-    return validate(json.loads(Path(path).read_text()))
+    source = Path(path)
+    text = source.read_text()
+    value = (
+        yaml.safe_load(text)
+        if source.suffix.lower() in {".yaml", ".yml"}
+        else json.loads(text)
+    )
+    return validate(value)

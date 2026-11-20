@@ -9,6 +9,8 @@ import os
 import signal
 from pathlib import Path
 
+import yaml
+
 from asdi.governance import TRMLedger, paired_metrics
 from asdi.lifecycle import LifecycleStore, MissionGuardrails, MergeAuthorization, ProductOps
 from launcher.contract import load_contract
@@ -43,7 +45,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--model-key-env", default="LITELLM_MASTER_KEY")
     commands = parser.add_subparsers(dest="command", required=True)
     run = commands.add_parser("run", help="Run a REV K contract")
-    run.add_argument("--contract", required=True)
+    run.add_argument("contract", nargs="?")
+    run.add_argument("--contract", dest="contract_option")
     run.add_argument("--max-turns", type=int, default=None)
     run.add_argument("--max-tokens", type=int, default=None)
     run.add_argument("--max-spend-usd", type=float, default=None)
@@ -69,7 +72,19 @@ def main(argv: list[str] | None = None) -> int:
     root = Path(args.root).resolve()
     runs_root = root / "runs"
     if args.command == "run":
-        contract = json.loads(Path(args.contract).read_text())
+        if args.contract and args.contract_option:
+            parser.error("use either a positional contract or --contract, not both")
+        contract_path = args.contract_option or args.contract
+        if not contract_path:
+            parser.error("a contract path is required")
+        source = Path(contract_path)
+        contract = (
+            yaml.safe_load(source.read_text())
+            if source.suffix.lower() in {".yaml", ".yml"}
+            else json.loads(source.read_text())
+        )
+        if not isinstance(contract, dict):
+            parser.error("contract must be an object")
         guardrails = contract["guardrails"]
         if args.max_turns is not None:
             guardrails["turns"] = args.max_turns
@@ -79,9 +94,18 @@ def main(argv: list[str] | None = None) -> int:
             guardrails["spend_usd"] = args.max_spend_usd
         if args.minutes is not None:
             guardrails["minutes"] = args.minutes
-        temporary = root / ".current-contract.json"
+        suffix = (
+            source.suffix.lower()
+            if source.suffix.lower() in {".json", ".yaml", ".yml"}
+            else ".json"
+        )
+        temporary = root / f".current-contract{suffix}"
         temporary.parent.mkdir(parents=True, exist_ok=True)
-        temporary.write_text(json.dumps(contract, indent=2, sort_keys=True) + "\n")
+        temporary.write_text(
+            yaml.safe_dump(contract, sort_keys=True)
+            if suffix in {".yaml", ".yml"}
+            else json.dumps(contract, indent=2, sort_keys=True) + "\n"
+        )
         contract = load_contract(temporary)
         runtime = DockerRuntime(args.docker)
         launcher = REVKLauncher(

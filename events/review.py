@@ -8,9 +8,11 @@ import os
 import subprocess
 import tempfile
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
+
+from .config import load_operational_defaults
 
 
 ALLOWED_STATUS = {"pass", "fail", "blocked"}
@@ -24,7 +26,9 @@ class ReviewCommand:
 
     name: str
     argv: tuple[str, ...]
-    timeout_seconds: float = 600.0
+    timeout_seconds: float = field(
+        default_factory=lambda: load_operational_defaults().review_timeout_seconds
+    )
     independent_family: bool = False
 
     def __post_init__(self) -> None:
@@ -169,6 +173,26 @@ def run_review(
             reason = "reviewer timed out" if timed_out else "reviewer did not write output"
             report = {"status": "blocked", "findings": [{"claim": reason}]}
         normalized, failures = validate_review_report(report, reviewed_commit)
+        execution_failures: list[str] = []
+        if timed_out:
+            execution_failures.append("reviewer timed out")
+        elif exit_code != 0:
+            execution_failures.append(f"reviewer exited nonzero ({exit_code})")
+        if execution_failures:
+            failures.extend(execution_failures)
+            findings = normalized.get("findings")
+            normalized = {
+                **normalized,
+                "status": "blocked",
+                "findings": [
+                    *(findings if isinstance(findings, list) else []),
+                    {
+                        "bucket": "act",
+                        "claim": "reviewer execution did not succeed",
+                        "evidence": "; ".join(execution_failures),
+                    },
+                ],
+            }
         result = {
             "schema_version": "asdi.review-execution/v1",
             "pass": "review",

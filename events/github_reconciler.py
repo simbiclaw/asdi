@@ -13,11 +13,12 @@ import json
 import re
 import subprocess
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
 from .journal import EventJournal, atomic_json, utc_now
+from .config import load_operational_defaults
 
 
 FULL_SHA = re.compile(r"^[0-9a-f]{40}$")
@@ -30,7 +31,9 @@ class GitHubCommand:
     """Bounded execution boundary for one read-only GitHub CLI invocation."""
 
     argv: tuple[str, ...]
-    timeout_seconds: float = 20.0
+    timeout_seconds: float = field(
+        default_factory=lambda: load_operational_defaults().github_reconciler_timeout_seconds
+    )
     environment: dict[str, str] | None = None
 
     def __post_init__(self) -> None:

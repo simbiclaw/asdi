@@ -11,7 +11,7 @@ from typing import Any
 
 import yaml
 
-from .config import load_defaults
+from .config import DEFAULT_CONFIG_PATH, load_operational_defaults
 from .journal import EventJournal, LocalPoller, PollerState
 from .main_workflow import MainWorkflowStore
 from .main_pipeline import run_main_verification_pipeline
@@ -75,7 +75,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--defaults",
         type=Path,
-        default=Path(__file__).resolve().parents[1] / "config/defaults.yaml",
+        default=DEFAULT_CONFIG_PATH,
     )
     commands = parser.add_subparsers(dest="command", required=True)
 
@@ -113,7 +113,7 @@ def build_parser() -> argparse.ArgumentParser:
         choices=("true", "false", "unavailable"),
         required=True,
     )
-    review.add_argument("--timeout-seconds", type=float, default=600.0)
+    review.add_argument("--timeout-seconds", type=float, default=None)
     review.add_argument("--result-output", required=True)
     review_event = commands.add_parser("review-event")
     review_event.add_argument("--packet", required=True)
@@ -125,7 +125,7 @@ def build_parser() -> argparse.ArgumentParser:
         choices=("true", "false", "unavailable"),
         required=True,
     )
-    review_event.add_argument("--timeout-seconds", type=float, default=600.0)
+    review_event.add_argument("--timeout-seconds", type=float, default=None)
     review_event.add_argument("--result-output", required=True)
     verification_event = commands.add_parser("record-verification")
     verification_event.add_argument("--packet", required=True)
@@ -170,7 +170,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--proxy",
         default="http://127.0.0.1:7890",
     )
-    reconcile.add_argument("--timeout-seconds", type=float, default=20.0)
+    reconcile.add_argument("--timeout-seconds", type=float, default=None)
     pipeline = commands.add_parser("run-pr-gate")
     pipeline.add_argument("--pr-number", type=int, required=True)
     pipeline.add_argument("--evidence")
@@ -187,13 +187,13 @@ def build_parser() -> argparse.ArgumentParser:
         choices=("true", "false", "unavailable"),
         required=True,
     )
-    pipeline.add_argument("--timeout-seconds", type=float, default=600.0)
+    pipeline.add_argument("--timeout-seconds", type=float, default=None)
     pipeline.add_argument("--review-result-output", required=True)
     pipeline.add_argument("--actor", required=True)
     pipeline.add_argument("--trm-level", default="T0")
     pipeline.add_argument("--verifier", action="append")
     pipeline.add_argument("--verifier-name")
-    pipeline.add_argument("--verifier-timeout-seconds", type=float, default=900.0)
+    pipeline.add_argument("--verifier-timeout-seconds", type=float, default=None)
     pipeline.add_argument("--verifier-result-output")
     main_pipeline = commands.add_parser("run-main-verification")
     main_pipeline.add_argument("--commit")
@@ -207,7 +207,7 @@ def build_parser() -> argparse.ArgumentParser:
     main_pipeline.add_argument(
         "--verifier-timeout-seconds",
         type=float,
-        default=900.0,
+        default=None,
     )
     main_pipeline.add_argument("--verifier-result-output", required=True)
     return parser
@@ -218,8 +218,18 @@ def main(argv: list[str] | None = None) -> int:
     arguments = parser.parse_args(argv)
     root = arguments.root.resolve()
     root.mkdir(parents=True, exist_ok=True)
-    defaults = load_defaults(arguments.defaults)
-    stale_after_seconds = defaults["poller_stale_after_seconds"]
+    defaults = load_operational_defaults(arguments.defaults)
+    stale_after_seconds = defaults.poller_stale_after_seconds
+    if arguments.command in {"review", "review-event", "run-pr-gate"}:
+        if arguments.timeout_seconds is None:
+            arguments.timeout_seconds = defaults.review_timeout_seconds
+    elif arguments.command == "reconcile-github" and arguments.timeout_seconds is None:
+        arguments.timeout_seconds = defaults.github_reconciler_timeout_seconds
+    if (
+        arguments.command in {"run-pr-gate", "run-main-verification"}
+        and arguments.verifier_timeout_seconds is None
+    ):
+        arguments.verifier_timeout_seconds = defaults.verifier_timeout_seconds
     journal = EventJournal(root / "journal")
     state = PollerState(root / "state")
 

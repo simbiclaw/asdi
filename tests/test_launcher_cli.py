@@ -7,6 +7,8 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+import yaml
+
 from launcher.cli import main
 from launcher.runner import RunResult
 
@@ -24,6 +26,7 @@ class FakeLauncher:
         FakeLauncher.instances.append(self)
 
     def run(self, contract_path: str):
+        self.contract_path = Path(contract_path)
         run_id = "r-clitest"
         run_root = self.root / "runs" / run_id
         run_root.mkdir(parents=True, exist_ok=True)
@@ -86,6 +89,27 @@ class LauncherCliTests(unittest.TestCase):
 
     def tearDown(self) -> None:
         self._temporary.cleanup()
+
+    def test_run_accepts_positional_yaml_contract(self) -> None:
+        contract = json.loads(CONTRACT.read_text())
+        contract_path = self.root / "contract.yaml"
+        contract_path.write_text(yaml.safe_dump(contract, sort_keys=True))
+        with patch("launcher.cli.REVKLauncher", FakeLauncher), patch(
+            "launcher.cli.DockerRuntime", FakeDocker
+        ):
+            result = main(
+                [
+                    "--root",
+                    str(self.root),
+                    "--product-root",
+                    str(self.root / "product"),
+                    "run",
+                    str(contract_path),
+                ]
+            )
+        self.assertEqual(result, 0)
+        self.assertEqual(FakeLauncher.instances[-1].contract_path.suffix, ".yaml")
+        self.assertTrue((self.root / ".current-contract.yaml").is_file())
 
     def test_run_status_and_kill_use_durable_state(self) -> None:
         with patch("launcher.cli.REVKLauncher", FakeLauncher), patch(

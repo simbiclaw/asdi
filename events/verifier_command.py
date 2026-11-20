@@ -10,7 +10,7 @@ import subprocess
 import tempfile
 import time
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -19,6 +19,7 @@ from .verification import (
     main_verification_event_payload,
     verification_event_payload,
 )
+from .config import load_operational_defaults
 
 
 FULL_SHA = re.compile(r"^[0-9a-f]{40}$")
@@ -54,7 +55,9 @@ class VerificationCommand:
 
     name: str
     argv: tuple[str, ...]
-    timeout_seconds: float = 900.0
+    timeout_seconds: float = field(
+        default_factory=lambda: load_operational_defaults().verifier_timeout_seconds
+    )
     source: str = "pr-head"
 
     def __post_init__(self) -> None:

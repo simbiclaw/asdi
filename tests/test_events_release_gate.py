@@ -75,6 +75,12 @@ class ReleaseReadinessTests(unittest.TestCase):
         self.assertEqual(result["decision"], "blocked")
         self.assertIn("release commit is no longer current main", result["failures"])
 
+    def test_missing_current_main_state_is_blocked(self) -> None:
+        result = self.evaluate(current_state=None)
+        self.assertEqual(result["decision"], "blocked")
+        self.assertFalse(result["deployment_eligible"])
+        self.assertIn("no current main state for release commit", result["failures"])
+
     def test_failed_post_merge_result_is_blocked(self) -> None:
         main_state = self.store.current_state(COMMIT)
         main_state["result"] = {

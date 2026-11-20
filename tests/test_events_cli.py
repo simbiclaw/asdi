@@ -6,6 +6,9 @@ import tempfile
 import unittest
 from pathlib import Path
 
+import yaml
+
+from events.config import DEFAULT_CONFIG_PATH
 from events.cli import main
 from events.main_workflow import MainWorkflowStore
 from launcher.evidence import EvidenceStore
@@ -139,7 +142,9 @@ class EventsCliTests(unittest.TestCase):
 
     def test_health_uses_configured_stale_window(self) -> None:
         defaults = self.root / "defaults.yaml"
-        defaults.write_text("version: 1\npoller_stale_after_seconds: 17\n")
+        config = yaml.safe_load(DEFAULT_CONFIG_PATH.read_text())
+        config["poller_stale_after_seconds"] = 17
+        defaults.write_text(yaml.safe_dump(config))
         exit_code = main(
             [
                 *self.common,

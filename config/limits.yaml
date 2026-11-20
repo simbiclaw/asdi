@@ -1,9 +1,4 @@
 version: 1
-defaults:
-  turns: 200
-  spend_usd: 8
-  minutes: 90
-  tokens: null
 zones:
   agent:
     cpus: "2"

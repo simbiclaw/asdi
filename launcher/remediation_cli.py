@@ -32,7 +32,7 @@ def build_parser() -> argparse.ArgumentParser:
     audit.add_argument("--builder-command", required=True)
     audit.add_argument("--verifier-command", required=True)
     audit.add_argument("--spec-path", action="append", required=True)
-    audit.add_argument("--max-cycles", type=int, default=2, choices=(0, 1, 2))
+    audit.add_argument("--max-cycles", type=int, default=None)
 
     resume = commands.add_parser("remediate", help="Resume an existing Loop A workflow")
     status = commands.add_parser("status", help="Show durable remediation state")

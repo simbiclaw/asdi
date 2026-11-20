@@ -44,7 +44,7 @@ class ReviewPassTests(unittest.TestCase):
     def tearDown(self) -> None:
         self.temporary.cleanup()
 
-    def command(self) -> ReviewCommand:
+    def command(self, *, timeout_seconds: float = 5) -> ReviewCommand:
         return ReviewCommand(
             name="local_review",
             argv=(
@@ -57,7 +57,7 @@ class ReviewPassTests(unittest.TestCase):
                 "--output",
                 "{output}",
             ),
-            timeout_seconds=5,
+            timeout_seconds=timeout_seconds,
             independent_family=False,
         )
 
@@ -80,6 +80,71 @@ class ReviewPassTests(unittest.TestCase):
         result = run_review(packet=PACKET, diff="changed\n", command=self.command())
         self.assertEqual(result["status"], "blocked")
         self.assertIn("reviewed_commit does not match PR head", result["execution"]["validation_failures"])
+
+    def test_nonzero_reviewer_exit_blocks_even_with_pass_output(self) -> None:
+        self.reviewer.write_text(
+            "#!/usr/bin/env python3\n"
+            "import argparse\n"
+            "import json\n"
+            "from pathlib import Path\n"
+            "parser = argparse.ArgumentParser()\n"
+            "parser.add_argument('--packet', required=True)\n"
+            "parser.add_argument('--diff', required=True)\n"
+            "parser.add_argument('--output', required=True)\n"
+            "arguments = parser.parse_args()\n"
+            "Path(arguments.output).write_text(json.dumps({\n"
+            "  'schema_version': 'asdi.review-result/v1',\n"
+            "  'pass': 'review',\n"
+            "  'model': 'local-review-model',\n"
+            "  'independent_family': False,\n"
+            "  'reviewed_commit': 'a' * 40,\n"
+            "  'status': 'pass',\n"
+            "  'findings': [],\n"
+            "}))\n"
+            "raise SystemExit(7)\n"
+        )
+        result = run_review(packet=PACKET, diff="changed\n", command=self.command())
+        self.assertEqual(result["status"], "blocked")
+        self.assertEqual(result["execution"]["exit_code"], 7)
+        self.assertIn(
+            "reviewer exited nonzero (7)",
+            result["execution"]["validation_failures"],
+        )
+
+    def test_timed_out_reviewer_blocks_even_with_pass_output(self) -> None:
+        self.reviewer.write_text(
+            "#!/usr/bin/env python3\n"
+            "import argparse\n"
+            "import json\n"
+            "import time\n"
+            "from pathlib import Path\n"
+            "parser = argparse.ArgumentParser()\n"
+            "parser.add_argument('--packet', required=True)\n"
+            "parser.add_argument('--diff', required=True)\n"
+            "parser.add_argument('--output', required=True)\n"
+            "arguments = parser.parse_args()\n"
+            "Path(arguments.output).write_text(json.dumps({\n"
+            "  'schema_version': 'asdi.review-result/v1',\n"
+            "  'pass': 'review',\n"
+            "  'model': 'local-review-model',\n"
+            "  'independent_family': False,\n"
+            "  'reviewed_commit': 'a' * 40,\n"
+            "  'status': 'pass',\n"
+            "  'findings': [],\n"
+            "}))\n"
+            "time.sleep(5)\n"
+        )
+        result = run_review(
+            packet=PACKET,
+            diff="changed\n",
+            command=self.command(timeout_seconds=1),
+        )
+        self.assertEqual(result["status"], "blocked")
+        self.assertTrue(result["execution"]["timed_out"])
+        self.assertIn(
+            "reviewer timed out",
+            result["execution"]["validation_failures"],
+        )
 
     def test_rejects_credential_like_reviewer_command(self) -> None:
         with self.assertRaisesRegex(ValueError, "credential-like"):

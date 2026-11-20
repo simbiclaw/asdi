@@ -20,8 +20,8 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
 
+from events.config import load_operational_defaults
 
-MAX_REMEDIATION_CYCLES = 2
 SPEC_SCHEMA_VERSION = "asdi.spec-feedback/v1"
 REMEDIATION_SCHEMA_VERSION = "asdi.remediation/v1"
 
@@ -67,19 +67,35 @@ class RemediationConfig:
     builder_command: tuple[str, ...]
     verifier_command: tuple[str, ...]
     spec_paths: tuple[str, ...]
-    max_cycles: int = MAX_REMEDIATION_CYCLES
-    builder_timeout_seconds: float = 3600.0
-    verifier_timeout_seconds: float = 3600.0
+    max_cycles: int | None = None
+    builder_timeout_seconds: float | None = None
+    verifier_timeout_seconds: float | None = None
+
+    def __post_init__(self) -> None:
+        defaults = load_operational_defaults()
+        if self.max_cycles is None:
+            object.__setattr__(self, "max_cycles", defaults.repair_attempts)
+        if self.builder_timeout_seconds is None:
+            object.__setattr__(
+                self,
+                "builder_timeout_seconds",
+                defaults.remediation_timeout_seconds,
+            )
+        if self.verifier_timeout_seconds is None:
+            object.__setattr__(
+                self,
+                "verifier_timeout_seconds",
+                defaults.remediation_timeout_seconds,
+            )
 
 
 class RemediationController:
     """Durable Loop A controller with fail-closed Loop B escalation."""
 
     def __init__(self, root: str | Path, config: RemediationConfig) -> None:
-        if config.max_cycles > MAX_REMEDIATION_CYCLES:
-            raise ValueError(
-                f"remediation ceiling cannot exceed {MAX_REMEDIATION_CYCLES} cycles"
-            )
+        ceiling = load_operational_defaults().repair_attempts
+        if config.max_cycles > ceiling:
+            raise ValueError(f"remediation ceiling cannot exceed {ceiling} cycles")
         if config.max_cycles < 0:
             raise ValueError("remediation ceiling cannot be negative")
         self.root = Path(root).resolve()

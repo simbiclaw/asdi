@@ -49,3 +49,51 @@ class MergeGateTests(unittest.TestCase):
         )
         self.assertEqual(result["decision"], "human_required")
         self.assertTrue(result["human_required"])
+
+    def test_only_passing_status_values_count_as_present(self) -> None:
+        failing = packet()
+        failing["statuses"] = {"ci": "fail", "asdi/policy": "pass"}
+        result = evaluate_merge_packet(failing, actor="merge-bot")
+        self.assertEqual(result["decision"], "blocked")
+        self.assertEqual(
+            result["merge_dry_run"]["observed_statuses"],
+            ["asdi/policy"],
+        )
+        self.assertIn(
+            "R9-required-status-missing:ci",
+            result["merge_dry_run"]["rules_fired"],
+        )
+
+    def test_stale_sha_evidence_fires_up_to_date_rule(self) -> None:
+        stale = packet()
+        stale["base_sha"] = "b" * 40
+        stale["main_sha"] = "c" * 40
+        result = evaluate_merge_packet(stale, actor="merge-bot")
+        self.assertEqual(result["decision"], "blocked")
+        self.assertFalse(result["merge_dry_run"]["up_to_date"])
+        self.assertIn(
+            "R9-branch-not-up-to-date",
+            result["merge_dry_run"]["rules_fired"],
+        )
+        self.assertTrue(result["branch_freshness"]["evaluated"])
+
+    def test_explicit_freshness_flag_is_honored(self) -> None:
+        stale = packet()
+        stale["branch_up_to_date"] = False
+        result = evaluate_merge_packet(stale, actor="merge-bot")
+        self.assertEqual(result["decision"], "blocked")
+        self.assertFalse(result["merge_dry_run"]["up_to_date"])
+        self.assertEqual(
+            result["branch_freshness"]["basis"],
+            "packet.branch_up_to_date",
+        )
+
+    def test_missing_freshness_evidence_is_recorded_as_not_evaluated(self) -> None:
+        result = evaluate_merge_packet(packet(), actor="merge-bot")
+        self.assertFalse(result["branch_freshness"]["evaluated"])
+        self.assertIsNone(result["merge_dry_run"]["up_to_date"])
+        self.assertIn(
+            "R9-branch-freshness-not-evaluated",
+            result["merge_dry_run"]["rules_fired"],
+        )
+        self.assertEqual(result["decision"], "human_required")

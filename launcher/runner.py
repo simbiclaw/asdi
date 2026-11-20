@@ -19,6 +19,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from events.config import load_operational_defaults
+
 from .contract import load_contract
 from .evidence import EvidenceStore
 from .agent_adapters import ADAPTERS, adapter_script
@@ -735,14 +737,14 @@ class REVKLauncher:
                 "started_at": started,
             },
         )
-        self._fresh_export(workspace, revision=revision)
-        self._fresh_export(base, revision=self.base_branch)
-        self.runtime.create_volume(workspace_volume)
-        self.runtime.create_volume(base_volume)
-        self.runtime.populate_volume(workspace_volume, workspace)
-        self.runtime.populate_volume(base_volume, base, destination="/opt/base")
-        self.runtime.chown_volume(workspace_volume, "/workspace", "1001:1001")
         try:
+            self._fresh_export(workspace, revision=revision)
+            self._fresh_export(base, revision=self.base_branch)
+            self.runtime.create_volume(workspace_volume)
+            self.runtime.create_volume(base_volume)
+            self.runtime.populate_volume(workspace_volume, workspace)
+            self.runtime.populate_volume(base_volume, base, destination="/opt/base")
+            self.runtime.chown_volume(workspace_volume, "/workspace", "1001:1001")
             verifier_result: dict[str, Any] = {}
             checks = self._verify_head(
                 run_id=run_id,
@@ -1067,7 +1069,7 @@ class REVKLauncher:
                 command,
                 capture_output=True,
                 text=True,
-                timeout=900,
+                timeout=load_operational_defaults().verifier_timeout_seconds,
                 check=False,
             )
             status = "pass" if completed.returncode == 0 else "fail"

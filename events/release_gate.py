@@ -41,7 +41,9 @@ def release_readiness(
             deployment = deployment_decision(commit=commit, main_results=[result])
             if not deployment.get("eligible"):
                 failures.append(deployment.get("reason", "release commit is not deployment eligible"))
-    if current_state is not None and current_state.get("commit") != commit:
+    if not isinstance(current_state, dict):
+        failures.append("no current main state for release commit")
+    elif current_state.get("commit") != commit:
         failures.append("release commit is no longer current main")
 
     return {
